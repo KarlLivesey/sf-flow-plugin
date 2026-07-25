@@ -1,6 +1,6 @@
 # sf-flow-plugin
 
-`sf-flow-plugin` adds Salesforce CLI commands for managing Flow versions. The first command activates a selected Flow version through the authenticated org's Tooling API without requiring a Salesforce DX project.
+`sf-flow-plugin` adds Salesforce CLI commands for inspecting, auditing, activating, deactivating and pruning Flow versions through the authenticated org's Tooling API. The commands do not require a Salesforce DX project.
 
 The package is implemented in strict TypeScript using the current Salesforce external-plugin template, `@salesforce/core`, `@salesforce/sf-plugins-core`, oclif, and Zod runtime validation.
 
@@ -8,18 +8,12 @@ The package is implemented in strict TypeScript using the current Salesforce ext
 
 - Node.js 22.19 or later.
 - A current Salesforce CLI installation. The packaged plugin is verified with `@salesforce/cli` 2.144.6.
-- An authenticated Salesforce org whose user can read Flow Tooling API records and update `FlowDefinition`.
+- An authenticated Salesforce org whose user can read Flow Tooling API records.
+- Flow update or deletion permissions for commands that mutate `FlowDefinition` or `Flow` records.
 
 ## Release status
 
-The plugin is implemented for local validation and has not yet been published to npm.
-
-## Maintainer handover
-
-No Git remote, hosted repository, release tag, or npm publication is created by this implementation. `klivesey` owns
-those release steps. Before enabling the retained release workflows, configure the repository protection and npm
-publishing settings; configure the protected `salesforce-nut` environment and `SF_NUT_AUTH_URL` secret before running
-the manual NUT workflow.
+Version 1.0.0 is published publicly on npm. Tagged releases are validated and published from GitHub Actions through npm trusted publishing.
 
 ## Local installation
 
@@ -43,6 +37,16 @@ sf org login web --alias MySandbox --instance-url https://test.salesforce.com
 ```
 
 If `--target-org` is omitted, the command uses the Salesforce CLI `target-org` configuration. It fails non-interactively when neither the flag nor a configured default org is available.
+
+## Commands
+
+| Command              | Purpose                                                         |
+| -------------------- | --------------------------------------------------------------- |
+| `sf flow activate`   | Activate and verify a selected Flow version.                    |
+| `sf flow versions`   | List every version and identify the active and latest versions. |
+| `sf flow deactivate` | Deactivate a Flow and verify the resulting state.               |
+| `sf flow audit`      | Report Flow definitions with version-state issues.              |
+| `sf flow prune`      | Safely plan or delete old inactive Flow versions.               |
 
 ## `sf flow activate`
 
@@ -121,17 +125,134 @@ Dry runs use the same activation-planning code as real updates but never send a 
 
 The `result` object is stable and contains only serialisable values. In a dry run, `activeVersion` is the proposed end-state version and `changed` remains `false` because no mutation occurred.
 
-### Error codes
+## `sf flow versions`
 
-| Code                               | Meaning                                                                     |
-| ---------------------------------- | --------------------------------------------------------------------------- |
-| `FlowDefinitionNotFound`           | No definition matched the API name and namespace.                           |
-| `FlowDefinitionAmbiguous`          | Multiple definitions matched; specify a namespace.                          |
-| `FlowVersionInvalid`               | The version flag was neither `latest` nor a positive integer.               |
-| `FlowVersionNotFound`              | The requested version does not exist.                                       |
-| `FlowVersionNotActivatable`        | The selected version has an ineligible Salesforce status.                   |
-| `FlowActivationFailed`             | A validated Tooling API query or update failed.                             |
-| `FlowActivationVerificationFailed` | Salesforce did not report the requested version as active after the update. |
+```bash
+sf flow versions \
+  --api-name Order_Processing \
+  [--target-org ORG] \
+  [--namespace NAMESPACE] \
+  [--api-version VERSION] \
+  [--json]
+```
+
+The command lists every Flow version with its status, creation date, last-modified date and active/latest markers:
+
+```bash
+sf flow versions --target-org MySandbox --api-name Order_Processing
+```
+
+## `sf flow deactivate`
+
+```bash
+sf flow deactivate \
+  --api-name Order_Processing \
+  [--target-org ORG] \
+  [--namespace NAMESPACE] \
+  [--api-version VERSION] \
+  [--dry-run] \
+  [--json]
+```
+
+Deactivation is idempotent. A real mutation succeeds only after Salesforce reports that the Flow no longer has an active version:
+
+```bash
+sf flow deactivate --target-org MySandbox --api-name Order_Processing
+```
+
+Preview the same operation without sending a PATCH request:
+
+```bash
+sf flow deactivate --api-name Order_Processing --dry-run --json
+```
+
+## `sf flow audit`
+
+```bash
+sf flow audit [--target-org ORG] [--api-version VERSION] [--json]
+```
+
+The audit reports definitions that have no active version, whose active version is behind the latest version, or that contain Draft or Obsolete versions:
+
+```bash
+sf flow audit --target-org MySandbox
+```
+
+## `sf flow prune`
+
+```bash
+sf flow prune \
+  --api-name Order_Processing \
+  [--target-org ORG] \
+  [--keep NUMBER] \
+  [--keep-version NUMBER ...] \
+  [--ignore NUMBER ...] \
+  [--keep-by created|modified] \
+  [--namespace NAMESPACE] \
+  [--api-version VERSION] \
+  [--no-dry-run] \
+  [--json]
+```
+
+| Flag             | Default   | Description                                                                                |
+| ---------------- | --------- | ------------------------------------------------------------------------------------------ |
+| `--keep`         | `5`       | Number of prunable inactive versions to retain.                                            |
+| `--keep-version` | —         | Retain a specific version within the `--keep` total. Repeatable.                           |
+| `--ignore`       | —         | Protect a version for this invocation without reducing the `--keep` total. Repeatable.     |
+| `--keep-by`      | `created` | Select the newest retained versions by creation or last-modified date.                     |
+| `--dry-run`      | `true`    | Plan without deletion. Specify `--no-dry-run` to perform and verify the planned deletions. |
+
+Active and latest versions are always protected outside the inactive retention total. `--ignore` wins when the same version is also passed to `--keep-version`.
+
+Retain version 21 within a total of five inactive versions:
+
+```bash
+sf flow prune \
+  --api-name Order_Processing \
+  --keep 5 \
+  --keep-version 21
+```
+
+Temporarily protect version 21 and retain five additional inactive versions by last modification:
+
+```bash
+sf flow prune \
+  --api-name Order_Processing \
+  --keep 5 \
+  --ignore 21 \
+  --keep-by modified
+```
+
+Prune defaults to dry-run. Review the plan, then repeat it with mutation enabled:
+
+```bash
+sf flow prune \
+  --api-name Order_Processing \
+  --keep 5 \
+  --ignore 21 \
+  --no-dry-run
+```
+
+Only Draft, Obsolete and InvalidDraft versions are eligible for deletion. Other statuses are reported as skipped. Deletions are verified with a second Tooling API query.
+
+## Error codes
+
+| Code                                 | Meaning                                                                     |
+| ------------------------------------ | --------------------------------------------------------------------------- |
+| `FlowDefinitionNotFound`             | No definition matched the API name and namespace.                           |
+| `FlowDefinitionAmbiguous`            | Multiple definitions matched; specify a namespace.                          |
+| `FlowVersionInvalid`                 | The version flag was neither `latest` nor a positive integer.               |
+| `FlowVersionNotFound`                | The requested version does not exist.                                       |
+| `FlowVersionNotActivatable`          | The selected version has an ineligible Salesforce status.                   |
+| `FlowActivationFailed`               | A validated Tooling API query or update failed.                             |
+| `FlowActivationVerificationFailed`   | Salesforce did not report the requested version as active after the update. |
+| `FlowQueryFailed`                    | A validated Tooling API query or response failed.                           |
+| `FlowMutationFailed`                 | Salesforce rejected a validated Flow mutation.                              |
+| `FlowDeactivationFailed`             | Flow deactivation could not be completed.                                   |
+| `FlowDeactivationVerificationFailed` | Salesforce still reported an active version after deactivation.             |
+| `FlowAuditFailed`                    | The org-wide Flow audit could not be completed.                             |
+| `FlowPruneFailed`                    | Flow prune planning or deletion failed.                                     |
+| `FlowPruneVerificationFailed`        | Salesforce still returned a deleted version after pruning.                  |
 
 ## Development
 
@@ -148,7 +269,7 @@ yarn run check
 
 `yarn run check` is the complete local gate. The explicit `run` is required because Yarn 1 reserves `yarn check` for its deprecated dependency-integrity command. The project gate requires Prettier, zero-warning ESLint, production and test TypeScript compilation, real V8 coverage thresholds, unit tests, and a build.
 
-Run the command directly:
+Run a command directly:
 
 ```bash
 ./bin/dev.js flow activate \

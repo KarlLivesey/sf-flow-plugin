@@ -2,7 +2,19 @@
 
 All notable user-visible changes to this project will be documented in this file.
 
-## 1.0.0 - Unreleased
+## Unreleased
+
+### Added
+
+- Added `sf flow versions` with active/latest markers and version timestamps.
+- Added verified, idempotent `sf flow deactivate` with dry-run support.
+- Added org-wide `sf flow audit` for inactive, behind, Draft and Obsolete Flow states.
+- Added dry-run-by-default `sf flow prune` with active/latest protection and verified deletion.
+- Added creation-date and last-modified-date retention ordering.
+- Added repeatable `--keep-version` retention within the keep quota.
+- Added repeatable, invocation-scoped `--ignore` protection outside the keep quota.
+
+## 1.0.0 - 2026-07-25
 
 ### Added
 
