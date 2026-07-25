@@ -6,7 +6,7 @@
  */
 import { fileURLToPath } from 'node:url';
 
-import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
+import { execCmd } from '@salesforce/cli-plugins-testkit';
 import type { JsonOutput } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
 import { z } from 'zod';
@@ -14,7 +14,15 @@ import { z } from 'zod';
 import type { FlowActivationResult } from '../../../src/types/flow.js';
 
 interface OrgSafetyResult {
-  records: Array<{ IsSandbox: boolean }>;
+  records: Array<{ IsSandbox: boolean; OrganizationType: string }>;
+}
+
+interface FlowDefinitionLookupResult {
+  records: Array<{ Id: string; ActiveVersionId: string | null }>;
+}
+
+interface FlowVersionLookupResult {
+  records: Array<{ Id: string }>;
 }
 
 const fixtureProject = fileURLToPath(new URL('../../nuts/fixtures/project', import.meta.url));
@@ -23,27 +31,83 @@ const targetOrgSchema = z
   .string()
   .min(1)
   .regex(/^[A-Za-z0-9._@+-]+$/);
-let session: TestSession | undefined;
+let fixtureDeployed = false;
 
 function requireTargetOrg(): string {
   const result = targetOrgSchema.safeParse(targetOrg);
   if (!result.success) {
-    throw new Error('NUT_TARGET_ORG must identify a dedicated scratch org or sandbox.');
+    throw new Error('NUT_TARGET_ORG must identify a dedicated scratch org, sandbox, or Developer Edition org.');
   }
   return result.data;
 }
 
 function verifyNonProductionOrg(org: string): void {
-  const command = `data query --query "SELECT IsSandbox FROM Organization" --target-org ${org} --json`;
+  const command =
+    'data query --query "SELECT IsSandbox, OrganizationType FROM Organization" ' + `--target-org ${org} --json`;
   const output = execCmd<OrgSafetyResult>(command, { cli: 'sf', ensureExitCode: 0 }).jsonOutput;
-  if (output === undefined || output.result.records[0]?.IsSandbox !== true) {
-    throw new Error('NUTs may run only against a Salesforce scratch org or sandbox.');
+  const organization = output?.result.records[0];
+  if (organization?.IsSandbox !== true && organization?.OrganizationType !== 'Developer Edition') {
+    throw new Error('NUTs may run only against a Salesforce scratch org, sandbox, or Developer Edition org.');
   }
 }
 
 function deployFixture(sourceDirectory: 'v1' | 'v2'): void {
   const command = `project deploy start --target-org ${requireTargetOrg()} --source-dir ${sourceDirectory}`;
   execCmd(command, { cli: 'sf', cwd: fixtureProject, ensureExitCode: 0 });
+}
+
+function findFixture(org: string): FlowDefinitionLookupResult['records'][number] | undefined {
+  const query =
+    'SELECT Id, ActiveVersionId FROM FlowDefinition ' +
+    "WHERE DeveloperName = 'Plugin_Test_Flow' AND NamespacePrefix = null";
+  const lookup = execCmd<FlowDefinitionLookupResult>(
+    `data query --use-tooling-api --query "${query}" --target-org ${org} --json`,
+    { cli: 'sf', ensureExitCode: 0 }
+  ).jsonOutput;
+  if (lookup === undefined) {
+    throw new Error('The fixture lookup did not return JSON output.');
+  }
+  return lookup.result.records[0];
+}
+
+function deactivateFixture(org: string, definitionId: string): void {
+  const endpoint = `/services/data/v65.0/tooling/sobjects/FlowDefinition/${definitionId}`;
+  const body = '\'{"Metadata":{"activeVersionNumber":0}}\'';
+  execCmd(`api request rest ${endpoint} --target-org ${org} --method PATCH --body ${body}`, {
+    cli: 'sf',
+    ensureExitCode: 0,
+  });
+}
+
+function deleteFixtureVersions(org: string, definitionId: string): void {
+  const query = `SELECT Id FROM Flow WHERE DefinitionId = '${definitionId}'`;
+  const lookup = execCmd<FlowVersionLookupResult>(
+    `data query --use-tooling-api --query "${query}" --target-org ${org} --json`,
+    { cli: 'sf', ensureExitCode: 0 }
+  ).jsonOutput;
+  if (lookup === undefined) {
+    throw new Error('The fixture version lookup did not return JSON output.');
+  }
+  for (const version of lookup.result.records) {
+    execCmd(
+      `data delete record --use-tooling-api --sobject Flow --record-id ${version.Id} ` + `--target-org ${org} --json`,
+      { cli: 'sf', ensureExitCode: 0 }
+    );
+  }
+}
+
+function deleteFixtureIfPresent(org: string): void {
+  const fixture = findFixture(org);
+  if (fixture === undefined) {
+    return;
+  }
+  if (fixture.ActiveVersionId !== null) {
+    deactivateFixture(org, fixture.Id);
+  }
+  deleteFixtureVersions(org, fixture.Id);
+  if (findFixture(org) !== undefined) {
+    throw new Error('Salesforce retained the fixture FlowDefinition after all versions were deleted.');
+  }
 }
 
 function runActivation(arguments_: string, exitCode = 0): JsonOutput<FlowActivationResult> {
@@ -55,18 +119,18 @@ function runActivation(arguments_: string, exitCode = 0): JsonOutput<FlowActivat
   return output;
 }
 
-before(async (): Promise<void> => {
+before((): void => {
   const org = requireTargetOrg();
   verifyNonProductionOrg(org);
-  session = await TestSession.create({ devhubAuthStrategy: 'NONE' });
+  deleteFixtureIfPresent(org);
   deployFixture('v1');
+  fixtureDeployed = true;
   deployFixture('v2');
 });
 
-after(async (): Promise<void> => {
-  if (session !== undefined) {
-    runActivation('--version 1');
-    await session.clean();
+after((): void => {
+  if (fixtureDeployed) {
+    deleteFixtureIfPresent(requireTargetOrg());
   }
 });
 

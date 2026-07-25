@@ -32,7 +32,7 @@ mix in a second typescript-eslint major merely to enable those renamed rules.
 
 ## NUTs
 
-NUTs must use a dedicated scratch org or sandbox and must never target Production:
+NUTs must use a dedicated scratch org, sandbox, or Developer Edition org and must never target Production:
 
 ```bash
 sf org login web \
@@ -42,12 +42,13 @@ sf org login web \
 NUT_TARGET_ORG=sf-flow-plugin-nut yarn test:nuts
 ```
 
-Tests that mutate a Flow must restore or redeploy their fixture state so test order does not affect results.
+Tests that mutate a Flow must deactivate their dedicated fixture and delete its Tooling API version records during
+teardown so repeated runs start cleanly.
 
 The manual `NUTs` GitHub Actions workflow expects a protected `salesforce-nut` environment containing an
-`SF_NUT_AUTH_URL` secret for the dedicated org. The workflow still verifies `Organization.IsSandbox` before deploying
-or mutating metadata. Repository environment and secret configuration are maintainer handover tasks and are not
-stored in this repository.
+`SF_NUT_AUTH_URL` secret for the dedicated org. The workflow verifies that the org is a sandbox or Developer Edition
+before deploying or mutating metadata. Repository environment and secret configuration are maintainer handover tasks
+and are not stored in this repository.
 
 ## Adding a command
 

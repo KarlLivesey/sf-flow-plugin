@@ -157,7 +157,7 @@ Run the command directly:
   --dry-run
 ```
 
-NUTs require a dedicated non-production scratch org or sandbox:
+NUTs require a dedicated non-production scratch org, sandbox, or Developer Edition org:
 
 ```bash
 NUT_TARGET_ORG=sf-flow-plugin-nut yarn test:nuts
