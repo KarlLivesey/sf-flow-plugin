@@ -1,7 +1,7 @@
 {
   "name": "sf-flow-plugin",
   "description": "Salesforce CLI commands for managing Flow versions",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "dependencies": {
     "@oclif/core": "^4",
     "@salesforce/core": "^8.2.7",
