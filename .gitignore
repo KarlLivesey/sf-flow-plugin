@@ -21,6 +21,8 @@ lib
 .nyc_output
 coverage
 test_session*
+stdout*.txt
+stderr*.txt
 
 # generated docs
 docs

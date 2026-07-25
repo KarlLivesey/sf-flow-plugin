@@ -6,13 +6,12 @@
  */
 import { Org } from '@salesforce/core';
 import type { Connection } from '@salesforce/core';
-import { TestContext } from '@salesforce/core/testSetup';
 import { expect } from 'chai';
-import { stubSfCommandUx } from '@salesforce/sf-plugins-core';
 
 import FlowActivate, { parseFlowVersionSelector } from '../../../src/commands/flow/activate.js';
 import { FlowDefinitionService } from '../../../src/services/flow-definition-service.js';
 import type { FlowActivationResult } from '../../../src/types/flow.js';
+import { commandTestContext as $$, commandUx } from '../../helpers/command-test-context.js';
 
 const result: FlowActivationResult = {
   apiName: 'Order_Processing',
@@ -46,17 +45,6 @@ async function expectError(promise: Promise<unknown>, name: string): Promise<voi
     expect((error as Error).name).to.equal(name);
   }
 }
-
-const $$ = new TestContext();
-let commandUx: ReturnType<typeof stubSfCommandUx>;
-
-beforeEach((): void => {
-  commandUx = stubSfCommandUx($$.SANDBOX);
-});
-
-afterEach((): void => {
-  $$.restore();
-});
 
 describe('flow activate flags', (): void => {
   it('provides help and examples', (): void => {

@@ -6,10 +6,10 @@
  */
 import { SfError } from '@salesforce/core';
 
-import type { FlowActivationErrorCode, FlowVersionSelector } from '../types/flow.js';
+import type { FlowErrorCode, FlowVersionSelector } from '../types/flow.js';
 
 interface FlowErrorOptions {
-  code: FlowActivationErrorCode;
+  code: FlowErrorCode;
   message: string;
   action: string;
   cause?: unknown;
@@ -78,5 +78,66 @@ export function flowActivationVerificationFailed(apiName: string, version: numbe
     code: 'FlowActivationVerificationFailed',
     message: `Salesforce did not report Flow "${apiName}" version ${version} as active after the update.`,
     action: 'Query the Flow definition in Salesforce and retry the activation.',
+  });
+}
+
+export function flowQueryFailed(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowQueryFailed',
+    message,
+    action: 'Confirm the org supports Tooling API Flow queries and that your user has sufficient permissions.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
+export function flowMutationFailed(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowMutationFailed',
+    message,
+    action: 'Confirm the org supports Tooling API Flow updates and that your user has sufficient permissions.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
+export function flowDeactivationFailed(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowDeactivationFailed',
+    message,
+    action: 'Confirm the Flow can be deactivated and that your user has sufficient permissions.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
+export function flowDeactivationVerificationFailed(apiName: string): SfError {
+  return createFlowError({
+    code: 'FlowDeactivationVerificationFailed',
+    message: `Salesforce still reports Flow "${apiName}" as active after the update.`,
+    action: 'Query the Flow definition in Salesforce and retry the deactivation.',
+  });
+}
+
+export function flowAuditFailed(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowAuditFailed',
+    message,
+    action: 'Confirm the org supports Tooling API Flow queries and that your user has sufficient permissions.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
+export function flowPruneFailed(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowPruneFailed',
+    message,
+    action: 'Review the planned versions and confirm that Salesforce permits deleting them.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
+export function flowPruneVerificationFailed(apiName: string): SfError {
+  return createFlowError({
+    code: 'FlowPruneVerificationFailed',
+    message: `Salesforce still reports one or more deleted versions for Flow "${apiName}".`,
+    action: 'Query the Flow versions in Salesforce and retry the prune operation.',
   });
 }

@@ -7,7 +7,7 @@
 import type { Connection } from '@salesforce/core';
 import type { z } from 'zod';
 
-import { flowActivationFailed } from '../errors/flow-errors.js';
+import { flowMutationFailed, flowQueryFailed } from '../errors/flow-errors.js';
 import {
   flowDefinitionRecordSchema,
   flowVersionRecordSchema,
@@ -28,7 +28,7 @@ import { validateFlowApiName, validateNamespace, validateSalesforceId } from '..
 function parseSalesforceValue<T>(schema: z.ZodType<T>, value: unknown, label: string): T {
   const result = schema.safeParse(value);
   if (!result.success) {
-    throw flowActivationFailed(`Salesforce returned a malformed ${label}.`);
+    throw flowQueryFailed(`Salesforce returned a malformed ${label}.`);
   }
   return result.data;
 }
@@ -59,6 +59,8 @@ function parseVersion(value: unknown): FlowVersion {
     status: external.Status,
     label: external.MasterLabel,
     processType: external.ProcessType,
+    createdDate: external.CreatedDate,
+    lastModifiedDate: external.LastModifiedDate,
   };
 }
 
@@ -68,9 +70,17 @@ function buildDefinitionQuery(lookup: FlowDefinitionLookup): string {
   return `SELECT ${fields} FROM FlowDefinition WHERE DeveloperName = '${lookup.apiName}'${namespaceClause}`;
 }
 
+function buildAllDefinitionsQuery(): string {
+  return 'SELECT Id, DeveloperName, NamespacePrefix, ActiveVersionId, LatestVersionId FROM FlowDefinition ORDER BY DeveloperName ASC';
+}
+
 function buildVersionQuery(definitionId: string): string {
-  const fields = 'Id, DefinitionId, VersionNumber, Status, MasterLabel, ProcessType';
+  const fields = 'Id, DefinitionId, VersionNumber, Status, MasterLabel, ProcessType, CreatedDate, LastModifiedDate';
   return `SELECT ${fields} FROM Flow WHERE DefinitionId = '${definitionId}' ORDER BY VersionNumber ASC`;
+}
+
+function buildAllVersionsQuery(): string {
+  return 'SELECT Id, DefinitionId, VersionNumber, Status, MasterLabel, ProcessType, CreatedDate, LastModifiedDate FROM Flow ORDER BY DefinitionId ASC, VersionNumber ASC';
 }
 
 export class ToolingFlowDefinitionGateway implements FlowDefinitionGateway {
@@ -85,27 +95,47 @@ export class ToolingFlowDefinitionGateway implements FlowDefinitionGateway {
     return records.map(parseDefinition);
   }
 
+  public async findAllDefinitions(): Promise<ReadonlyArray<FlowDefinition>> {
+    const records = await this.queryAll(buildAllDefinitionsQuery());
+    return records.map(parseDefinition);
+  }
+
   public async findVersions(definitionId: string): Promise<ReadonlyArray<FlowVersion>> {
     validateSalesforceId(definitionId, 'Flow definition ID');
     const records = await this.queryAll(buildVersionQuery(definitionId));
     const versions = records.map(parseVersion);
     if (versions.some((version) => version.definitionId !== definitionId)) {
-      throw flowActivationFailed('Salesforce returned a Flow version for an unexpected definition.');
+      throw flowQueryFailed('Salesforce returned a Flow version for an unexpected definition.');
     }
     return versions;
   }
 
-  public async updateActiveVersion(definitionId: string, versionNumber: FlowVersionNumber): Promise<void> {
+  public async findAllVersions(): Promise<ReadonlyArray<FlowVersion>> {
+    const records = await this.queryAll(buildAllVersionsQuery());
+    return records.map(parseVersion);
+  }
+
+  public async setActiveVersion(definitionId: string, versionNumber: FlowVersionNumber | null): Promise<void> {
     validateSalesforceId(definitionId, 'Flow definition ID');
-    if (!positiveFlowVersionSchema.safeParse(versionNumber).success) {
-      throw flowActivationFailed('The active Flow version must be a positive whole number.');
+    if (versionNumber !== null && !positiveFlowVersionSchema.safeParse(versionNumber).success) {
+      throw flowMutationFailed('The active Flow version must be a positive whole number.');
     }
-    const update: FlowDefinitionMetadataUpdate = { Metadata: { activeVersionNumber: versionNumber } };
+    const update: FlowDefinitionMetadataUpdate = { Metadata: { activeVersionNumber: versionNumber ?? 0 } };
     const url = `${this.connection.baseUrl()}/tooling/sobjects/FlowDefinition/${definitionId}`;
     try {
       await this.connection.request({ method: 'PATCH', url, body: JSON.stringify(update) });
     } catch (error: unknown) {
-      throw flowActivationFailed('Salesforce rejected the Flow activation update.', error);
+      throw flowMutationFailed('Salesforce rejected the Flow definition update.', error);
+    }
+  }
+
+  public async deleteVersion(versionId: string): Promise<void> {
+    validateSalesforceId(versionId, 'Flow version ID');
+    const url = `${this.connection.baseUrl()}/tooling/sobjects/Flow/${versionId}`;
+    try {
+      await this.connection.request({ method: 'DELETE', url });
+    } catch (error: unknown) {
+      throw flowMutationFailed('Salesforce rejected the Flow version deletion.', error);
     }
   }
 
@@ -114,10 +144,10 @@ export class ToolingFlowDefinitionGateway implements FlowDefinitionGateway {
       const firstPage: unknown = await this.connection.tooling.query(soql);
       return await this.collectPages(parseQueryResult(firstPage), []);
     } catch (error: unknown) {
-      if (error instanceof Error && error.name === 'FlowActivationFailed') {
+      if (error instanceof Error && error.name === 'FlowQueryFailed') {
         throw error;
       }
-      throw flowActivationFailed('The Salesforce Tooling API query failed.', error);
+      throw flowQueryFailed('The Salesforce Tooling API query failed.', error);
     }
   }
 
@@ -130,7 +160,7 @@ export class ToolingFlowDefinitionGateway implements FlowDefinitionGateway {
       return records;
     }
     if (page.nextRecordsUrl === undefined) {
-      throw flowActivationFailed('Salesforce omitted the URL for the next Tooling API query page.');
+      throw flowQueryFailed('Salesforce omitted the URL for the next Tooling API query page.');
     }
     const nextPage: unknown = await this.connection.tooling.queryMore(page.nextRecordsUrl);
     return this.collectPages(parseQueryResult(nextPage), records);

@@ -6,7 +6,7 @@
  */
 import { z } from 'zod';
 
-import type { FlowDefinitionRecord, FlowVersionRecord } from '../types/flow.js';
+import type { FlowDefinitionRecord, FlowPruneOrder, FlowVersionRecord } from '../types/flow.js';
 
 const FLOW_API_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
 const NAMESPACE_PATTERN = /^[A-Za-z][A-Za-z0-9]{0,14}$/;
@@ -22,6 +22,10 @@ export const namespaceSchema = z.string().regex(NAMESPACE_PATTERN);
 export const salesforceIdSchema = z.string().regex(SALESFORCE_ID_PATTERN);
 
 export const positiveFlowVersionSchema = z.number().int().positive().safe();
+
+export const nonnegativeIntegerSchema = z.number().int().nonnegative().safe();
+
+export const flowPruneOrderSchema: z.ZodType<FlowPruneOrder> = z.enum(['created', 'modified']);
 
 export const toolingQueryResultSchema = z.object({
   done: z.boolean(),
@@ -45,4 +49,6 @@ export const flowVersionRecordSchema: z.ZodType<FlowVersionRecord> = z.object({
   Status: z.string().min(1),
   MasterLabel: z.string().min(1),
   ProcessType: z.string().min(1),
+  CreatedDate: z.string().datetime({ offset: true }),
+  LastModifiedDate: z.string().datetime({ offset: true }),
 });

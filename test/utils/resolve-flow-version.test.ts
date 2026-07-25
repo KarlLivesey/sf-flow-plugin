@@ -17,6 +17,8 @@ function version(versionNumber: number, status = 'Draft'): FlowVersion {
     status,
     label: `Version ${versionNumber}`,
     processType: 'Flow',
+    createdDate: `2026-01-${String(versionNumber).padStart(2, '0')}T00:00:00.000Z`,
+    lastModifiedDate: `2026-02-${String(versionNumber).padStart(2, '0')}T00:00:00.000Z`,
   };
 }
 

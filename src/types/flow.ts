@@ -8,21 +8,33 @@ export type FlowVersionNumber = number;
 
 export type FlowVersionSelector = 'latest' | FlowVersionNumber;
 
-export type FlowActivationErrorCode =
+export type FlowPruneOrder = 'created' | 'modified';
+
+export type FlowErrorCode =
   | 'FlowDefinitionNotFound'
   | 'FlowDefinitionAmbiguous'
   | 'FlowVersionInvalid'
   | 'FlowVersionNotFound'
   | 'FlowVersionNotActivatable'
+  | 'FlowQueryFailed'
+  | 'FlowMutationFailed'
   | 'FlowActivationFailed'
-  | 'FlowActivationVerificationFailed';
+  | 'FlowActivationVerificationFailed'
+  | 'FlowDeactivationFailed'
+  | 'FlowDeactivationVerificationFailed'
+  | 'FlowAuditFailed'
+  | 'FlowPruneFailed'
+  | 'FlowPruneVerificationFailed';
 
-export interface FlowActivationRequest {
+export interface NamedFlowRequest {
   apiName: string;
   targetOrg: string;
-  requestedVersion: FlowVersionSelector;
   namespace?: string;
   apiVersion?: string;
+}
+
+export interface FlowActivationRequest extends NamedFlowRequest {
+  requestedVersion: FlowVersionSelector;
   dryRun: boolean;
 }
 
@@ -48,6 +60,8 @@ export interface FlowVersionRecord {
   Status: string;
   MasterLabel: string;
   ProcessType: string;
+  CreatedDate: string;
+  LastModifiedDate: string;
 }
 
 export interface FlowDefinition {
@@ -65,6 +79,8 @@ export interface FlowVersion {
   status: string;
   label: string;
   processType: string;
+  createdDate: string;
+  lastModifiedDate: string;
 }
 
 export interface FlowActivationPlan {
@@ -90,7 +106,7 @@ export interface FlowActivationResult {
 
 export interface FlowDefinitionMetadataUpdate {
   Metadata: {
-    activeVersionNumber: FlowVersionNumber;
+    activeVersionNumber: number;
   };
 }
 
@@ -101,11 +117,110 @@ export interface FlowDefinitionLookup {
 
 export interface FlowDefinitionGateway {
   findDefinitions(lookup: FlowDefinitionLookup): Promise<ReadonlyArray<FlowDefinition>>;
+  findAllDefinitions(): Promise<ReadonlyArray<FlowDefinition>>;
   findVersions(definitionId: string): Promise<ReadonlyArray<FlowVersion>>;
-  updateActiveVersion(definitionId: string, versionNumber: FlowVersionNumber): Promise<void>;
+  findAllVersions(): Promise<ReadonlyArray<FlowVersion>>;
+  setActiveVersion(definitionId: string, versionNumber: FlowVersionNumber | null): Promise<void>;
+  deleteVersion(versionId: string): Promise<void>;
 }
 
 export interface FlowDefinitionService {
   planActivation(request: FlowActivationRequest): Promise<FlowActivationPlan>;
   activate(request: FlowActivationRequest): Promise<FlowActivationResult>;
+}
+
+export interface FlowVersionSummary {
+  id: string;
+  versionNumber: FlowVersionNumber;
+  status: string;
+  label: string;
+  processType: string;
+  createdDate: string;
+  lastModifiedDate: string;
+  active: boolean;
+  latest: boolean;
+}
+
+export interface FlowVersionsResult {
+  apiName: string;
+  namespace: string | null;
+  definitionId: string;
+  activeVersion: FlowVersionNumber | null;
+  latestVersion: FlowVersionNumber | null;
+  versions: FlowVersionSummary[];
+  targetOrg: string;
+}
+
+export interface FlowDeactivationRequest extends NamedFlowRequest {
+  dryRun: boolean;
+}
+
+export interface FlowDeactivationResult {
+  apiName: string;
+  namespace: string | null;
+  definitionId: string;
+  previousActiveVersion: FlowVersionNumber | null;
+  activeVersion: null;
+  changed: boolean;
+  dryRun: boolean;
+  targetOrg: string;
+}
+
+export type FlowAuditIssueCode =
+  | 'ActiveVersionBehindLatest'
+  | 'NoActiveVersion'
+  | 'DraftVersionsPresent'
+  | 'ObsoleteVersionsPresent';
+
+export interface FlowAuditEntry {
+  apiName: string;
+  namespace: string | null;
+  definitionId: string;
+  activeVersion: FlowVersionNumber | null;
+  latestVersion: FlowVersionNumber | null;
+  draftVersions: number;
+  obsoleteVersions: number;
+  issues: FlowAuditIssueCode[];
+}
+
+export interface FlowAuditResult {
+  targetOrg: string;
+  definitionsScanned: number;
+  flowsWithIssues: number;
+  flows: FlowAuditEntry[];
+}
+
+export interface FlowPruneRequest extends NamedFlowRequest {
+  keep: number;
+  keepVersions: FlowVersionNumber[];
+  ignoreVersions: FlowVersionNumber[];
+  keepBy: FlowPruneOrder;
+  dryRun: boolean;
+}
+
+export interface FlowPruneVersion {
+  id: string;
+  versionNumber: FlowVersionNumber;
+  status: string;
+  createdDate: string;
+  lastModifiedDate: string;
+}
+
+export interface FlowPruneResult {
+  apiName: string;
+  namespace: string | null;
+  definitionId: string;
+  keep: number;
+  keepVersions: FlowVersionNumber[];
+  ignoreVersions: FlowVersionNumber[];
+  keepBy: FlowPruneOrder;
+  protectedVersions: FlowPruneVersion[];
+  ignoredVersions: FlowPruneVersion[];
+  retainedVersions: FlowPruneVersion[];
+  plannedDeletions: FlowPruneVersion[];
+  deletedVersions: FlowPruneVersion[];
+  skippedVersions: FlowPruneVersion[];
+  changed: boolean;
+  dryRun: boolean;
+  targetOrg: string;
 }

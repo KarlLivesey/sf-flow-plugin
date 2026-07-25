@@ -18,10 +18,11 @@ import type {
 
 interface UpdateCall {
   definitionId: string;
-  versionNumber: number;
+  versionNumber: number | null;
 }
 
 class FakeGateway implements FlowDefinitionGateway {
+  public readonly deletes: string[] = [];
   public readonly lookups: FlowDefinitionLookup[] = [];
   public readonly updates: UpdateCall[] = [];
   public definitionError?: Error;
@@ -44,6 +45,10 @@ class FakeGateway implements FlowDefinitionGateway {
     return response;
   }
 
+  public async findAllDefinitions(): Promise<ReadonlyArray<FlowDefinition>> {
+    return this.definitionResponses[0] ?? [];
+  }
+
   public async findVersions(_definitionId: string): Promise<ReadonlyArray<FlowVersion>> {
     void _definitionId;
     const response = this.versionResponses[this.versionCall] ?? this.versionResponses.at(-1) ?? [];
@@ -51,11 +56,19 @@ class FakeGateway implements FlowDefinitionGateway {
     return response;
   }
 
-  public async updateActiveVersion(definitionId: string, versionNumber: FlowVersionNumber): Promise<void> {
+  public async findAllVersions(): Promise<ReadonlyArray<FlowVersion>> {
+    return this.versionResponses.flat();
+  }
+
+  public async setActiveVersion(definitionId: string, versionNumber: FlowVersionNumber | null): Promise<void> {
     if (this.updateError !== undefined) {
       throw this.updateError;
     }
     this.updates.push({ definitionId, versionNumber });
+  }
+
+  public async deleteVersion(versionId: string): Promise<void> {
+    this.deletes.push(versionId);
   }
 }
 
@@ -77,6 +90,8 @@ function version(versionNumber: number): FlowVersion {
     status: versionNumber === 1 ? 'Active' : 'Draft',
     label: `Version ${versionNumber}`,
     processType: 'Flow',
+    createdDate: `2026-01-${String(versionNumber).padStart(2, '0')}T00:00:00.000Z`,
+    lastModifiedDate: `2026-02-${String(versionNumber).padStart(2, '0')}T00:00:00.000Z`,
   };
 }
 

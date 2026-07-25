@@ -106,7 +106,7 @@ export class FlowDefinitionService implements FlowDefinitionServiceContract {
 
   private async update(plan: FlowActivationPlan): Promise<void> {
     try {
-      await this.gateway.updateActiveVersion(plan.definition.id, plan.selectedVersion.versionNumber);
+      await this.gateway.setActiveVersion(plan.definition.id, plan.selectedVersion.versionNumber);
     } catch (error: unknown) {
       throw flowActivationFailed(`Failed to activate Flow "${plan.definition.apiName}".`, error);
     }

@@ -11,7 +11,13 @@ import type { JsonOutput } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
 import { z } from 'zod';
 
-import type { FlowActivationResult } from '../../../src/types/flow.js';
+import type {
+  FlowActivationResult,
+  FlowAuditResult,
+  FlowDeactivationResult,
+  FlowPruneResult,
+  FlowVersionsResult,
+} from '../../../src/types/flow.js';
 
 interface OrgSafetyResult {
   records: Array<{ IsSandbox: boolean; OrganizationType: string }>;
@@ -51,7 +57,7 @@ function verifyNonProductionOrg(org: string): void {
   }
 }
 
-function deployFixture(sourceDirectory: 'v1' | 'v2'): void {
+function deployFixture(sourceDirectory: 'v1' | 'v2' | 'v3'): void {
   const command = `project deploy start --target-org ${requireTargetOrg()} --source-dir ${sourceDirectory}`;
   execCmd(command, { cli: 'sf', cwd: fixtureProject, ensureExitCode: 0 });
 }
@@ -115,6 +121,15 @@ function runActivation(arguments_: string, exitCode = 0): JsonOutput<FlowActivat
   const output = execCmd<FlowActivationResult>(command, { ensureExitCode: exitCode }).jsonOutput;
   if (output === undefined) {
     throw new Error('The command did not return JSON output.');
+  }
+  return output;
+}
+
+function runFlowCommand<TResult>(commandName: string, arguments_: string): JsonOutput<TResult> {
+  const command = `flow ${commandName} --target-org ${requireTargetOrg()} ${arguments_} --json`;
+  const output = execCmd<TResult>(command, { ensureExitCode: 0 }).jsonOutput;
+  if (output === undefined) {
+    throw new Error(`The flow ${commandName} command did not return JSON output.`);
   }
   return output;
 }
@@ -191,5 +206,34 @@ describe('flow activate error NUTs', (): void => {
   it('returns FlowVersionNotFound for an unknown version', (): void => {
     const output = runActivation('--version 999', 1);
     expect(output).to.have.property('name', 'FlowVersionNotFound');
+  });
+});
+
+describe('Flow lifecycle command NUTs', (): void => {
+  it('lists active and latest versions', (): void => {
+    const output = runFlowCommand<FlowVersionsResult>('versions', '--api-name Plugin_Test_Flow');
+    expect(output.result.versions.map((version) => version.versionNumber)).to.deep.equal([1, 2]);
+    expect(output.result.versions.find((version) => version.active)?.versionNumber).to.equal(2);
+  });
+
+  it('audits the fixture Flow', (): void => {
+    const output = runFlowCommand<FlowAuditResult>('audit', '');
+    const fixture = output.result.flows.find((flow) => flow.apiName === 'Plugin_Test_Flow');
+    expect(fixture).to.not.equal(undefined);
+  });
+
+  it('deactivates and verifies the fixture Flow', (): void => {
+    const output = runFlowCommand<FlowDeactivationResult>('deactivate', '--api-name Plugin_Test_Flow');
+    expect(output.result).to.include({ previousActiveVersion: 2, activeVersion: null, changed: true });
+  });
+
+  it('prunes an old inactive version while protecting active and latest', (): void => {
+    runActivation('--version 1');
+    deployFixture('v3');
+    const preview = runFlowCommand<FlowPruneResult>('prune', '--api-name Plugin_Test_Flow --keep 0');
+    expect(preview.result.plannedDeletions.map((version) => version.versionNumber)).to.deep.equal([2]);
+    const output = runFlowCommand<FlowPruneResult>('prune', '--api-name Plugin_Test_Flow --keep 0 --no-dry-run');
+    expect(output.result.deletedVersions.map((version) => version.versionNumber)).to.deep.equal([2]);
+    expect(output.result.protectedVersions.map((version) => version.versionNumber)).to.have.members([1, 3]);
   });
 });
