@@ -20,6 +20,7 @@ import type {
   FlowVariableSummary,
 } from '../../types/flow-inspection.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
+import { withFlowProgress } from '../../utils/flow-progress.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('sf-flow-plugin', 'flow.describe');
@@ -137,7 +138,9 @@ export default class FlowDescribe extends SfCommand<FlowDescribeResult> {
     validateNamedFlowFlags(flags);
     const context = createFlowCommandContext(flags);
     const service = new FlowDescribeService(new ToolingFlowDefinitionGateway(context.connection));
-    const result = await service.describe(createRequest(flags, context));
+    const result = await withFlowProgress(this.spinner, 'describe', async () =>
+      service.describe(createRequest(flags, context))
+    );
     this.writeHumanOutput(result);
     return result;
   }

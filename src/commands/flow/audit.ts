@@ -12,6 +12,7 @@ import { FlowAuditService } from '../../services/flow-audit-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type { FlowAuditResult } from '../../types/flow.js';
 import { createFlowCommandContext } from '../../utils/flow-command.js';
+import { withFlowProgress } from '../../utils/flow-progress.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -42,7 +43,7 @@ export default class FlowAudit extends SfCommand<FlowAuditResult> {
     const flags = await this.parseFlags();
     const context = createFlowCommandContext(flags);
     const service = new FlowAuditService(new ToolingFlowDefinitionGateway(context.connection));
-    const result = await service.audit(context.targetOrg);
+    const result = await withFlowProgress(this.spinner, 'audit', async () => service.audit(context.targetOrg));
     this.writeHumanOutput(result);
     return result;
   }

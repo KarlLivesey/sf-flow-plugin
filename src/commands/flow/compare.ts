@@ -18,6 +18,7 @@ import type {
   JsonValue,
 } from '../../types/flow-analysis.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
+import { withFlowProgress } from '../../utils/flow-progress.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -99,7 +100,9 @@ export default class FlowCompare extends SfCommand<FlowCompareResult> {
     validateNamedFlowFlags(flags);
     const context = createFlowCommandContext(flags);
     const service = new FlowComparisonService(new ToolingFlowDefinitionGateway(context.connection));
-    const result = await service.compare(createRequest(flags, context));
+    const result = await withFlowProgress(this.spinner, 'compare', async () =>
+      service.compare(createRequest(flags, context))
+    );
     this.writeHumanOutput(result);
     return result;
   }

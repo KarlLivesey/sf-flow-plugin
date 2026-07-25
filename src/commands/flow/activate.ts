@@ -12,6 +12,7 @@ import { flowActivationFailed, flowVersionInvalid } from '../../errors/flow-erro
 import { FlowDefinitionService } from '../../services/flow-definition-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type { FlowActivationRequest, FlowActivationResult, FlowVersionSelector } from '../../types/flow.js';
+import { withFlowProgress } from '../../utils/flow-progress.js';
 import { validateFlowApiName, validateNamespace } from '../../utils/flow-name-validation.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -113,7 +114,9 @@ export default class FlowActivate extends SfCommand<FlowActivationResult> {
     const targetOrg = requireTargetOrg(flags['target-org']);
     const connection = targetOrg.getConnection(flags['api-version']);
     const service = new FlowDefinitionService(new ToolingFlowDefinitionGateway(connection));
-    const result = await service.activate(createRequest(flags, targetOrg));
+    const result = await withFlowProgress(this.spinner, 'activate', async () =>
+      service.activate(createRequest(flags, targetOrg))
+    );
     this.writeHumanOutput(result);
     return result;
   }

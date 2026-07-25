@@ -12,6 +12,7 @@ import { FlowDeactivationService } from '../../services/flow-deactivation-servic
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type { FlowDeactivationRequest, FlowDeactivationResult } from '../../types/flow.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
+import { withFlowProgress } from '../../utils/flow-progress.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -65,7 +66,9 @@ export default class FlowDeactivate extends SfCommand<FlowDeactivationResult> {
     validateNamedFlowFlags(flags);
     const context = createFlowCommandContext(flags);
     const service = new FlowDeactivationService(new ToolingFlowDefinitionGateway(context.connection));
-    const result = await service.deactivate(createRequest(flags, context));
+    const result = await withFlowProgress(this.spinner, 'deactivate', async () =>
+      service.deactivate(createRequest(flags, context))
+    );
     this.writeHumanOutput(result);
     return result;
   }

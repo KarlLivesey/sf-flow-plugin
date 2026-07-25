@@ -11,6 +11,8 @@ All notable user-visible changes to this project will be documented in this file
 - Added optional recursive subflow expansion with visited-definition and configurable depth limits.
 - Added active-or-latest subflow version selection, defaulting to active with latest fallback.
 - Added optional variable and formula annotations to generated graphs.
+- Added semantic Mermaid and DOT styling with named or hex colour overrides and configurable typography.
+- Added automatic Salesforce-style progress output to every Flow command, suppressed in JSON mode.
 - Added point-in-time Tooling API permission preflights for real and dry-run Flow mutations.
 
 ## 1.1.0 - 2026-07-25

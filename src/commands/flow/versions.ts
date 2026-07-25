@@ -12,6 +12,7 @@ import { FlowVersionsService } from '../../services/flow-versions-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type { FlowVersionsResult } from '../../types/flow.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
+import { withFlowProgress } from '../../utils/flow-progress.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -53,7 +54,9 @@ export default class FlowVersions extends SfCommand<FlowVersionsResult> {
     validateNamedFlowFlags(flags);
     const context = createFlowCommandContext(flags);
     const service = new FlowVersionsService(new ToolingFlowDefinitionGateway(context.connection));
-    const result = await service.getVersions(createNamedFlowRequest(flags, context));
+    const result = await withFlowProgress(this.spinner, 'versions', async () =>
+      service.getVersions(createNamedFlowRequest(flags, context))
+    );
     this.writeHumanOutput(result);
     return result;
   }

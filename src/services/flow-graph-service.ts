@@ -5,6 +5,8 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import type { FlowMetadataGateway } from '../types/flow-analysis.js';
+import { flowInspectionFailed } from '../errors/flow-errors.js';
+import { flowGraphStyleSchema } from '../schemas/flow.js';
 import type { FlowDefinitionGateway } from '../types/flow.js';
 import type { FlowGraphRequest, FlowGraphResult } from '../types/flow-inspection.js';
 import { renderFlowGraph } from '../utils/flow-graph-renderer.js';
@@ -14,16 +16,22 @@ export class FlowGraphService {
   public constructor(private readonly gateway: FlowDefinitionGateway & FlowMetadataGateway) {}
 
   public async graph(request: FlowGraphRequest): Promise<FlowGraphResult> {
+    const style = flowGraphStyleSchema.safeParse(request.style);
+    if (!style.success) {
+      throw flowInspectionFailed('The requested graph style is invalid.');
+    }
     const described = await new FlowDescribeService(this.gateway).describe(request);
     const options = {
       includeVariables: request.includeVariables,
       includeFormulas: request.includeFormulas,
+      style: style.data,
     };
     return {
       ...described,
       format: request.format,
       includeVariables: request.includeVariables,
       includeFormulas: request.includeFormulas,
+      style: style.data,
       graph: renderFlowGraph(described.flows, request.format, options),
     };
   }

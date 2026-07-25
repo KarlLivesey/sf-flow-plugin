@@ -16,6 +16,7 @@ import type {
   FlowDependencyDirection,
 } from '../../types/flow-analysis.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
+import { withFlowProgress } from '../../utils/flow-progress.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -73,7 +74,9 @@ export default class FlowDependencies extends SfCommand<FlowDependenciesResult> 
     validateNamedFlowFlags(flags);
     const context = createFlowCommandContext(flags);
     const service = new FlowDependenciesService(new ToolingFlowDefinitionGateway(context.connection));
-    const result = await service.getDependencies(createRequest(flags, context));
+    const result = await withFlowProgress(this.spinner, 'dependencies', async () =>
+      service.getDependencies(createRequest(flags, context))
+    );
     this.writeHumanOutput(result);
     return result;
   }

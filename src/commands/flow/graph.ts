@@ -9,15 +9,19 @@ import type { Org } from '@salesforce/core';
 import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
 import { FlowGraphService } from '../../services/flow-graph-service.js';
+import { flowInspectionFailed } from '../../errors/flow-errors.js';
+import { flowGraphColorRoleSchema, flowGraphColorSchema } from '../../schemas/flow.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type { FlowComparisonVersionSelector } from '../../types/flow-analysis.js';
 import type {
+  FlowGraphColorOverrides,
   FlowGraphFormat,
   FlowGraphRequest,
   FlowGraphResult,
   FlowSubflowVersionSelector,
 } from '../../types/flow-inspection.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
+import { withFlowProgress } from '../../utils/flow-progress.js';
 import { parseInspectionVersionSelector } from './describe.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -33,8 +37,25 @@ export interface GraphFlagValues {
   'max-depth': number;
   'include-variables': boolean;
   'include-formulas': boolean;
+  color: string[];
+  'font-family': string;
+  'font-size': number;
   namespace: string | undefined;
   'api-version': string | undefined;
+}
+
+export function parseGraphColorOverrides(values: ReadonlyArray<string>): FlowGraphColorOverrides {
+  return values.reduce<FlowGraphColorOverrides>((colors, value) => {
+    const separator = value.indexOf('=');
+    const roleResult = flowGraphColorRoleSchema.safeParse(value.slice(0, separator));
+    const colorResult = flowGraphColorSchema.safeParse(value.slice(separator + 1).toLowerCase());
+    if (separator < 1 || !roleResult.success || !colorResult.success) {
+      throw flowInspectionFailed(
+        `Graph colour override "${value}" must use a supported ROLE=COLOUR or ROLE=#HEX value.`
+      );
+    }
+    return { ...colors, [roleResult.data]: colorResult.data };
+  }, {});
 }
 
 function createRequest(flags: GraphFlagValues, context: ReturnType<typeof createFlowCommandContext>): FlowGraphRequest {
@@ -47,6 +68,11 @@ function createRequest(flags: GraphFlagValues, context: ReturnType<typeof create
     maxDepth: flags['max-depth'],
     includeVariables: flags['include-variables'],
     includeFormulas: flags['include-formulas'],
+    style: {
+      colors: parseGraphColorOverrides(flags.color),
+      fontFamily: flags['font-family'],
+      fontSize: flags['font-size'],
+    },
   };
 }
 
@@ -105,6 +131,22 @@ export default class FlowGraph extends SfCommand<FlowGraphResult> {
       default: false,
       summary: messages.getMessage('flags.include-formulas.summary'),
     }),
+    color: Flags.string({
+      aliases: ['colour'],
+      default: [],
+      multiple: true,
+      summary: messages.getMessage('flags.color.summary'),
+    }),
+    'font-family': Flags.string({
+      default: 'Arial',
+      summary: messages.getMessage('flags.font-family.summary'),
+    }),
+    'font-size': Flags.integer({
+      default: 14,
+      min: 8,
+      max: 32,
+      summary: messages.getMessage('flags.font-size.summary'),
+    }),
     namespace: Flags.string({
       summary: messages.getMessage('flags.namespace.summary'),
     }),
@@ -118,7 +160,9 @@ export default class FlowGraph extends SfCommand<FlowGraphResult> {
     validateNamedFlowFlags(flags);
     const context = createFlowCommandContext(flags);
     const service = new FlowGraphService(new ToolingFlowDefinitionGateway(context.connection));
-    const result = await service.graph(createRequest(flags, context));
+    const result = await withFlowProgress(this.spinner, 'graph', async () =>
+      service.graph(createRequest(flags, context))
+    );
     if (!this.jsonEnabled()) {
       this.log(result.graph);
       for (const warning of result.warnings) {

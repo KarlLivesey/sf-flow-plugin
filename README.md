@@ -67,6 +67,8 @@ If `--target-org` is omitted, the command uses the Salesforce CLI `target-org` c
 | `sf flow audit`        | Report Flow definitions with version-state issues.              |
 | `sf flow prune`        | Safely plan or delete old inactive Flow versions.               |
 
+Commands show an automatic Salesforce-style progress spinner while they query or mutate the org. Progress output is suppressed automatically when `--json` is used.
+
 ## `sf flow activate`
 
 ```bash
@@ -255,6 +257,9 @@ sf flow graph \
   [--max-depth NUMBER] \
   [--include-variables] \
   [--include-formulas] \
+  [--color ROLE=COLOUR ...] \
+  [--font-family NAME] \
+  [--font-size NUMBER] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--json]
@@ -279,6 +284,21 @@ sf flow graph \
 ```
 
 Recursive graphs use the same subflow-version selection, fallback, visited-definition and depth rules as `sf flow describe`.
+
+Mermaid and DOT output use the same semantic theme. Override a role with repeatable `--color` or `--colour` flags; both spellings are equivalent. Values can be a supported named colour, `#RGB` or `#RRGGBB`:
+
+```bash
+sf flow graph \
+  --api-name Order_Processing \
+  --colour decision=orange \
+  --color subflow=#7c3aed \
+  --font-family "Fira Code" \
+  --font-size 16
+```
+
+Colour roles are `background`, `cluster`, `text`, `node`, `start`, `decision`, `subflow`, `action`, `record`, `screen`, `resource`, `connector` and `call`.
+
+Named colours include `aliceblue`, `amber`, `aqua`, `aquamarine`, `azure`, `beige`, `bisque`, `black`, `blue`, `brown`, `chocolate`, `coral`, `cornflowerblue`, `crimson`, `cyan`, `darkblue`, `darkcyan`, `darkgreen`, `darkgrey`, `darkorange`, `darkred`, `deeppink`, `deepskyblue`, `emerald`, `fuchsia`, `gold`, `goldenrod`, `gray`, `green`, `grey`, `hotpink`, `indigo`, `ivory`, `khaki`, `lavender`, `lime`, `magenta`, `maroon`, `navy`, `olive`, `orange`, `orchid`, `pink`, `plum`, `purple`, `red`, `rose`, `salmon`, `seagreen`, `silver`, `sky`, `skyblue`, `slate`, `slateblue`, `slategray`, `slategrey`, `tan`, `teal`, `tomato`, `turquoise`, `violet`, `white`, `yellow` and `yellowgreen`. Named values are converted to hex; `gray` and `grey` are identical.
 
 ## `sf flow deactivate`
 

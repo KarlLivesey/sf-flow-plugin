@@ -7,7 +7,7 @@
 import type { Connection } from '@salesforce/core';
 import { expect } from 'chai';
 
-import FlowGraph from '../../../src/commands/flow/graph.js';
+import FlowGraph, { parseGraphColorOverrides } from '../../../src/commands/flow/graph.js';
 import { FlowGraphService } from '../../../src/services/flow-graph-service.js';
 import type { FlowGraphResult } from '../../../src/types/flow-inspection.js';
 import { createCommandOrg } from '../../helpers/command-org.js';
@@ -27,6 +27,11 @@ const result: FlowGraphResult = {
   format: 'dot',
   includeVariables: true,
   includeFormulas: true,
+  style: {
+    colors: { decision: 'orange' },
+    fontFamily: 'Inter',
+    fontSize: 16,
+  },
   graph: 'digraph Flow {}',
 };
 
@@ -37,6 +42,23 @@ describe('flow graph flags', (): void => {
     expect(FlowGraph.flags.recursive.default).to.equal(false);
     expect(FlowGraph.flags['include-variables'].default).to.equal(false);
     expect(FlowGraph.flags['include-formulas'].default).to.equal(false);
+    expect(FlowGraph.flags.color.default).to.deep.equal([]);
+    expect(FlowGraph.flags.color.aliases).to.deep.equal(['colour']);
+    expect(FlowGraph.flags['font-family'].default).to.equal('Arial');
+    expect(FlowGraph.flags['font-size'].default).to.equal(14);
+  });
+
+  it('accepts named and hex colour overrides with the last duplicate winning', (): void => {
+    expect(parseGraphColorOverrides(['decision=orange', 'subflow=#7c3aed', 'decision=coral'])).to.deep.equal({
+      decision: 'coral',
+      subflow: '#7c3aed',
+    });
+  });
+
+  it('rejects malformed or unsupported colour overrides', (): void => {
+    expect(() => parseGraphColorOverrides(['decision=chartreuse'])).to.throw(
+      'must use a supported ROLE=COLOUR or ROLE=#HEX value'
+    );
   });
 });
 
@@ -52,6 +74,9 @@ describe('flow graph command execution', (): void => {
       'max-depth': 4,
       'include-variables': true,
       'include-formulas': true,
+      color: ['decision=orange'],
+      'font-family': 'Inter',
+      'font-size': 16,
       namespace: undefined,
       'api-version': undefined,
     };
@@ -68,6 +93,11 @@ describe('flow graph command execution', (): void => {
       maxDepth: 4,
       includeVariables: true,
       includeFormulas: true,
+      style: {
+        colors: { decision: 'orange' },
+        fontFamily: 'Inter',
+        fontSize: 16,
+      },
     });
     expect(actual).to.equal(result);
   });

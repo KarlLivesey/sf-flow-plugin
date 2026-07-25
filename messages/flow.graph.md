@@ -42,6 +42,18 @@ Include Flow variables as graph annotations.
 
 Include Flow formulas as graph annotations.
 
+# flags.color.summary
+
+Override a graph colour using ROLE=COLOUR or ROLE=#HEX. Repeat for multiple roles. --colour is an alias.
+
+# flags.font-family.summary
+
+Font family used by the generated graph.
+
+# flags.font-size.summary
+
+Base font size used by the generated graph.
+
 # flags.namespace.summary
 
 Namespace that identifies a packaged Flow.
@@ -59,6 +71,10 @@ Salesforce API version to use for the Tooling API requests.
 - Recursively generate DOT with variables and formulas:
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --version active --recursive --subflow-version latest --format dot --include-variables --include-formulas
+
+- Override semantic colours and typography:
+
+  <%= config.bin %> <%= command.id %> --api-name Order_Processing --colour decision=orange --color subflow=#7C3AED --font-family Arial --font-size 16
 
 # warnings.depth-limit
 

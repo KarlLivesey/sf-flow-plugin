@@ -4,10 +4,36 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import type { NamedFlowRequest, FlowVersionNumber } from './flow.js';
+import type { FlowGraphNamedColor } from '../constants/flow-graph-colors.js';
 import type { FlowComparisonVersionSelector } from './flow-analysis.js';
+import type { NamedFlowRequest, FlowVersionNumber } from './flow.js';
 
 export type FlowGraphFormat = 'mermaid' | 'dot';
+
+export type FlowGraphColorRole =
+  | 'background'
+  | 'cluster'
+  | 'text'
+  | 'node'
+  | 'start'
+  | 'decision'
+  | 'subflow'
+  | 'action'
+  | 'record'
+  | 'screen'
+  | 'resource'
+  | 'connector'
+  | 'call';
+
+export type FlowGraphColor = FlowGraphNamedColor | `#${string}`;
+
+export type FlowGraphColorOverrides = Partial<Record<FlowGraphColorRole, FlowGraphColor>>;
+
+export interface FlowGraphStyle {
+  colors: FlowGraphColorOverrides;
+  fontFamily: string;
+  fontSize: number;
+}
 
 export type FlowSubflowVersionSelector = 'active' | 'latest';
 
@@ -24,6 +50,7 @@ export interface FlowGraphRequest extends FlowTraversalRequest {
   format: FlowGraphFormat;
   includeVariables: boolean;
   includeFormulas: boolean;
+  style: FlowGraphStyle;
 }
 
 export interface FlowVariableSummary {
@@ -118,5 +145,6 @@ export interface FlowGraphResult extends FlowDescribeResult {
   format: FlowGraphFormat;
   includeVariables: boolean;
   includeFormulas: boolean;
+  style: FlowGraphStyle;
   graph: string;
 }

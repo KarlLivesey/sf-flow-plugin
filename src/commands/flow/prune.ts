@@ -12,6 +12,7 @@ import { FlowPruneService } from '../../services/flow-prune-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type { FlowPruneOrder, FlowPruneRequest, FlowPruneResult } from '../../types/flow.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
+import { withFlowProgress } from '../../utils/flow-progress.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -97,7 +98,9 @@ export default class FlowPrune extends SfCommand<FlowPruneResult> {
     validateNamedFlowFlags(flags);
     const context = createFlowCommandContext(flags);
     const service = new FlowPruneService(new ToolingFlowDefinitionGateway(context.connection));
-    const result = await service.prune(createRequest(flags, context));
+    const result = await withFlowProgress(this.spinner, 'prune', async () =>
+      service.prune(createRequest(flags, context))
+    );
     this.writeHumanOutput(result);
     return result;
   }
