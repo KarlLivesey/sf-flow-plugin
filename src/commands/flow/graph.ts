@@ -17,6 +17,7 @@ import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-defini
 import type { FlowComparisonVersionSelector } from '../../types/flow-analysis.js';
 import type {
   FlowGraphColorOverrides,
+  FlowGraphDirection,
   FlowGraphFormat,
   FlowGraphRequest,
   FlowGraphResult,
@@ -39,6 +40,9 @@ export interface GraphFlagValues {
   'max-depth': number;
   'include-variables': boolean;
   'include-formulas': boolean;
+  direction: FlowGraphDirection;
+  legend: boolean;
+  'label-width': number;
   color: string[];
   'font-family': string;
   'font-size': number;
@@ -88,6 +92,9 @@ function createRequest(flags: GraphFlagValues, context: ReturnType<typeof create
     maxDepth: flags['max-depth'],
     includeVariables: flags['include-variables'],
     includeFormulas: flags['include-formulas'],
+    direction: flags.direction,
+    legend: flags.legend,
+    labelWidth: flags['label-width'],
     style: {
       colors: parseGraphColorOverrides(flags.color),
       fontFamily: flags['font-family'],
@@ -150,6 +157,22 @@ export default class FlowGraph extends SfCommand<FlowGraphResult> {
     'include-formulas': Flags.boolean({
       default: false,
       summary: messages.getMessage('flags.include-formulas.summary'),
+    }),
+    direction: Flags.custom<FlowGraphDirection>({
+      default: 'auto',
+      options: ['auto', 'left-right', 'top-down'],
+      summary: messages.getMessage('flags.direction.summary'),
+      parse: (input: string): Promise<FlowGraphDirection> => Promise.resolve(input as FlowGraphDirection),
+    })(),
+    legend: Flags.boolean({
+      default: false,
+      summary: messages.getMessage('flags.legend.summary'),
+    }),
+    'label-width': Flags.integer({
+      default: 32,
+      min: 12,
+      max: 80,
+      summary: messages.getMessage('flags.label-width.summary'),
     }),
     color: Flags.string({
       aliases: ['colour'],

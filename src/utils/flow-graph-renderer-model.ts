@@ -8,6 +8,8 @@ import type {
   FlowDescription,
   FlowElementSummary,
   FlowFormulaSummary,
+  FlowGraphDirection,
+  FlowGraphResolvedDirection,
   FlowGraphStyle,
   FlowSubflowSummary,
   FlowVariableSummary,
@@ -16,6 +18,9 @@ import type {
 export interface FlowGraphRenderOptions {
   includeVariables: boolean;
   includeFormulas: boolean;
+  direction: FlowGraphResolvedDirection;
+  legend: boolean;
+  labelWidth: number;
   style: FlowGraphStyle;
 }
 
@@ -35,8 +40,42 @@ export function createRenderFlows(flows: ReadonlyArray<FlowDescription>): Render
   }));
 }
 
+function isShortLinearFlow(flow: FlowDescription): boolean {
+  const sources = new Set<string>();
+  return (
+    flow.elements.length <= 12 &&
+    flow.connectors.every((connector) => {
+      const unique = !sources.has(connector.source);
+      sources.add(connector.source);
+      return unique;
+    })
+  );
+}
+
+export function resolveGraphDirection(
+  flows: ReadonlyArray<FlowDescription>,
+  direction: FlowGraphDirection
+): FlowGraphResolvedDirection {
+  if (direction !== 'auto') {
+    return direction;
+  }
+  return flows.length === 1 && flows[0] !== undefined && isShortLinearFlow(flows[0]) ? 'left-right' : 'top-down';
+}
+
 export function elementLabel(element: FlowElementSummary): string {
   return `${element.type}: ${element.label ?? element.name}`;
+}
+
+export function wrapGraphLabel(value: string, width: number, separator: string): string {
+  const words = value.split(/\s+/u);
+  const lines = words.reduce<string[]>((wrapped, word) => {
+    const current = wrapped.at(-1);
+    if (current === undefined || current.length + word.length + 1 > width) {
+      return [...wrapped, word];
+    }
+    return [...wrapped.slice(0, -1), `${current} ${word}`];
+  }, []);
+  return lines.join(separator);
 }
 
 export function variableLabel(variable: FlowVariableSummary): string {

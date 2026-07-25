@@ -11,10 +11,6 @@ The package is implemented in strict TypeScript using the current Salesforce ext
 - An authenticated Salesforce org whose user can read Flow Tooling API records.
 - Tooling API update or deletion access for commands that mutate `FlowDefinition` or `Flow` records.
 
-## Release status
-
-Version 1.1.0 is published publicly on npm. Tagged releases are validated and published from GitHub Actions through npm trusted publishing.
-
 ## Local installation
 
 ```bash
@@ -24,17 +20,17 @@ yarn build
 sf plugins link .
 ```
 
-After publication, install a released version with:
+Install the latest published release with:
 
 ```bash
-sf plugins install sf-flow-plugin@1.1.0
+sf plugins install sf-flow-plugin
 ```
 
 To replace a locally linked development checkout with the published package:
 
 ```bash
 sf plugins unlink sf-flow-plugin
-sf plugins install sf-flow-plugin@1.1.0
+sf plugins install sf-flow-plugin
 ```
 
 Useful installation-management commands:
@@ -257,6 +253,9 @@ sf flow graph \
   [--max-depth NUMBER] \
   [--include-variables] \
   [--include-formulas] \
+  [--direction auto|top-down|left-right] \
+  [--legend] \
+  [--label-width NUMBER] \
   [--color ROLE=COLOUR ...] \
   [--font-family NAME] \
   [--font-size NUMBER] \
@@ -286,6 +285,10 @@ sf flow graph \
 
 Recursive graphs use the same subflow-version selection, fallback, visited-definition and depth rules as `sf flow describe`.
 
+Both formats place each Flow in a labelled container and use distinct shapes for starts, decisions, subflows, records, screens, loops, waits and actions. Decision outcomes are green, default paths are dashed amber and fault paths are dashed red. Use `--legend` to include these conventions in the diagram.
+
+`--direction` accepts `auto`, `top-down` or `left-right` and defaults to `auto`. Automatic layout uses left-to-right for a short linear Flow and top-down for branched or recursive diagrams. Long labels wrap at approximately 32 characters; override that with `--label-width`.
+
 Mermaid and DOT output use the same semantic theme. Override a role with repeatable `--color` or `--colour` flags; both spellings are equivalent. Values can be a supported named colour, `#RGB` or `#RRGGBB`:
 
 ```bash
@@ -293,11 +296,15 @@ sf flow graph \
   --api-name Order_Processing \
   --colour decision=orange \
   --color subflow=#7c3aed \
+  --color fault=crimson \
+  --direction left-right \
+  --legend \
+  --label-width 28 \
   --font-family "Fira Code" \
   --font-size 16
 ```
 
-Colour roles are `background`, `cluster`, `text`, `node`, `start`, `decision`, `subflow`, `action`, `record`, `screen`, `resource`, `connector` and `call`.
+Colour roles are `background`, `cluster`, `text`, `node`, `start`, `decision`, `subflow`, `action`, `record`, `screen`, `resource`, `connector`, `call`, `outcome`, `default` and `fault`.
 
 Named colours include `aliceblue`, `amber`, `aqua`, `aquamarine`, `azure`, `beige`, `bisque`, `black`, `blue`, `brown`, `chocolate`, `coral`, `cornflowerblue`, `crimson`, `cyan`, `darkblue`, `darkcyan`, `darkgreen`, `darkgrey`, `darkorange`, `darkred`, `deeppink`, `deepskyblue`, `emerald`, `fuchsia`, `gold`, `goldenrod`, `gray`, `green`, `grey`, `hotpink`, `indigo`, `ivory`, `khaki`, `lavender`, `lime`, `magenta`, `maroon`, `navy`, `olive`, `orange`, `orchid`, `pink`, `plum`, `purple`, `red`, `rose`, `salmon`, `seagreen`, `silver`, `sky`, `skyblue`, `slate`, `slateblue`, `slategray`, `slategrey`, `tan`, `teal`, `tomato`, `turquoise`, `violet`, `white`, `yellow` and `yellowgreen`. Named values are converted to hex; `gray` and `grey` are identical.
 

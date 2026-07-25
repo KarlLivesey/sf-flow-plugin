@@ -24,6 +24,7 @@ export interface ResolvedFlowGraphTheme {
   call: string;
   cluster: FlowGraphColorPair;
   connector: string;
+  connectorKind: Record<'default' | 'fault' | 'outcome', string>;
   node: Record<FlowGraphStyleCategory, FlowGraphColorPair>;
   resource: FlowGraphColorPair;
   text: string;
@@ -43,6 +44,9 @@ export const FLOW_GRAPH_COLOR_ROLES: FlowGraphColorRole[] = [
   'resource',
   'connector',
   'call',
+  'outcome',
+  'default',
+  'fault',
 ];
 
 const DEFAULT_ROLES: Record<FlowGraphColorRole, FlowGraphColor> = {
@@ -59,6 +63,9 @@ const DEFAULT_ROLES: Record<FlowGraphColorRole, FlowGraphColor> = {
   resource: 'orange',
   connector: 'slate',
   call: 'purple',
+  outcome: 'green',
+  default: 'amber',
+  fault: 'red',
 };
 
 function expandHex(value: `#${string}`): string {
@@ -103,6 +110,11 @@ export function resolveGraphTheme(style: FlowGraphStyle): ResolvedFlowGraphTheme
     call: directColor(role.call),
     cluster: colorPair(role.cluster),
     connector: directColor(role.connector),
+    connectorKind: {
+      default: directColor(role.default),
+      fault: directColor(role.fault),
+      outcome: directColor(role.outcome),
+    },
     node: {
       action: colorPair(role.action),
       decision: colorPair(role.decision),

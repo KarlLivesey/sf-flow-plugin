@@ -24,6 +24,7 @@ const metadata: JsonObject = {
       name: 'Check_Order',
       label: 'Check Order',
       rules: [{ name: 'Accepted', connector: { targetReference: 'Call_Apex' } }],
+      defaultConnector: { targetReference: 'Call_Subflow' },
     },
   ],
   actionCalls: [
@@ -33,6 +34,7 @@ const metadata: JsonObject = {
       actionName: 'OrderAction',
       actionType: 'apex',
       connector: { targetReference: 'Call_Subflow' },
+      faultConnector: { targetReference: 'Call_Subflow' },
     },
   ],
   subflows: [{ name: 'Call_Subflow', label: 'Call Child', flowName: 'Child_Flow' }],
@@ -68,12 +70,35 @@ describe('analyseFlowMetadata', (): void => {
 
   it('extracts connector targets and decision outcome labels', (): void => {
     const result = analyseFlowMetadata({ definition, version, metadata, depth: 0 });
-    expect(result.connectors).to.deep.include({ source: 'start', target: 'Check_Order', label: null });
+    expect(result.connectors).to.deep.include({
+      source: 'start',
+      target: 'Check_Order',
+      label: null,
+      kind: 'normal',
+    });
     expect(result.connectors).to.deep.include({
       source: 'Check_Order',
       target: 'Call_Apex',
       label: 'Accepted',
+      kind: 'outcome',
     });
-    expect(result.connectors).to.deep.include({ source: 'Call_Apex', target: 'Call_Subflow', label: null });
+    expect(result.connectors).to.deep.include({
+      source: 'Call_Apex',
+      target: 'Call_Subflow',
+      label: null,
+      kind: 'normal',
+    });
+    expect(result.connectors).to.deep.include({
+      source: 'Check_Order',
+      target: 'Call_Subflow',
+      label: null,
+      kind: 'default',
+    });
+    expect(result.connectors).to.deep.include({
+      source: 'Call_Apex',
+      target: 'Call_Subflow',
+      label: null,
+      kind: 'fault',
+    });
   });
 });

@@ -31,6 +31,10 @@ const result: FlowGraphResult = {
   format: 'dot',
   includeVariables: true,
   includeFormulas: true,
+  requestedDirection: 'left-right',
+  resolvedDirection: 'left-right',
+  legend: true,
+  labelWidth: 36,
   style: {
     colors: { decision: 'orange' },
     fontFamily: 'Inter',
@@ -46,6 +50,12 @@ describe('flow graph flags', (): void => {
     expect(FlowGraph.flags.recursive.default).to.equal(false);
     expect(FlowGraph.flags['include-variables'].default).to.equal(false);
     expect(FlowGraph.flags['include-formulas'].default).to.equal(false);
+    expect(FlowGraph.flags.direction.default).to.equal('auto');
+    expect(FlowGraph.flags.legend.default).to.equal(false);
+    expect(FlowGraph.flags['label-width'].default).to.equal(32);
+  });
+
+  it('defaults graph styling and file output safely', (): void => {
     expect(FlowGraph.flags.color.default).to.deep.equal([]);
     expect(FlowGraph.flags.color.aliases).to.deep.equal(['colour']);
     expect(FlowGraph.flags['font-family'].default).to.equal('Arial');
@@ -54,9 +64,12 @@ describe('flow graph flags', (): void => {
   });
 
   it('accepts named and hex colour overrides with the last duplicate winning', (): void => {
-    expect(parseGraphColorOverrides(['decision=orange', 'subflow=#7c3aed', 'decision=coral'])).to.deep.equal({
+    expect(
+      parseGraphColorOverrides(['decision=orange', 'subflow=#7c3aed', 'fault=crimson', 'decision=coral'])
+    ).to.deep.equal({
       decision: 'coral',
       subflow: '#7c3aed',
+      fault: 'crimson',
     });
   });
 
@@ -79,6 +92,9 @@ describe('flow graph command execution', (): void => {
       'max-depth': 4,
       'include-variables': true,
       'include-formulas': true,
+      direction: 'left-right' as const,
+      legend: true,
+      'label-width': 36,
       color: ['decision=orange'],
       'font-family': 'Inter',
       'font-size': 16,
@@ -99,6 +115,9 @@ describe('flow graph command execution', (): void => {
       maxDepth: 4,
       includeVariables: true,
       includeFormulas: true,
+      direction: 'left-right',
+      legend: true,
+      labelWidth: 36,
       style: {
         colors: { decision: 'orange' },
         fontFamily: 'Inter',

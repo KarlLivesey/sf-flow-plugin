@@ -161,38 +161,46 @@ function objectLabel(value: JsonObject, fallback: string | null): string | null 
   return typeof label === 'string' && label.length > 0 ? label : fallback;
 }
 
-function collectTargets(
-  value: JsonValue,
-  label: string | null,
-  targets: Array<{ target: string; label: string | null }>
-): void {
+interface ConnectorCollectionContext {
+  label: string | null;
+  kind: FlowConnectorSummary['kind'];
+  targets: FlowConnectorSummary[];
+}
+
+function collectTargets(value: JsonValue, context: ConnectorCollectionContext): void {
   if (Array.isArray(value)) {
     for (const item of value) {
-      collectTargets(
-        item,
-        typeof item === 'object' && item !== null && !Array.isArray(item) ? objectLabel(item, label) : label,
-        targets
-      );
+      const label =
+        typeof item === 'object' && item !== null && !Array.isArray(item)
+          ? objectLabel(item, context.label)
+          : context.label;
+      collectTargets(item, { ...context, label });
     }
     return;
   }
   if (typeof value !== 'object' || value === null) {
     return;
   }
-  collectObjectTargets(value, label, targets);
+  collectObjectTargets(value, context);
 }
 
-function collectObjectTargets(
-  value: JsonObject,
-  label: string | null,
-  targets: Array<{ target: string; label: string | null }>
-): void {
+function connectorKind(key: string, inherited: FlowConnectorSummary['kind']): FlowConnectorSummary['kind'] {
+  if (key === 'faultConnector') {
+    return 'fault';
+  }
+  if (key === 'defaultConnector') {
+    return 'default';
+  }
+  return key === 'rules' ? 'outcome' : inherited;
+}
+
+function collectObjectTargets(value: JsonObject, context: ConnectorCollectionContext): void {
   const target = value.targetReference;
   if (typeof target === 'string' && target.length > 0) {
-    targets.push({ target, label });
+    context.targets.push({ source: '', target, label: context.label, kind: context.kind });
   }
-  for (const child of Object.values(value)) {
-    collectTargets(child, label, targets);
+  for (const [key, child] of Object.entries(value)) {
+    collectTargets(child, { ...context, kind: connectorKind(key, context.kind) });
   }
 }
 
@@ -202,9 +210,9 @@ function connectorsFor(metadata: JsonObject, element: FlowElementSummary): FlowC
   if (value === undefined) {
     return [];
   }
-  const targets: Array<{ target: string; label: string | null }> = [];
-  collectTargets(value, null, targets);
-  return targets.map((target) => ({ source, ...target }));
+  const targets: FlowConnectorSummary[] = [];
+  collectTargets(value, { label: null, kind: 'normal', targets });
+  return targets.map((target) => ({ ...target, source }));
 }
 
 function metadataElement(metadata: JsonObject, element: FlowElementSummary): JsonValue | undefined {
@@ -220,7 +228,10 @@ function metadataElement(metadata: JsonObject, element: FlowElementSummary): Jso
 function connectors(metadata: JsonObject, flowElements: ReadonlyArray<FlowElementSummary>): FlowConnectorSummary[] {
   const unique = new Map<string, FlowConnectorSummary>();
   for (const connector of flowElements.flatMap((element) => connectorsFor(metadata, element))) {
-    unique.set(`${connector.source}\u0000${connector.target}\u0000${connector.label ?? ''}`, connector);
+    unique.set(
+      `${connector.source}\u0000${connector.target}\u0000${connector.label ?? ''}\u0000${connector.kind}`,
+      connector
+    );
   }
   return [...unique.values()];
 }

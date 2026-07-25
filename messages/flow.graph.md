@@ -42,6 +42,18 @@ Include Flow variables as graph annotations.
 
 Include Flow formulas as graph annotations.
 
+# flags.direction.summary
+
+Graph layout direction: auto, top-down, or left-right.
+
+# flags.legend.summary
+
+Include a visual legend for node and connector styles.
+
+# flags.label-width.summary
+
+Approximate number of characters per wrapped graph-label line.
+
 # flags.color.summary
 
 Override a graph colour using ROLE=COLOUR or ROLE=#HEX. Repeat for multiple roles. --colour is an alias.
@@ -78,7 +90,7 @@ Salesforce API version to use for the Tooling API requests.
 
 - Override semantic colours and typography:
 
-  <%= config.bin %> <%= command.id %> --api-name Order_Processing --colour decision=orange --color subflow=#7C3AED --font-family Arial --font-size 16
+  <%= config.bin %> <%= command.id %> --api-name Order_Processing --colour decision=orange --color fault=crimson --direction left-right --legend --label-width 28 --font-family Arial --font-size 16
 
 - Write DOT source to a file:
 

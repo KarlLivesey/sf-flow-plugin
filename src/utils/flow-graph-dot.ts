@@ -4,7 +4,8 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import type { FlowDescription, FlowElementSummary } from '../types/flow-inspection.js';
+import type { FlowConnectorSummary, FlowDescription, FlowElementSummary } from '../types/flow-inspection.js';
+import { dotLegendLines, type DotLegendNode } from './flow-graph-dot-legend.js';
 import {
   calledFlow,
   createRenderFlows,
@@ -13,6 +14,7 @@ import {
   formulaLabel,
   type RenderFlow,
   variableLabel,
+  wrapGraphLabel,
 } from './flow-graph-renderer-model.js';
 import {
   elementStyleCategory,
@@ -35,6 +37,24 @@ interface AnnotationNodeOptions {
   root: string;
 }
 
+interface ElementNodeOptions {
+  id: string;
+  element: FlowElementSummary;
+  render: FlowGraphRenderOptions;
+  theme: ResolvedFlowGraphTheme;
+}
+
+const DOT_ELEMENT_SHAPES: Partial<Record<string, string>> = {
+  Start: 'oval',
+  Decision: 'diamond',
+  Subflow: 'component',
+  Screen: 'tab',
+  Loop: 'hexagon',
+  Wait: 'octagon',
+  Action: 'box3d',
+  'Apex Plugin': 'box3d',
+};
+
 function dotAttributes(attributes: Record<string, number | string>): string {
   return Object.entries(attributes)
     .map(([name, value]) => `${name}=${typeof value === 'number' ? String(value) : JSON.stringify(value)}`)
@@ -52,25 +72,19 @@ function dotNode(options: DotNodeOptions): string {
 }
 
 function elementShape(element: FlowElementSummary): string {
-  if (element.type === 'Start') {
-    return 'oval';
+  if (element.type.startsWith('Record ')) {
+    return 'cylinder';
   }
-  if (element.type === 'Decision') {
-    return 'diamond';
-  }
-  if (element.type === 'Subflow') {
-    return 'component';
-  }
-  return element.type === 'Screen' ? 'tab' : 'box';
+  return DOT_ELEMENT_SHAPES[element.type] ?? 'box';
 }
 
-function elementNode(id: string, element: FlowElementSummary, theme: ResolvedFlowGraphTheme): string {
+function elementNode(options: ElementNodeOptions): string {
   return dotNode({
-    id,
-    label: elementLabel(element),
-    shape: elementShape(element),
-    colors: theme.node[elementStyleCategory(element)],
-    text: theme.text,
+    id: options.id,
+    label: wrapGraphLabel(elementLabel(options.element), options.render.labelWidth, '\n'),
+    shape: elementShape(options.element),
+    colors: options.theme.node[elementStyleCategory(options.element)],
+    text: options.theme.text,
   });
 }
 
@@ -94,26 +108,59 @@ function dotAnnotations(flow: RenderFlow, options: FlowGraphRenderOptions, theme
   }
   const variables = options.includeVariables
     ? flow.description.variables.flatMap((variable, index) =>
-        annotationNode({ id: `f${flow.index}_v${index}`, label: variableLabel(variable), root }, theme)
+        annotationNode(
+          {
+            id: `f${flow.index}_v${index}`,
+            label: wrapGraphLabel(variableLabel(variable), options.labelWidth, '\n'),
+            root,
+          },
+          theme
+        )
       )
     : [];
   const formulas = options.includeFormulas
     ? flow.description.formulas.flatMap((formula, index) =>
-        annotationNode({ id: `f${flow.index}_x${index}`, label: formulaLabel(formula), root }, theme)
+        annotationNode(
+          {
+            id: `f${flow.index}_x${index}`,
+            label: wrapGraphLabel(formulaLabel(formula), options.labelWidth, '\n'),
+            root,
+          },
+          theme
+        )
       )
     : [];
   return [...variables, ...formulas];
 }
 
-function dotConnectors(flow: RenderFlow): string[] {
+function connectorAttributes(
+  connector: FlowConnectorSummary,
+  theme: ResolvedFlowGraphTheme,
+  labelWidth: number
+): Record<string, number | string> {
+  const label = connector.label === null ? {} : { label: wrapGraphLabel(connector.label, labelWidth, '\n') };
+  if (connector.kind === 'normal') {
+    return label;
+  }
+  return {
+    ...label,
+    color: theme.connectorKind[connector.kind],
+    fontcolor: theme.connectorKind[connector.kind],
+    penwidth: connector.kind === 'fault' ? 2.5 : 2,
+    ...(connector.kind === 'outcome' ? {} : { style: 'dashed' }),
+  };
+}
+
+function dotConnectors(flow: RenderFlow, options: FlowGraphRenderOptions, theme: ResolvedFlowGraphTheme): string[] {
   return flow.description.connectors.flatMap((connector) => {
     const source = flow.elementIds.get(connector.source);
     const target = flow.elementIds.get(connector.target);
     if (source === undefined || target === undefined) {
       return [];
     }
-    const label = connector.label === null ? '' : ` [label=${JSON.stringify(connector.label)}]`;
-    return [`    ${source} -> ${target}${label};`];
+    const attributes = connectorAttributes(connector, theme, options.labelWidth);
+    const rendered = Object.keys(attributes).length === 0 ? '' : ` [${dotAttributes(attributes)}]`;
+    return [`    ${source} -> ${target}${rendered};`];
   });
 }
 
@@ -139,12 +186,15 @@ function globalStyleLines(options: FlowGraphRenderOptions, theme: ResolvedFlowGr
   return [
     `  graph [${dotAttributes({
       bgcolor: theme.background,
+      compound: 'true',
       fontname: options.style.fontFamily,
       fontsize: options.style.fontSize,
       fontcolor: theme.text,
       pad: 0.3,
       nodesep: 0.45,
+      newrank: 'true',
       ranksep: 0.65,
+      splines: 'spline',
     })}];`,
     `  node [${dotAttributes({
       style: 'rounded,filled',
@@ -167,10 +217,15 @@ function globalStyleLines(options: FlowGraphRenderOptions, theme: ResolvedFlowGr
 
 function flowBlock(flow: RenderFlow, options: FlowGraphRenderOptions, theme: ResolvedFlowGraphTheme): string[] {
   const elements = flow.description.elements.map((element) =>
-    elementNode(flow.elementIds.get(element.name) ?? '', element, theme)
+    elementNode({
+      id: flow.elementIds.get(element.name) ?? '',
+      element,
+      render: options,
+      theme,
+    })
   );
   const cluster = dotAttributes({
-    label: `${flow.description.qualifiedName} v${flow.description.versionNumber}`,
+    label: `${flow.description.qualifiedName} v${flow.description.versionNumber} · ${flow.description.status}`,
     style: 'rounded,filled',
     fillcolor: theme.cluster.fill,
     color: theme.cluster.stroke,
@@ -181,7 +236,7 @@ function flowBlock(flow: RenderFlow, options: FlowGraphRenderOptions, theme: Res
     `  subgraph cluster_f${flow.index} {`,
     `    graph [${cluster}];`,
     ...elements,
-    ...dotConnectors(flow),
+    ...dotConnectors(flow, options, theme),
     ...dotAnnotations(flow, options, theme),
     '  }',
   ];
@@ -192,10 +247,11 @@ export function renderDot(flows: ReadonlyArray<FlowDescription>, options: FlowGr
   const theme = resolveGraphTheme(options.style);
   const lines = [
     'digraph Flow {',
-    '  rankdir=TB;',
+    `  rankdir=${options.direction === 'left-right' ? 'LR' : 'TB'};`,
     ...globalStyleLines(options, theme),
     ...renderFlows.flatMap((flow) => flowBlock(flow, options, theme)),
     ...renderFlows.flatMap((flow) => dotCalls(flow, renderFlows, theme)),
+    ...dotLegendLines(options, theme, (node: DotLegendNode) => dotNode({ ...node, text: theme.text })),
     '}',
   ];
   return `${lines.join('\n')}\n`;

@@ -10,6 +10,10 @@ import type { NamedFlowRequest, FlowVersionNumber } from './flow.js';
 
 export type FlowGraphFormat = 'mermaid' | 'dot';
 
+export type FlowGraphDirection = 'auto' | 'left-right' | 'top-down';
+
+export type FlowGraphResolvedDirection = Exclude<FlowGraphDirection, 'auto'>;
+
 export type FlowGraphColorRole =
   | 'background'
   | 'cluster'
@@ -23,7 +27,10 @@ export type FlowGraphColorRole =
   | 'screen'
   | 'resource'
   | 'connector'
-  | 'call';
+  | 'call'
+  | 'outcome'
+  | 'default'
+  | 'fault';
 
 export type FlowGraphColor = FlowGraphNamedColor | `#${string}`;
 
@@ -50,6 +57,9 @@ export interface FlowGraphRequest extends FlowTraversalRequest {
   format: FlowGraphFormat;
   includeVariables: boolean;
   includeFormulas: boolean;
+  direction: FlowGraphDirection;
+  legend: boolean;
+  labelWidth: number;
   style: FlowGraphStyle;
 }
 
@@ -94,6 +104,7 @@ export interface FlowConnectorSummary {
   source: string;
   target: string;
   label: string | null;
+  kind: 'default' | 'fault' | 'normal' | 'outcome';
 }
 
 export interface FlowDescription {
@@ -145,6 +156,10 @@ export interface FlowGraphResult extends FlowDescribeResult {
   format: FlowGraphFormat;
   includeVariables: boolean;
   includeFormulas: boolean;
+  requestedDirection: FlowGraphDirection;
+  resolvedDirection: FlowGraphResolvedDirection;
+  legend: boolean;
+  labelWidth: number;
   style: FlowGraphStyle;
   graph: string;
 }
