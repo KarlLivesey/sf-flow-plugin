@@ -4,6 +4,13 @@ All notable user-visible changes to this project will be documented in this file
 
 ## Unreleased
 
+### Added
+
+- Added `sf flow describe` for Flow resources, elements, Apex actions, subflows and referenced objects.
+- Added `sf flow graph` with Mermaid and Graphviz DOT output.
+- Added optional recursive active-subflow expansion with exact call-cycle detection and configurable depth limits.
+- Added optional variable and formula annotations to generated graphs.
+
 ## 1.1.0 - 2026-07-25
 
 ### Added

@@ -61,6 +61,8 @@ If `--target-org` is omitted, the command uses the Salesforce CLI `target-org` c
 | `sf flow versions`     | List every version and identify the active and latest versions. |
 | `sf flow compare`      | Compare the structure of two Flow versions.                     |
 | `sf flow dependencies` | Show indexed incoming and outgoing dependencies.                |
+| `sf flow describe`     | Summarise Flow resources, elements and referenced components.   |
+| `sf flow graph`        | Render Flow connectors and recursive subflow calls.             |
 | `sf flow deactivate`   | Deactivate a Flow and verify the resulting state.               |
 | `sf flow audit`        | Report Flow definitions with version-state issues.              |
 | `sf flow prune`        | Safely plan or delete old inactive Flow versions.               |
@@ -205,6 +207,75 @@ sf flow dependencies \
 
 This command reports Salesforce's `MetadataComponentDependency` index. Salesforce can omit unsupported dependency types, and the index represents component-level rather than historical version-specific relationships.
 
+## `sf flow describe`
+
+```bash
+sf flow describe \
+  --api-name Order_Processing \
+  [--target-org ORG] \
+  [--version active|latest|NUMBER] \
+  [--recursive] \
+  [--max-depth NUMBER] \
+  [--namespace NAMESPACE] \
+  [--api-version VERSION] \
+  [--json]
+```
+
+The command summarises inputs, outputs, variables, formulas, executable elements, Apex actions, subflows and referenced objects. It defaults to the latest Flow version:
+
+```bash
+sf flow describe --api-name Order_Processing
+```
+
+Use `--recursive` to follow the active version of each referenced subflow. `--max-depth` defaults to `10`; a value of `0` describes only the requested Flow:
+
+```bash
+sf flow describe \
+  --api-name Order_Processing \
+  --version active \
+  --recursive \
+  --max-depth 5 \
+  --json
+```
+
+Recursive traversal reports missing or inactive subflows and depth limits as warnings. It tracks both visited definitions and the current call path. For example, if Flow A calls Flow B and B calls A, the result reports the exact cycle `Flow_A -> Flow_B -> Flow_A` and stops expanding the repeated A.
+
+## `sf flow graph`
+
+```bash
+sf flow graph \
+  --api-name Order_Processing \
+  [--target-org ORG] \
+  [--version active|latest|NUMBER] \
+  [--format mermaid|dot] \
+  [--recursive] \
+  [--max-depth NUMBER] \
+  [--include-variables] \
+  [--include-formulas] \
+  [--namespace NAMESPACE] \
+  [--api-version VERSION] \
+  [--json]
+```
+
+The default output is a Mermaid flowchart containing executable elements and their connectors:
+
+```bash
+sf flow graph --api-name Order_Processing
+```
+
+Generate recursive Graphviz DOT with resource annotations:
+
+```bash
+sf flow graph \
+  --api-name Order_Processing \
+  --format dot \
+  --recursive \
+  --include-variables \
+  --include-formulas
+```
+
+Recursive graphs use the same active-subflow, depth and cycle rules as `sf flow describe`. A cycle retains the call edge that closes the loop—for example, B still has a `calls` edge back to A—but does not expand A a second time.
+
 ## `sf flow deactivate`
 
 ```bash
@@ -316,6 +387,7 @@ Only Draft, Obsolete and InvalidDraft versions are eligible for deletion. Other 
 | `FlowAuditFailed`                    | The org-wide Flow audit could not be completed.                             |
 | `FlowDependenciesFailed`             | Indexed Flow dependencies could not be queried.                             |
 | `FlowComparisonFailed`               | The requested versions or their Flow metadata could not be compared.        |
+| `FlowInspectionFailed`               | Flow metadata could not be described or rendered.                           |
 | `FlowPruneFailed`                    | Flow prune planning or deletion failed.                                     |
 | `FlowPruneVerificationFailed`        | Salesforce still returned a deleted version after pruning.                  |
 
