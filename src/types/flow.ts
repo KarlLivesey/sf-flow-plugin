@@ -25,6 +25,7 @@ export type FlowErrorCode =
   | 'FlowAuditFailed'
   | 'FlowDependenciesFailed'
   | 'FlowComparisonFailed'
+  | 'FlowInspectionFailed'
   | 'FlowPruneFailed'
   | 'FlowPruneVerificationFailed';
 

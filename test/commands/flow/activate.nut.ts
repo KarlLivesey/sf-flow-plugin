@@ -19,6 +19,7 @@ import type {
   FlowPruneResult,
   FlowVersionsResult,
 } from '../../../src/types/flow.js';
+import type { FlowDescribeResult, FlowGraphResult } from '../../../src/types/flow-inspection.js';
 
 interface OrgSafetyResult {
   records: Array<{ IsSandbox: boolean; OrganizationType: string }>;
@@ -232,7 +233,26 @@ describe('Flow lifecycle command NUTs', (): void => {
     expect(output.result).to.include({ apiName: 'Plugin_Test_Flow', direction: 'both' });
     expect(output.result.dependencies).to.be.an('array');
   });
+});
 
+describe('Flow inspection command NUTs', (): void => {
+  it('describes Flow resources and elements', (): void => {
+    const output = runFlowCommand<FlowDescribeResult>('describe', '--api-name Plugin_Test_Flow');
+    const flow = output.result.flows[0];
+    expect(output.result).to.include({ apiName: 'Plugin_Test_Flow', resolvedVersion: 2 });
+    expect(flow?.variables.find((variable) => variable.name === 'Result')).to.include({ output: true });
+    expect(flow?.elements.map((element) => element.name)).to.include('Set_Output');
+  });
+
+  it('renders a Mermaid graph with requested variable annotations', (): void => {
+    const output = runFlowCommand<FlowGraphResult>('graph', '--api-name Plugin_Test_Flow --include-variables');
+    expect(output.result.graph).to.include('flowchart TD');
+    expect(output.result.graph).to.include('Assignment: Set Output');
+    expect(output.result.graph).to.include('Variable: Result');
+  });
+});
+
+describe('Flow lifecycle mutation NUTs', (): void => {
   it('audits the fixture Flow', (): void => {
     const output = runFlowCommand<FlowAuditResult>('audit', '');
     const fixture = output.result.flows.find((flow) => flow.apiName === 'Plugin_Test_Flow');
