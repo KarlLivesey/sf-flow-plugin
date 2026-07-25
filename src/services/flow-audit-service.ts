@@ -13,6 +13,7 @@ import type {
   FlowDefinitionGateway,
   FlowVersion,
 } from '../types/flow.js';
+import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
 import { resolveVersionNumber } from '../utils/flow-state.js';
 
 interface AuditCounts {
@@ -72,10 +73,13 @@ function groupVersions(versions: ReadonlyArray<FlowVersion>): ReadonlyMap<string
 export class FlowAuditService {
   public constructor(private readonly gateway: FlowDefinitionGateway) {}
 
-  public async audit(targetOrg: string): Promise<FlowAuditResult> {
+  public async audit(targetOrg: string, progress: FlowProgressReporter = noFlowProgress): Promise<FlowAuditResult> {
     try {
+      progress('loading-flows', 'all Flow definitions');
       const definitions = await this.gateway.findAllDefinitions();
+      progress('loading-versions', 'all Flow definitions (all versions)');
       const versions = groupVersions(await this.gateway.findAllVersions());
+      progress('analysing-results', `${definitions.length} Flow definitions`);
       const flows = definitions
         .map((definition) => createEntry(definition, versions.get(definition.id) ?? []))
         .filter((entry) => entry.issues.length > 0);

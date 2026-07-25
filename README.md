@@ -67,7 +67,7 @@ If `--target-org` is omitted, the command uses the Salesforce CLI `target-org` c
 | `sf flow audit`        | Report Flow definitions with version-state issues.              |
 | `sf flow prune`        | Safely plan or delete old inactive Flow versions.               |
 
-Commands show an automatic Salesforce-style progress spinner while they query or mutate the org. Progress output is suppressed automatically when `--json` is used.
+Commands show an automatic Salesforce-style progress spinner while they query or mutate the org. Each stage identifies the Flow and relevant version or version scope. Progress output is suppressed automatically when `--json` is used.
 
 ## `sf flow activate`
 
@@ -260,6 +260,7 @@ sf flow graph \
   [--color ROLE=COLOUR ...] \
   [--font-family NAME] \
   [--font-size NUMBER] \
+  [--output-file PATH] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--json]
@@ -299,6 +300,12 @@ sf flow graph \
 Colour roles are `background`, `cluster`, `text`, `node`, `start`, `decision`, `subflow`, `action`, `record`, `screen`, `resource`, `connector` and `call`.
 
 Named colours include `aliceblue`, `amber`, `aqua`, `aquamarine`, `azure`, `beige`, `bisque`, `black`, `blue`, `brown`, `chocolate`, `coral`, `cornflowerblue`, `crimson`, `cyan`, `darkblue`, `darkcyan`, `darkgreen`, `darkgrey`, `darkorange`, `darkred`, `deeppink`, `deepskyblue`, `emerald`, `fuchsia`, `gold`, `goldenrod`, `gray`, `green`, `grey`, `hotpink`, `indigo`, `ivory`, `khaki`, `lavender`, `lime`, `magenta`, `maroon`, `navy`, `olive`, `orange`, `orchid`, `pink`, `plum`, `purple`, `red`, `rose`, `salmon`, `seagreen`, `silver`, `sky`, `skyblue`, `slate`, `slateblue`, `slategray`, `slategrey`, `tan`, `teal`, `tomato`, `turquoise`, `violet`, `white`, `yellow` and `yellowgreen`. Named values are converted to hex; `gray` and `grey` are identical.
+
+Use `--output-file` to write the Mermaid or DOT source to a new file instead of printing it. Existing files are never overwritten:
+
+```bash
+sf flow graph --api-name Order_Processing --format dot --output-file order-processing.dot
+```
 
 ## `sf flow deactivate`
 

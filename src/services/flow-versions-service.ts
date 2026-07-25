@@ -12,7 +12,8 @@ import type {
   FlowVersionsResult,
   NamedFlowRequest,
 } from '../types/flow.js';
-import { resolveVersionNumber, selectFlowDefinition } from '../utils/flow-state.js';
+import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
+import { qualifiedFlowName, resolveVersionNumber, selectFlowDefinition } from '../utils/flow-state.js';
 
 function createLookup(request: NamedFlowRequest): FlowDefinitionLookup {
   return request.namespace === undefined
@@ -49,9 +50,14 @@ function createResult(
 export class FlowVersionsService {
   public constructor(private readonly gateway: FlowDefinitionGateway) {}
 
-  public async getVersions(request: NamedFlowRequest): Promise<FlowVersionsResult> {
+  public async getVersions(
+    request: NamedFlowRequest,
+    progress: FlowProgressReporter = noFlowProgress
+  ): Promise<FlowVersionsResult> {
+    progress('resolving-flow', request.apiName);
     const definitions = await this.gateway.findDefinitions(createLookup(request));
     const definition = selectFlowDefinition(request.apiName, definitions);
+    progress('loading-versions', `${qualifiedFlowName(definition.apiName, definition.namespace)} (all versions)`);
     const versions = await this.gateway.findVersions(definition.id);
     return createResult(request, definition, versions);
   }

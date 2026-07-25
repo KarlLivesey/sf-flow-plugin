@@ -98,8 +98,8 @@ export default class FlowPrune extends SfCommand<FlowPruneResult> {
     validateNamedFlowFlags(flags);
     const context = createFlowCommandContext(flags);
     const service = new FlowPruneService(new ToolingFlowDefinitionGateway(context.connection));
-    const result = await withFlowProgress(this.spinner, 'prune', async () =>
-      service.prune(createRequest(flags, context))
+    const result = await withFlowProgress(this.spinner, 'prune', async (progress) =>
+      service.prune(createRequest(flags, context), progress)
     );
     this.writeHumanOutput(result);
     return result;

@@ -13,7 +13,8 @@ import type {
   FlowDefinitionLookup,
   FlowVersion,
 } from '../types/flow.js';
-import { resolveVersionNumber, selectFlowDefinition } from '../utils/flow-state.js';
+import { noFlowProgress, type FlowProgressReporter, withFlowProgressStage } from '../utils/flow-progress.js';
+import { qualifiedFlowName, resolveVersionNumber, selectFlowDefinition } from '../utils/flow-state.js';
 
 interface FlowState {
   definition: FlowDefinition;
@@ -46,24 +47,53 @@ function createResult(request: FlowDeactivationRequest, state: FlowState, change
 export class FlowDeactivationService {
   public constructor(private readonly gateway: FlowDefinitionGateway) {}
 
-  public async deactivate(request: FlowDeactivationRequest): Promise<FlowDeactivationResult> {
-    const state = await this.getState(request);
+  public async deactivate(
+    request: FlowDeactivationRequest,
+    progress: FlowProgressReporter = noFlowProgress
+  ): Promise<FlowDeactivationResult> {
+    progress('resolving-flow', request.apiName);
+    const state = await this.getState(request, progress);
+    return this.executeDeactivation(request, state, progress);
+  }
+
+  private async executeDeactivation(
+    request: FlowDeactivationRequest,
+    state: FlowState,
+    progress: FlowProgressReporter
+  ): Promise<FlowDeactivationResult> {
     if (state.definition.activeVersionId === null) {
       return createResult(request, state, false);
     }
-    await this.gateway.assertMutationAllowed('update-definition');
+    const detail = qualifiedFlowName(state.definition.apiName, state.definition.namespace);
+    await withFlowProgressStage(progress, {
+      stage: 'checking-permissions',
+      detail: `${detail} (deactivate)`,
+      operation: async () => this.gateway.assertMutationAllowed('update-definition'),
+    });
     if (request.dryRun) {
       return createResult(request, state, false);
     }
-    await this.clearActiveVersion(state.definition);
-    await this.verify(request);
+    await withFlowProgressStage(progress, {
+      stage: 'applying-change',
+      detail,
+      operation: async () => this.clearActiveVersion(state.definition),
+    });
+    await withFlowProgressStage(progress, {
+      stage: 'verifying-change',
+      detail,
+      operation: async () => this.verify(request),
+    });
     return createResult(request, state, true);
   }
 
-  private async getState(request: FlowDeactivationRequest): Promise<FlowState> {
+  private async getState(
+    request: FlowDeactivationRequest,
+    progress: FlowProgressReporter = noFlowProgress
+  ): Promise<FlowState> {
     try {
       const definitions = await this.gateway.findDefinitions(createLookup(request));
       const definition = selectFlowDefinition(request.apiName, definitions);
+      progress('loading-versions', `${qualifiedFlowName(definition.apiName, definition.namespace)} (all versions)`);
       const versions = await this.gateway.findVersions(definition.id);
       return { definition, versions };
     } catch (error: unknown) {

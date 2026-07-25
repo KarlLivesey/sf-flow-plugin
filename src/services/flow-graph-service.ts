@@ -10,22 +10,27 @@ import { flowGraphStyleSchema } from '../schemas/flow.js';
 import type { FlowDefinitionGateway } from '../types/flow.js';
 import type { FlowGraphRequest, FlowGraphResult } from '../types/flow-inspection.js';
 import { renderFlowGraph } from '../utils/flow-graph-renderer.js';
+import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
 import { FlowDescribeService } from './flow-describe-service.js';
 
 export class FlowGraphService {
   public constructor(private readonly gateway: FlowDefinitionGateway & FlowMetadataGateway) {}
 
-  public async graph(request: FlowGraphRequest): Promise<FlowGraphResult> {
+  public async graph(
+    request: FlowGraphRequest,
+    progress: FlowProgressReporter = noFlowProgress
+  ): Promise<FlowGraphResult> {
     const style = flowGraphStyleSchema.safeParse(request.style);
     if (!style.success) {
       throw flowInspectionFailed('The requested graph style is invalid.');
     }
-    const described = await new FlowDescribeService(this.gateway).describe(request);
+    const described = await new FlowDescribeService(this.gateway).describe(request, progress);
     const options = {
       includeVariables: request.includeVariables,
       includeFormulas: request.includeFormulas,
       style: style.data,
     };
+    progress('rendering-graph', `${described.apiName} (${request.format})`);
     return {
       ...described,
       format: request.format,

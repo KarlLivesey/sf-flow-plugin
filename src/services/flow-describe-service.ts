@@ -20,6 +20,7 @@ import type {
   FlowSubflowVersionSelector,
   FlowTraversalWarning,
 } from '../types/flow-inspection.js';
+import { noFlowProgress, type FlowProgressReporter, withFlowProgressStage } from '../utils/flow-progress.js';
 import { analyseFlowMetadata } from '../utils/flow-metadata-analysis.js';
 import { qualifiedFlowName, selectFlowDefinition } from '../utils/flow-state.js';
 
@@ -127,17 +128,22 @@ class FlowMetadataTraversal {
 
   public constructor(
     private readonly gateway: FlowDefinitionGateway & FlowMetadataGateway,
-    private readonly request: FlowDescribeRequest
+    private readonly request: FlowDescribeRequest,
+    private readonly progress: FlowProgressReporter
   ) {}
 
   public async traverse(): Promise<TraversalResult> {
+    this.progress('resolving-flow', this.request.apiName);
     const definition = selectFlowDefinition(
       this.request.apiName,
       await this.gateway.findDefinitions(lookupForRequest(this.request))
     );
+    const name = qualifiedFlowName(definition.apiName, definition.namespace);
+    const requestedVersion =
+      typeof this.request.version === 'number' ? `v${this.request.version}` : this.request.version;
+    this.progress('loading-versions', `${name} (${requestedVersion})`);
     const versions = await this.gateway.findVersions(definition.id);
     const version = selectVersion(definition, versions, this.request.version);
-    const name = qualifiedFlowName(definition.apiName, definition.namespace);
     const root = await this.visit({ definition, version, depth: 0, path: [name] });
     return { root, flows: this.flows, warnings: [...this.warnings.values()] };
   }
@@ -147,6 +153,10 @@ class FlowMetadataTraversal {
   }
 
   private async visit(context: VisitContext): Promise<FlowDescription> {
+    this.progress(
+      'loading-metadata',
+      `${qualifiedFlowName(context.definition.apiName, context.definition.namespace)} v${context.version.versionNumber}`
+    );
     const metadata = await this.gateway.getVersionMetadata(context.version.id);
     const description = analyseFlowMetadata({ ...context, metadata });
     this.flows.push(description);
@@ -201,7 +211,12 @@ class FlowMetadataTraversal {
   }
 
   private async visitSubflow(definition: FlowDefinition, parent: VisitContext, path: string[]): Promise<void> {
-    const versions = await this.gateway.findVersions(definition.id);
+    const name = qualifiedFlowName(definition.apiName, definition.namespace);
+    const versions = await withFlowProgressStage(this.progress, {
+      stage: 'loading-versions',
+      detail: `${name} (${this.request.subflowVersion}, subflow)`,
+      operation: async () => this.gateway.findVersions(definition.id),
+    });
     const reference = subflowVersionReference(definition, this.request.subflowVersion);
     if (reference.id === null) {
       this.addWarning({ kind: 'missing-subflow-version', flowName: path.at(-1) ?? definition.apiName, path });
@@ -247,7 +262,10 @@ function shouldRethrow(error: unknown): boolean {
 export class FlowDescribeService {
   public constructor(private readonly gateway: FlowDefinitionGateway & FlowMetadataGateway) {}
 
-  public async describe(request: FlowDescribeRequest): Promise<FlowDescribeResult> {
+  public async describe(
+    request: FlowDescribeRequest,
+    progress: FlowProgressReporter = noFlowProgress
+  ): Promise<FlowDescribeResult> {
     if (!nonnegativeIntegerSchema.safeParse(request.maxDepth).success) {
       throw flowInspectionFailed('The recursive Flow traversal depth must be a non-negative whole number.');
     }
@@ -255,7 +273,7 @@ export class FlowDescribeService {
       throw flowInspectionFailed('The recursive subflow version selector must be active or latest.');
     }
     try {
-      return createResult(request, await new FlowMetadataTraversal(this.gateway, request).traverse());
+      return createResult(request, await new FlowMetadataTraversal(this.gateway, request, progress).traverse());
     } catch (error: unknown) {
       if (shouldRethrow(error)) {
         throw error;

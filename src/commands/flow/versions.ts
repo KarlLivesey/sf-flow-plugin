@@ -54,8 +54,8 @@ export default class FlowVersions extends SfCommand<FlowVersionsResult> {
     validateNamedFlowFlags(flags);
     const context = createFlowCommandContext(flags);
     const service = new FlowVersionsService(new ToolingFlowDefinitionGateway(context.connection));
-    const result = await withFlowProgress(this.spinner, 'versions', async () =>
-      service.getVersions(createNamedFlowRequest(flags, context))
+    const result = await withFlowProgress(this.spinner, 'versions', async (progress) =>
+      service.getVersions(createNamedFlowRequest(flags, context), progress)
     );
     this.writeHumanOutput(result);
     return result;

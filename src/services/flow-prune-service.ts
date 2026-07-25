@@ -15,7 +15,8 @@ import type {
   FlowPruneVersion,
   FlowVersion,
 } from '../types/flow.js';
-import { selectFlowDefinition } from '../utils/flow-state.js';
+import { noFlowProgress, type FlowProgressReporter, withFlowProgressStage } from '../utils/flow-progress.js';
+import { qualifiedFlowName, selectFlowDefinition } from '../utils/flow-state.js';
 
 const PRUNABLE_STATUSES = new Set(['Draft', 'Obsolete', 'InvalidDraft']);
 
@@ -156,32 +157,50 @@ function createResult(
 export class FlowPruneService {
   public constructor(private readonly gateway: FlowDefinitionGateway) {}
 
-  public async prune(request: FlowPruneRequest): Promise<FlowPruneResult> {
+  public async prune(
+    request: FlowPruneRequest,
+    progress: FlowProgressReporter = noFlowProgress
+  ): Promise<FlowPruneResult> {
     if (!validPruneRequest(request)) {
       throw flowPruneFailed('The Flow prune retention options are invalid.');
     }
-    const plan = await this.plan(request);
-    const deletedVersions = await this.executePlan(request, plan);
+    const plan = await this.plan(request, progress);
+    const deletedVersions = await this.executePlan(request, plan, progress);
     return createResult(request, plan, deletedVersions);
   }
 
-  private async executePlan(request: FlowPruneRequest, plan: PrunePlan): Promise<FlowPruneVersion[]> {
+  private async executePlan(
+    request: FlowPruneRequest,
+    plan: PrunePlan,
+    progress: FlowProgressReporter
+  ): Promise<FlowPruneVersion[]> {
     if (plan.plannedDeletions.length === 0) {
       return [];
     }
-    await this.gateway.assertMutationAllowed('delete-version');
+    const name = qualifiedFlowName(plan.definition.apiName, plan.definition.namespace);
+    await withFlowProgressStage(progress, {
+      stage: 'checking-permissions',
+      detail: `${name} (delete Flow versions)`,
+      operation: async () => this.gateway.assertMutationAllowed('delete-version'),
+    });
     if (request.dryRun) {
       return [];
     }
-    await this.deleteVersions(plan);
-    await this.verify(plan);
+    await this.deleteVersions(plan, progress);
+    await withFlowProgressStage(progress, {
+      stage: 'verifying-change',
+      detail: `${name} (${plan.plannedDeletions.length} deleted versions)`,
+      operation: async () => this.verify(plan),
+    });
     return plan.plannedDeletions;
   }
 
-  private async plan(request: FlowPruneRequest): Promise<PrunePlan> {
+  private async plan(request: FlowPruneRequest, progress: FlowProgressReporter): Promise<PrunePlan> {
     try {
+      progress('resolving-flow', request.apiName);
       const definitions = await this.gateway.findDefinitions(createLookup(request));
       const definition = selectFlowDefinition(request.apiName, definitions);
+      progress('loading-versions', `${qualifiedFlowName(definition.apiName, definition.namespace)} (all versions)`);
       return createPlan(definition, await this.gateway.findVersions(definition.id), request);
     } catch (error: unknown) {
       if (error instanceof Error && ['FlowDefinitionNotFound', 'FlowDefinitionAmbiguous'].includes(error.name)) {
@@ -191,12 +210,16 @@ export class FlowPruneService {
     }
   }
 
-  private async deleteVersions(plan: PrunePlan): Promise<void> {
+  private async deleteVersions(plan: PrunePlan, progress: FlowProgressReporter): Promise<void> {
     try {
-      await plan.plannedDeletions.reduce(
-        (previous, version) => previous.then(() => this.gateway.deleteVersion(version.id)),
-        Promise.resolve()
-      );
+      await plan.plannedDeletions.reduce(async (previous, version) => {
+        await previous;
+        progress(
+          'deleting-versions',
+          `${qualifiedFlowName(plan.definition.apiName, plan.definition.namespace)} v${version.versionNumber}`
+        );
+        await this.gateway.deleteVersion(version.id);
+      }, Promise.resolve());
     } catch (error: unknown) {
       throw flowPruneFailed(`Failed to prune Flow "${plan.definition.apiName}".`, error);
     }

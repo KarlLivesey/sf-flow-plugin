@@ -34,7 +34,9 @@ describe('flow audit command', (): void => {
     $$.SANDBOX.stub(FlowAudit.prototype, 'parseFlags').resolves(flags);
     const audit = $$.SANDBOX.stub(FlowAuditService.prototype, 'audit').resolves(result);
     const actual = await FlowAudit.run(['--json']);
-    expect(audit.calledOnceWithExactly('admin@example.com')).to.equal(true);
+    expect(audit.calledOnce).to.equal(true);
+    expect(audit.firstCall.args[0]).to.equal('admin@example.com');
+    expect(audit.firstCall.args[1]).to.be.a('function');
     expect(actual).to.equal(result);
   });
 });

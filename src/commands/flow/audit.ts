@@ -43,7 +43,9 @@ export default class FlowAudit extends SfCommand<FlowAuditResult> {
     const flags = await this.parseFlags();
     const context = createFlowCommandContext(flags);
     const service = new FlowAuditService(new ToolingFlowDefinitionGateway(context.connection));
-    const result = await withFlowProgress(this.spinner, 'audit', async () => service.audit(context.targetOrg));
+    const result = await withFlowProgress(this.spinner, 'audit', async (progress) =>
+      service.audit(context.targetOrg, progress)
+    );
     this.writeHumanOutput(result);
     return result;
   }

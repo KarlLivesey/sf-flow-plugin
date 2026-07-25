@@ -11,6 +11,9 @@ import { withFlowProgress } from '../../src/utils/flow-progress.js';
 
 function fakeSpinner(events: string[]): Spinner {
   return {
+    set status(value: string | undefined) {
+      events.push(`status:${value ?? ''}`);
+    },
     start: (action: string): void => {
       events.push(`start:${action}`);
     },
@@ -23,9 +26,18 @@ function fakeSpinner(events: string[]): Spinner {
 describe('withFlowProgress', (): void => {
   it('starts and stops progress around a successful operation', async (): Promise<void> => {
     const events: string[] = [];
-    const result = await withFlowProgress(fakeSpinner(events), 'graph', async () => Promise.resolve('result'));
+    const result = await withFlowProgress(fakeSpinner(events), 'graph', async (progress) => {
+      progress('loading-metadata', 'Order_Processing v3');
+      progress('rendering-graph');
+      return Promise.resolve('result');
+    });
     expect(result).to.equal('result');
-    expect(events).to.deep.equal(['start:Generating Flow graph', 'stop']);
+    expect(events).to.deep.equal([
+      'start:Generating Flow graph',
+      'status:Loading Flow metadata: Order_Processing v3',
+      'status:Rendering graph',
+      'stop',
+    ]);
   });
 
   it('stops progress when the operation fails', async (): Promise<void> => {

@@ -14,7 +14,8 @@ import type {
   FlowDependencyQueryDirection,
 } from '../types/flow-analysis.js';
 import type { FlowDefinition, FlowDefinitionGateway, FlowDefinitionLookup } from '../types/flow.js';
-import { selectFlowDefinition } from '../utils/flow-state.js';
+import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
+import { qualifiedFlowName, selectFlowDefinition } from '../utils/flow-state.js';
 
 function createLookup(request: FlowDependenciesRequest): FlowDefinitionLookup {
   return request.namespace === undefined
@@ -76,20 +77,32 @@ async function queryDependencies(
   return (await Promise.all(queries)).flat();
 }
 
+async function resolveDependencies(
+  gateway: FlowDefinitionGateway & FlowDependencyGateway,
+  request: FlowDependenciesRequest,
+  progress: FlowProgressReporter
+): Promise<FlowDependenciesResult> {
+  progress('resolving-flow', request.apiName);
+  const definition = selectFlowDefinition(request.apiName, await gateway.findDefinitions(createLookup(request)));
+  const name = qualifiedFlowName(definition.apiName, definition.namespace);
+  progress('loading-dependencies', `${name} (${request.direction})`);
+  const dependencies = await queryDependencies(gateway, definition, request);
+  progress('analysing-results', `${name} (${dependencies.length} dependency records)`);
+  return createResult(request, definition, dependencies);
+}
+
 export class FlowDependenciesService {
   public constructor(private readonly gateway: FlowDefinitionGateway & FlowDependencyGateway) {}
 
-  public async getDependencies(request: FlowDependenciesRequest): Promise<FlowDependenciesResult> {
+  public async getDependencies(
+    request: FlowDependenciesRequest,
+    progress: FlowProgressReporter = noFlowProgress
+  ): Promise<FlowDependenciesResult> {
     if (!flowDependencyDirectionSchema.safeParse(request.direction).success) {
       throw flowDependenciesFailed('The Flow dependency direction is invalid.');
     }
     try {
-      const definition = selectFlowDefinition(
-        request.apiName,
-        await this.gateway.findDefinitions(createLookup(request))
-      );
-      const dependencies = await queryDependencies(this.gateway, definition, request);
-      return createResult(request, definition, dependencies);
+      return await resolveDependencies(this.gateway, request, progress);
     } catch (error: unknown) {
       if (shouldRethrow(error)) {
         throw error;

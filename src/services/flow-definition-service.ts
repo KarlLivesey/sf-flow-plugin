@@ -21,6 +21,8 @@ import type {
   FlowVersion,
   FlowVersionNumber,
 } from '../types/flow.js';
+import { noFlowProgress, type FlowProgressReporter, withFlowProgressStage } from '../utils/flow-progress.js';
+import { qualifiedFlowName } from '../utils/flow-state.js';
 import { resolveFlowVersion } from '../utils/resolve-flow-version.js';
 
 function createLookup(request: FlowActivationRequest): FlowDefinitionLookup {
@@ -79,9 +81,17 @@ function createResult(
 export class FlowDefinitionService implements FlowDefinitionServiceContract {
   public constructor(private readonly gateway: FlowDefinitionGateway) {}
 
-  public async planActivation(request: FlowActivationRequest): Promise<FlowActivationPlan> {
+  public async planActivation(
+    request: FlowActivationRequest,
+    progress: FlowProgressReporter = noFlowProgress
+  ): Promise<FlowActivationPlan> {
+    progress('resolving-flow', request.apiName);
     const definitions = await this.findDefinitions(request);
     const definition = selectDefinition(request.apiName, definitions);
+    const name = qualifiedFlowName(definition.apiName, definition.namespace);
+    const requestedVersion =
+      typeof request.requestedVersion === 'number' ? `v${request.requestedVersion}` : request.requestedVersion;
+    progress('loading-versions', `${name} (${requestedVersion})`);
     const versions = await this.findVersions(definition);
     const selectedVersion = resolveFlowVersion(request.apiName, request.requestedVersion, versions);
     const previousActiveVersion = activeVersionNumber(definition, versions);
@@ -94,17 +104,43 @@ export class FlowDefinitionService implements FlowDefinitionServiceContract {
     };
   }
 
-  public async activate(request: FlowActivationRequest): Promise<FlowActivationResult> {
-    const plan = await this.planActivation(request);
+  public async activate(
+    request: FlowActivationRequest,
+    progress: FlowProgressReporter = noFlowProgress
+  ): Promise<FlowActivationResult> {
+    const plan = await this.planActivation(request, progress);
+    return this.executeActivation(request, plan, progress);
+  }
+
+  private async executeActivation(
+    request: FlowActivationRequest,
+    plan: FlowActivationPlan,
+    progress: FlowProgressReporter
+  ): Promise<FlowActivationResult> {
     if (!plan.changeRequired) {
       return createResult(request, plan, false);
     }
-    await this.gateway.assertMutationAllowed('update-definition');
+    const detail = `${qualifiedFlowName(plan.definition.apiName, plan.definition.namespace)} v${
+      plan.selectedVersion.versionNumber
+    }`;
+    await withFlowProgressStage(progress, {
+      stage: 'checking-permissions',
+      detail: `${detail} (activate)`,
+      operation: async () => this.gateway.assertMutationAllowed('update-definition'),
+    });
     if (request.dryRun) {
       return createResult(request, plan, false);
     }
-    await this.update(plan);
-    await this.verify(plan, request);
+    await withFlowProgressStage(progress, {
+      stage: 'applying-change',
+      detail,
+      operation: async () => this.update(plan),
+    });
+    await withFlowProgressStage(progress, {
+      stage: 'verifying-change',
+      detail,
+      operation: async () => this.verify(plan, request),
+    });
     return createResult(request, plan, true);
   }
 

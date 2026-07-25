@@ -33,3 +33,51 @@ Pruning Flow versions
 # actions.versions
 
 Loading Flow versions
+
+# stages.resolving-flow
+
+Resolving Flow
+
+# stages.loading-flows
+
+Loading Flow definitions
+
+# stages.loading-versions
+
+Loading Flow versions
+
+# stages.loading-metadata
+
+Loading Flow metadata
+
+# stages.checking-permissions
+
+Checking permissions
+
+# stages.applying-change
+
+Applying change
+
+# stages.deleting-versions
+
+Deleting Flow versions
+
+# stages.verifying-change
+
+Verifying result
+
+# stages.loading-dependencies
+
+Loading dependencies
+
+# stages.analysing-results
+
+Analysing results
+
+# stages.comparing-metadata
+
+Comparing metadata
+
+# stages.rendering-graph
+
+Rendering graph

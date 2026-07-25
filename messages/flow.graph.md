@@ -54,6 +54,10 @@ Font family used by the generated graph.
 
 Base font size used by the generated graph.
 
+# flags.output-file.summary
+
+Write the Mermaid or DOT source to a new file instead of printing it.
+
 # flags.namespace.summary
 
 Namespace that identifies a packaged Flow.
@@ -75,6 +79,14 @@ Salesforce API version to use for the Tooling API requests.
 - Override semantic colours and typography:
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --colour decision=orange --color subflow=#7C3AED --font-family Arial --font-size 16
+
+- Write DOT source to a file:
+
+  <%= config.bin %> <%= command.id %> --api-name Order_Processing --format dot --output-file order-processing.dot
+
+# info.written
+
+Wrote Flow graph to %s.
 
 # warnings.depth-limit
 

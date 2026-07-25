@@ -74,8 +74,8 @@ export default class FlowDependencies extends SfCommand<FlowDependenciesResult> 
     validateNamedFlowFlags(flags);
     const context = createFlowCommandContext(flags);
     const service = new FlowDependenciesService(new ToolingFlowDefinitionGateway(context.connection));
-    const result = await withFlowProgress(this.spinner, 'dependencies', async () =>
-      service.getDependencies(createRequest(flags, context))
+    const result = await withFlowProgress(this.spinner, 'dependencies', async (progress) =>
+      service.getDependencies(createRequest(flags, context), progress)
     );
     this.writeHumanOutput(result);
     return result;

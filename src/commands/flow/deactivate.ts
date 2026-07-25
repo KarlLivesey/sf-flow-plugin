@@ -66,8 +66,8 @@ export default class FlowDeactivate extends SfCommand<FlowDeactivationResult> {
     validateNamedFlowFlags(flags);
     const context = createFlowCommandContext(flags);
     const service = new FlowDeactivationService(new ToolingFlowDefinitionGateway(context.connection));
-    const result = await withFlowProgress(this.spinner, 'deactivate', async () =>
-      service.deactivate(createRequest(flags, context))
+    const result = await withFlowProgress(this.spinner, 'deactivate', async (progress) =>
+      service.deactivate(createRequest(flags, context), progress)
     );
     this.writeHumanOutput(result);
     return result;

@@ -114,8 +114,8 @@ export default class FlowActivate extends SfCommand<FlowActivationResult> {
     const targetOrg = requireTargetOrg(flags['target-org']);
     const connection = targetOrg.getConnection(flags['api-version']);
     const service = new FlowDefinitionService(new ToolingFlowDefinitionGateway(connection));
-    const result = await withFlowProgress(this.spinner, 'activate', async () =>
-      service.activate(createRequest(flags, targetOrg))
+    const result = await withFlowProgress(this.spinner, 'activate', async (progress) =>
+      service.activate(createRequest(flags, targetOrg), progress)
     );
     this.writeHumanOutput(result);
     return result;

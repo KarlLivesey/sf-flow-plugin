@@ -100,8 +100,8 @@ export default class FlowCompare extends SfCommand<FlowCompareResult> {
     validateNamedFlowFlags(flags);
     const context = createFlowCommandContext(flags);
     const service = new FlowComparisonService(new ToolingFlowDefinitionGateway(context.connection));
-    const result = await withFlowProgress(this.spinner, 'compare', async () =>
-      service.compare(createRequest(flags, context))
+    const result = await withFlowProgress(this.spinner, 'compare', async (progress) =>
+      service.compare(createRequest(flags, context), progress)
     );
     this.writeHumanOutput(result);
     return result;

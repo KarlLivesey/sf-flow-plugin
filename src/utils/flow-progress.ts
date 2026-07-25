@@ -21,14 +21,51 @@ export type FlowProgressAction =
   | 'prune'
   | 'versions';
 
+export type FlowProgressStage =
+  | 'resolving-flow'
+  | 'loading-flows'
+  | 'loading-versions'
+  | 'loading-metadata'
+  | 'checking-permissions'
+  | 'applying-change'
+  | 'deleting-versions'
+  | 'verifying-change'
+  | 'loading-dependencies'
+  | 'analysing-results'
+  | 'comparing-metadata'
+  | 'rendering-graph';
+
+export type FlowProgressReporter = (stage: FlowProgressStage, detail?: string) => void;
+
+export const noFlowProgress: FlowProgressReporter = () => undefined;
+
+interface FlowProgressWork<Result> {
+  stage: FlowProgressStage;
+  detail: string;
+  operation: () => Promise<Result>;
+}
+
+export async function withFlowProgressStage<Result>(
+  progress: FlowProgressReporter,
+  work: FlowProgressWork<Result>
+): Promise<Result> {
+  progress(work.stage, work.detail);
+  return work.operation();
+}
+
 export async function withFlowProgress<Result>(
   spinner: Spinner,
   action: FlowProgressAction,
-  operation: () => Promise<Result>
+  operation: (progress: FlowProgressReporter) => Promise<Result>
 ): Promise<Result> {
   spinner.start(messages.getMessage(`actions.${action}`));
+  const output = spinner;
+  const progress: FlowProgressReporter = (stage, detail) => {
+    const message = messages.getMessage(`stages.${stage}`);
+    output.status = detail === undefined ? message : `${message}: ${detail}`;
+  };
   try {
-    return await operation();
+    return await operation(progress);
   } finally {
     spinner.stop();
   }

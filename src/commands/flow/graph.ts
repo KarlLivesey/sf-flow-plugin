@@ -4,6 +4,8 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+import { writeFile } from 'node:fs/promises';
+
 import { Messages } from '@salesforce/core';
 import type { Org } from '@salesforce/core';
 import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
@@ -40,6 +42,7 @@ export interface GraphFlagValues {
   color: string[];
   'font-family': string;
   'font-size': number;
+  'output-file': string | undefined;
   namespace: string | undefined;
   'api-version': string | undefined;
 }
@@ -56,6 +59,23 @@ export function parseGraphColorOverrides(values: ReadonlyArray<string>): FlowGra
     }
     return { ...colors, [roleResult.data]: colorResult.data };
   }, {});
+}
+
+export async function writeGraphOutput(outputFile: string | undefined, graph: string): Promise<void> {
+  if (outputFile === undefined) {
+    return;
+  }
+  if (outputFile.trim().length === 0) {
+    throw flowInspectionFailed('The graph output file path must not be empty.');
+  }
+  try {
+    await writeFile(outputFile, graph, { encoding: 'utf8', flag: 'wx' });
+  } catch (error: unknown) {
+    if (error instanceof Error && 'code' in error && error.code === 'EEXIST') {
+      throw flowInspectionFailed(`Graph output file "${outputFile}" already exists.`);
+    }
+    throw flowInspectionFailed(`Failed to write graph output file "${outputFile}".`, error);
+  }
 }
 
 function createRequest(flags: GraphFlagValues, context: ReturnType<typeof createFlowCommandContext>): FlowGraphRequest {
@@ -147,6 +167,9 @@ export default class FlowGraph extends SfCommand<FlowGraphResult> {
       max: 32,
       summary: messages.getMessage('flags.font-size.summary'),
     }),
+    'output-file': Flags.string({
+      summary: messages.getMessage('flags.output-file.summary'),
+    }),
     namespace: Flags.string({
       summary: messages.getMessage('flags.namespace.summary'),
     }),
@@ -160,20 +183,26 @@ export default class FlowGraph extends SfCommand<FlowGraphResult> {
     validateNamedFlowFlags(flags);
     const context = createFlowCommandContext(flags);
     const service = new FlowGraphService(new ToolingFlowDefinitionGateway(context.connection));
-    const result = await withFlowProgress(this.spinner, 'graph', async () =>
-      service.graph(createRequest(flags, context))
+    const result = await withFlowProgress(this.spinner, 'graph', async (progress) =>
+      service.graph(createRequest(flags, context), progress)
     );
-    if (!this.jsonEnabled()) {
-      this.log(result.graph);
-      for (const warning of result.warnings) {
-        this.warn(messages.getMessage(`warnings.${warning.kind}`, [warning.path.join(' -> ')]));
-      }
-    }
+    await writeGraphOutput(flags['output-file'], result.graph);
+    this.writeHumanOutput(result, flags['output-file']);
     return result;
   }
 
   public async parseFlags(): Promise<GraphFlagValues> {
     const { flags } = await this.parse(FlowGraph);
     return flags;
+  }
+
+  private writeHumanOutput(result: FlowGraphResult, outputFile: string | undefined): void {
+    if (this.jsonEnabled()) {
+      return;
+    }
+    this.log(outputFile === undefined ? result.graph : messages.getMessage('info.written', [outputFile]));
+    for (const warning of result.warnings) {
+      this.warn(messages.getMessage(`warnings.${warning.kind}`, [warning.path.join(' -> ')]));
+    }
   }
 }

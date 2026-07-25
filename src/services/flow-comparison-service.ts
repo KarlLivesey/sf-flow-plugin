@@ -14,7 +14,8 @@ import type {
 } from '../types/flow-analysis.js';
 import type { FlowDefinition, FlowDefinitionGateway, FlowDefinitionLookup, FlowVersion } from '../types/flow.js';
 import { compareFlowMetadata } from '../utils/flow-metadata-diff.js';
-import { selectFlowDefinition } from '../utils/flow-state.js';
+import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
+import { qualifiedFlowName, selectFlowDefinition } from '../utils/flow-state.js';
 
 interface VersionContext {
   definition: FlowDefinition;
@@ -60,6 +61,10 @@ function selectVersion(context: VersionContext, selector: FlowComparisonVersionS
   return version;
 }
 
+function versionSelectorLabel(selector: FlowComparisonVersionSelector): string {
+  return typeof selector === 'number' ? `v${selector}` : selector;
+}
+
 function changeCount(changes: ReadonlyArray<FlowComparisonChange>, kind: FlowComparisonChange['kind']): number {
   return changes.filter((change) => change.kind === kind).length;
 }
@@ -98,24 +103,46 @@ function shouldRethrow(error: unknown): boolean {
 
 async function resolveComparison(
   gateway: FlowDefinitionGateway & FlowMetadataGateway,
-  request: FlowCompareRequest
+  request: FlowCompareRequest,
+  progress: FlowProgressReporter
 ): Promise<{ definition: FlowDefinition; comparison: ResolvedComparison }> {
-  const definition = selectFlowDefinition(request.apiName, await gateway.findDefinitions(createLookup(request)));
-  const context = { definition, versions: await gateway.findVersions(definition.id) };
+  const context = await resolveVersionContext(gateway, request, progress);
   const fromVersion = selectVersion(context, request.from);
   const toVersion = selectVersion(context, request.to);
+  const name = qualifiedFlowName(context.definition.apiName, context.definition.namespace);
+  progress('loading-metadata', `${name} v${fromVersion.versionNumber} → v${toVersion.versionNumber}`);
   const fromMetadata = await gateway.getVersionMetadata(fromVersion.id);
   const toMetadata = fromVersion.id === toVersion.id ? fromMetadata : await gateway.getVersionMetadata(toVersion.id);
+  progress('comparing-metadata', `${name} v${fromVersion.versionNumber} → v${toVersion.versionNumber}`);
   const changes = compareFlowMetadata(fromMetadata, toMetadata);
-  return { definition, comparison: { fromVersion, toVersion, changes } };
+  return { definition: context.definition, comparison: { fromVersion, toVersion, changes } };
+}
+
+async function resolveVersionContext(
+  gateway: FlowDefinitionGateway,
+  request: FlowCompareRequest,
+  progress: FlowProgressReporter
+): Promise<VersionContext> {
+  progress('resolving-flow', request.apiName);
+  const definition = selectFlowDefinition(request.apiName, await gateway.findDefinitions(createLookup(request)));
+  progress(
+    'loading-versions',
+    `${qualifiedFlowName(definition.apiName, definition.namespace)} (${versionSelectorLabel(
+      request.from
+    )} → ${versionSelectorLabel(request.to)})`
+  );
+  return { definition, versions: await gateway.findVersions(definition.id) };
 }
 
 export class FlowComparisonService {
   public constructor(private readonly gateway: FlowDefinitionGateway & FlowMetadataGateway) {}
 
-  public async compare(request: FlowCompareRequest): Promise<FlowCompareResult> {
+  public async compare(
+    request: FlowCompareRequest,
+    progress: FlowProgressReporter = noFlowProgress
+  ): Promise<FlowCompareResult> {
     try {
-      const { definition, comparison } = await resolveComparison(this.gateway, request);
+      const { definition, comparison } = await resolveComparison(this.gateway, request, progress);
       return createResult(request, definition, comparison);
     } catch (error: unknown) {
       if (shouldRethrow(error)) {

@@ -7,6 +7,7 @@
 import { expect } from 'chai';
 
 import { FlowDescribeService } from '../../src/services/flow-describe-service.js';
+import type { FlowProgressStage } from '../../src/utils/flow-progress.js';
 import { inspectionRequest, nestedFlowGateway, versionedSubflowGateway } from '../helpers/flow-inspection-fixtures.js';
 
 describe('FlowDescribeService', (): void => {
@@ -20,6 +21,19 @@ describe('FlowDescribeService', (): void => {
     const result = await new FlowDescribeService(nestedFlowGateway()).describe(inspectionRequest());
     expect(result.flows.map((flow) => flow.qualifiedName)).to.deep.equal(['Flow_A', 'Flow_B']);
     expect(result.warnings).to.deep.equal([]);
+  });
+
+  it('reports the Flow and version scope for every recursive version query', async (): Promise<void> => {
+    const events: Array<[FlowProgressStage, string | undefined]> = [];
+    await new FlowDescribeService(nestedFlowGateway()).describe(inspectionRequest(), (stage, detail) => {
+      events.push([stage, detail]);
+    });
+    expect(events).to.deep.include.members([
+      ['loading-versions', 'Flow_A (latest)'],
+      ['loading-metadata', 'Flow_A v1'],
+      ['loading-versions', 'Flow_B (active, subflow)'],
+      ['loading-metadata', 'Flow_B v2'],
+    ]);
   });
 
   it('stops before expanding a subflow past the configured depth', async (): Promise<void> => {

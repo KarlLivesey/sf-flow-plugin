@@ -138,8 +138,8 @@ export default class FlowDescribe extends SfCommand<FlowDescribeResult> {
     validateNamedFlowFlags(flags);
     const context = createFlowCommandContext(flags);
     const service = new FlowDescribeService(new ToolingFlowDefinitionGateway(context.connection));
-    const result = await withFlowProgress(this.spinner, 'describe', async () =>
-      service.describe(createRequest(flags, context))
+    const result = await withFlowProgress(this.spinner, 'describe', async (progress) =>
+      service.describe(createRequest(flags, context), progress)
     );
     this.writeHumanOutput(result);
     return result;
