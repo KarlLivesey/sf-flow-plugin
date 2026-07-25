@@ -10,6 +10,8 @@ export type FlowVersionSelector = 'latest' | FlowVersionNumber;
 
 export type FlowPruneOrder = 'created' | 'modified';
 
+export type FlowMutationOperation = 'update-definition' | 'delete-version';
+
 export type FlowErrorCode =
   | 'FlowDefinitionNotFound'
   | 'FlowDefinitionAmbiguous'
@@ -18,6 +20,7 @@ export type FlowErrorCode =
   | 'FlowVersionNotActivatable'
   | 'FlowQueryFailed'
   | 'FlowMutationFailed'
+  | 'FlowMutationPermissionDenied'
   | 'FlowActivationFailed'
   | 'FlowActivationVerificationFailed'
   | 'FlowDeactivationFailed'
@@ -119,6 +122,7 @@ export interface FlowDefinitionLookup {
 }
 
 export interface FlowDefinitionGateway {
+  assertMutationAllowed(operation: FlowMutationOperation): Promise<void>;
   findDefinitions(lookup: FlowDefinitionLookup): Promise<ReadonlyArray<FlowDefinition>>;
   findAllDefinitions(): Promise<ReadonlyArray<FlowDefinition>>;
   findVersions(definitionId: string): Promise<ReadonlyArray<FlowVersion>>;

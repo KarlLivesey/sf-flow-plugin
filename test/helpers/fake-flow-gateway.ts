@@ -11,9 +11,11 @@ import type {
   FlowDefinition,
   FlowDefinitionGateway,
   FlowDefinitionLookup,
+  FlowMutationOperation,
   FlowVersion,
   FlowVersionNumber,
 } from '../../src/types/flow.js';
+import { flowMutationPermissionDenied } from '../../src/errors/flow-errors.js';
 
 export interface ActiveVersionUpdate {
   definitionId: string;
@@ -32,6 +34,9 @@ export class FakeFlowGateway implements FlowDefinitionGateway {
   public readonly deletes: string[] = [];
   public readonly dependencies: FlowDependency[] = [];
   public readonly metadata = new Map<string, JsonObject>();
+  public readonly permissionChecks: FlowMutationOperation[] = [];
+  public allowDefinitionUpdates = true;
+  public allowVersionDeletes = true;
   public persistUpdates = true;
   public persistDeletes = true;
   public queryError?: Error;
@@ -42,6 +47,16 @@ export class FakeFlowGateway implements FlowDefinitionGateway {
   public constructor(definitions: ReadonlyArray<FlowDefinition>, versions: ReadonlyArray<FlowVersion>) {
     this.definitions = definitions.map((definition) => ({ ...definition }));
     this.versions = versions.map((version) => ({ ...version }));
+  }
+
+  public async assertMutationAllowed(operation: FlowMutationOperation): Promise<void> {
+    this.permissionChecks.push(operation);
+    const allowed = operation === 'update-definition' ? this.allowDefinitionUpdates : this.allowVersionDeletes;
+    if (!allowed) {
+      throw flowMutationPermissionDenied(
+        operation === 'update-definition' ? 'update Flow definitions' : 'delete Flow versions'
+      );
+    }
   }
 
   public async findDefinitions(lookup: FlowDefinitionLookup): Promise<ReadonlyArray<FlowDefinition>> {

@@ -161,12 +161,21 @@ export class FlowPruneService {
       throw flowPruneFailed('The Flow prune retention options are invalid.');
     }
     const plan = await this.plan(request);
-    if (request.dryRun || plan.plannedDeletions.length === 0) {
-      return createResult(request, plan, []);
+    const deletedVersions = await this.executePlan(request, plan);
+    return createResult(request, plan, deletedVersions);
+  }
+
+  private async executePlan(request: FlowPruneRequest, plan: PrunePlan): Promise<FlowPruneVersion[]> {
+    if (plan.plannedDeletions.length === 0) {
+      return [];
+    }
+    await this.gateway.assertMutationAllowed('delete-version');
+    if (request.dryRun) {
+      return [];
     }
     await this.deleteVersions(plan);
     await this.verify(plan);
-    return createResult(request, plan, plan.plannedDeletions);
+    return plan.plannedDeletions;
   }
 
   private async plan(request: FlowPruneRequest): Promise<PrunePlan> {

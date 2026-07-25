@@ -48,12 +48,14 @@ function gateway(items: FlowVersion[] = versions()): FakeFlowGateway {
 
 describe('FlowPruneService planning', (): void => {
   it('protects active and latest, retains the newest candidates and plans older deletions', async (): Promise<void> => {
-    const result = await new FlowPruneService(gateway()).prune(request());
+    const fake = gateway();
+    const result = await new FlowPruneService(fake).prune(request());
     expect(result.protectedVersions.map((version) => version.versionNumber)).to.deep.equal([4, 5]);
     expect(result.retainedVersions.map((version) => version.versionNumber)).to.deep.equal([3, 2]);
     expect(result.plannedDeletions.map((version) => version.versionNumber)).to.deep.equal([1]);
     expect(result.skippedVersions.map((version) => version.versionNumber)).to.deep.equal([6]);
     expect(result).to.include({ changed: false, dryRun: true });
+    expect(fake.permissionChecks).to.deep.equal(['delete-version']);
   });
 
   it('counts explicitly retained versions within the keep total', async (): Promise<void> => {
@@ -100,6 +102,7 @@ describe('FlowPruneService deletion', (): void => {
     const result = await new FlowPruneService(fake).prune(request({ keep: 1, dryRun: false }));
     expect(result.deletedVersions.map((version) => version.versionNumber)).to.deep.equal([1, 2]);
     expect(fake.deletes).to.deep.equal(result.deletedVersions.map((version) => version.id));
+    expect(fake.permissionChecks).to.deep.equal(['delete-version']);
     expect(result.changed).to.equal(true);
   });
 
@@ -108,5 +111,12 @@ describe('FlowPruneService deletion', (): void => {
     fake.persistDeletes = false;
     const promise = new FlowPruneService(fake).prune(request({ keep: 1, dryRun: false }));
     await expectErrorName(promise, 'FlowPruneVerificationFailed');
+  });
+
+  it('fails a dry run when Flow versions are not deletable', async (): Promise<void> => {
+    const fake = gateway();
+    fake.allowVersionDeletes = false;
+    await expectErrorName(new FlowPruneService(fake).prune(request({ keep: 1 })), 'FlowMutationPermissionDenied');
+    expect(fake.deletes).to.deep.equal([]);
   });
 });

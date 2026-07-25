@@ -9,7 +9,7 @@ The package is implemented in strict TypeScript using the current Salesforce ext
 - Node.js 22.19 or later.
 - A current Salesforce CLI installation. The packaged plugin is verified with `@salesforce/cli` 2.144.6.
 - An authenticated Salesforce org whose user can read Flow Tooling API records.
-- Flow update or deletion permissions for commands that mutate `FlowDefinition` or `Flow` records.
+- Tooling API update or deletion access for commands that mutate `FlowDefinition` or `Flow` records.
 
 ## Release status
 
@@ -369,6 +369,23 @@ sf flow prune \
 
 Only Draft, Obsolete and InvalidDraft versions are eligible for deletion. Other statuses are reported as skipped. Deletions are verified with a second Tooling API query.
 
+## Mutation preflight checks
+
+Before proposing or performing a change, the mutation commands validate the target Flow and its current version state:
+
+- `sf flow activate` confirms that the selected version exists, has an activatable status and is not already active.
+- `sf flow deactivate` confirms that the Flow currently has an active version.
+- `sf flow prune` confirms that requested keep/ignore versions exist, protects active and latest versions, and selects only prunable statuses.
+
+When a plan contains a change, including during `--dry-run`, the plugin asks the Tooling API for the authenticated user's current object capabilities:
+
+- Activation and deactivation require `FlowDefinition.updateable`.
+- Pruning requires `Flow.deletable`.
+
+A denied capability produces `FlowMutationPermissionDenied` before any PATCH or DELETE request. A dry run still performs this check but never sends the mutation.
+
+These checks are point-in-time preflights, not an atomic guarantee. Permissions or Flow state can change between the check and the mutation, and Salesforce can reject a specific operation for additional state-dependent reasons. The mutation response remains authoritative, and successful mutations are followed by a fresh query that verifies the resulting Flow state.
+
 ## Error codes
 
 | Code                                 | Meaning                                                                     |
@@ -382,6 +399,7 @@ Only Draft, Obsolete and InvalidDraft versions are eligible for deletion. Other 
 | `FlowActivationVerificationFailed`   | Salesforce did not report the requested version as active after the update. |
 | `FlowQueryFailed`                    | A validated Tooling API query or response failed.                           |
 | `FlowMutationFailed`                 | Salesforce rejected a validated Flow mutation.                              |
+| `FlowMutationPermissionDenied`       | Tooling API reports that the user cannot perform the planned mutation.      |
 | `FlowDeactivationFailed`             | Flow deactivation could not be completed.                                   |
 | `FlowDeactivationVerificationFailed` | Salesforce still reported an active version after deactivation.             |
 | `FlowAuditFailed`                    | The org-wide Flow audit could not be completed.                             |

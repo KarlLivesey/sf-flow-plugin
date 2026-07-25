@@ -48,7 +48,11 @@ export class FlowDeactivationService {
 
   public async deactivate(request: FlowDeactivationRequest): Promise<FlowDeactivationResult> {
     const state = await this.getState(request);
-    if (request.dryRun || state.definition.activeVersionId === null) {
+    if (state.definition.activeVersionId === null) {
+      return createResult(request, state, false);
+    }
+    await this.gateway.assertMutationAllowed('update-definition');
+    if (request.dryRun) {
       return createResult(request, state, false);
     }
     await this.clearActiveVersion(state.definition);

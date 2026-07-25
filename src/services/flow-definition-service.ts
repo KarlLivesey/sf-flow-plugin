@@ -96,7 +96,11 @@ export class FlowDefinitionService implements FlowDefinitionServiceContract {
 
   public async activate(request: FlowActivationRequest): Promise<FlowActivationResult> {
     const plan = await this.planActivation(request);
-    if (request.dryRun || !plan.changeRequired) {
+    if (!plan.changeRequired) {
+      return createResult(request, plan, false);
+    }
+    await this.gateway.assertMutationAllowed('update-definition');
+    if (request.dryRun) {
       return createResult(request, plan, false);
     }
     await this.update(plan);

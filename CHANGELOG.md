@@ -10,6 +10,7 @@ All notable user-visible changes to this project will be documented in this file
 - Added `sf flow graph` with Mermaid and Graphviz DOT output.
 - Added optional recursive active-subflow expansion with exact call-cycle detection and configurable depth limits.
 - Added optional variable and formula annotations to generated graphs.
+- Added point-in-time Tooling API permission preflights for real and dry-run Flow mutations.
 
 ## 1.1.0 - 2026-07-25
 

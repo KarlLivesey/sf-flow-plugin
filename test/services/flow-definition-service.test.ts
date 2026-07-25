@@ -6,12 +6,14 @@
  */
 import { expect } from 'chai';
 
+import { flowMutationPermissionDenied } from '../../src/errors/flow-errors.js';
 import { FlowDefinitionService } from '../../src/services/flow-definition-service.js';
 import type {
   FlowActivationRequest,
   FlowDefinition,
   FlowDefinitionGateway,
   FlowDefinitionLookup,
+  FlowMutationOperation,
   FlowVersion,
   FlowVersionNumber,
 } from '../../src/types/flow.js';
@@ -24,7 +26,9 @@ interface UpdateCall {
 class FakeGateway implements FlowDefinitionGateway {
   public readonly deletes: string[] = [];
   public readonly lookups: FlowDefinitionLookup[] = [];
+  public readonly permissionChecks: FlowMutationOperation[] = [];
   public readonly updates: UpdateCall[] = [];
+  public allowDefinitionUpdates = true;
   public definitionError?: Error;
   public updateError?: Error;
   private definitionCall = 0;
@@ -34,6 +38,13 @@ class FakeGateway implements FlowDefinitionGateway {
     private readonly definitionResponses: ReadonlyArray<ReadonlyArray<FlowDefinition>>,
     private readonly versionResponses: ReadonlyArray<ReadonlyArray<FlowVersion>>
   ) {}
+
+  public async assertMutationAllowed(operation: FlowMutationOperation): Promise<void> {
+    this.permissionChecks.push(operation);
+    if (operation === 'update-definition' && !this.allowDefinitionUpdates) {
+      throw flowMutationPermissionDenied('update Flow definitions');
+    }
+  }
 
   public async findDefinitions(lookup: FlowDefinitionLookup): Promise<ReadonlyArray<FlowDefinition>> {
     if (this.definitionError !== undefined) {
@@ -166,13 +177,14 @@ describe('FlowDefinitionService planning', (): void => {
   });
 });
 
-describe('FlowDefinitionService activation', (): void => {
+describe('FlowDefinitionService activation preflight', (): void => {
   it('does not update during a dry run', async (): Promise<void> => {
     const gateway = new FakeGateway([[definition()]], [[version(1), version(2)]]);
     const result = await new FlowDefinitionService(gateway).activate(request({ dryRun: true }));
     expect(result.changed).to.equal(false);
     expect(result.dryRun).to.equal(true);
     expect(gateway.updates).to.deep.equal([]);
+    expect(gateway.permissionChecks).to.deep.equal(['update-definition']);
   });
 
   it('is idempotent when the selected version is active', async (): Promise<void> => {
@@ -180,8 +192,22 @@ describe('FlowDefinitionService activation', (): void => {
     const result = await new FlowDefinitionService(gateway).activate(request());
     expect(result.changed).to.equal(false);
     expect(gateway.updates).to.deep.equal([]);
+    expect(gateway.permissionChecks).to.deep.equal([]);
   });
 
+  it('fails a dry run when the user cannot update Flow definitions', async (): Promise<void> => {
+    const gateway = new FakeGateway([[definition()]], [[version(1), version(2)]]);
+    gateway.allowDefinitionUpdates = false;
+    await expectError(
+      new FlowDefinitionService(gateway).activate(request({ dryRun: true })),
+      'FlowMutationPermissionDenied',
+      'update Flow definitions'
+    );
+    expect(gateway.updates).to.deep.equal([]);
+  });
+});
+
+describe('FlowDefinitionService activation mutation', (): void => {
   it('updates and verifies the selected version', async (): Promise<void> => {
     const gateway = new FakeGateway(
       [[definition()], [definition('301000000000002')]],
@@ -192,6 +218,7 @@ describe('FlowDefinitionService activation', (): void => {
     );
     const result = await new FlowDefinitionService(gateway).activate(request());
     expect(gateway.updates).to.deep.equal([{ definitionId: '300000000000001', versionNumber: 2 }]);
+    expect(gateway.permissionChecks).to.deep.equal(['update-definition']);
     expect(result.changed).to.equal(true);
     expect(result.activeVersion).to.equal(2);
   });

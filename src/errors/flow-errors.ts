@@ -99,6 +99,14 @@ export function flowMutationFailed(message: string, cause?: unknown): SfError {
   });
 }
 
+export function flowMutationPermissionDenied(operation: string): SfError {
+  return createFlowError({
+    code: 'FlowMutationPermissionDenied',
+    message: `The authenticated user cannot ${operation} through the Salesforce Tooling API.`,
+    action: 'Grant the user the required Flow management and Tooling API access, then try again.',
+  });
+}
+
 export function flowDeactivationFailed(message: string, cause?: unknown): SfError {
   return createFlowError({
     code: 'FlowDeactivationFailed',

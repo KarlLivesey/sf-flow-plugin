@@ -7,13 +7,14 @@
 import type { Connection } from '@salesforce/core';
 import type { z } from 'zod';
 
-import { flowMutationFailed, flowQueryFailed } from '../errors/flow-errors.js';
+import { flowMutationFailed, flowMutationPermissionDenied, flowQueryFailed } from '../errors/flow-errors.js';
 import {
   flowDefinitionRecordSchema,
   flowMetadataRecordSchema,
   flowVersionRecordSchema,
   metadataComponentDependencyRecordSchema,
   positiveFlowVersionSchema,
+  toolingObjectPermissionSchema,
   toolingQueryResultSchema,
 } from '../schemas/flow.js';
 import type {
@@ -27,11 +28,24 @@ import type {
   FlowDefinitionGateway,
   FlowDefinitionLookup,
   FlowDefinitionMetadataUpdate,
+  FlowMutationOperation,
   FlowVersion,
   FlowVersionNumber,
   ToolingQueryResult,
 } from '../types/flow.js';
 import { validateFlowApiName, validateNamespace, validateSalesforceId } from '../utils/flow-name-validation.js';
+
+interface MutationOperationDetails {
+  objectName: 'Flow' | 'FlowDefinition';
+  permission: 'deletable' | 'updateable';
+  description: string;
+}
+
+function mutationOperationDetails(operation: FlowMutationOperation): MutationOperationDetails {
+  return operation === 'update-definition'
+    ? { objectName: 'FlowDefinition', permission: 'updateable', description: 'update Flow definitions' }
+    : { objectName: 'Flow', permission: 'deletable', description: 'delete Flow versions' };
+}
 
 function parseSalesforceValue<T>(schema: z.ZodType<T>, value: unknown, label: string): T {
   const result = schema.safeParse(value);
@@ -140,6 +154,14 @@ function buildMetadataQuery(versionId: string): string {
 export class ToolingFlowDefinitionGateway implements FlowDefinitionGateway {
   public constructor(private readonly connection: Connection) {}
 
+  public async assertMutationAllowed(operation: FlowMutationOperation): Promise<void> {
+    const details = mutationOperationDetails(operation);
+    const permission = await this.describePermissions(details.objectName);
+    if (!permission[details.permission]) {
+      throw flowMutationPermissionDenied(details.description);
+    }
+  }
+
   public async findDefinitions(lookup: FlowDefinitionLookup): Promise<ReadonlyArray<FlowDefinition>> {
     validateFlowApiName(lookup.apiName);
     if (lookup.namespace !== undefined) {
@@ -220,6 +242,18 @@ export class ToolingFlowDefinitionGateway implements FlowDefinitionGateway {
         throw error;
       }
       throw flowQueryFailed('The Salesforce Tooling API query failed.', error);
+    }
+  }
+
+  private async describePermissions(objectName: string): Promise<{ deletable: boolean; updateable: boolean }> {
+    try {
+      const response: unknown = await this.connection.tooling.describe(objectName);
+      return parseSalesforceValue(toolingObjectPermissionSchema, response, `${objectName} permission description`);
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'FlowQueryFailed') {
+        throw error;
+      }
+      throw flowQueryFailed(`The Salesforce Tooling API could not describe ${objectName} permissions.`, error);
     }
   }
 

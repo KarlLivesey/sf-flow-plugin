@@ -47,6 +47,11 @@ export const toolingQueryResultSchema = z.object({
   nextRecordsUrl: z.string().optional(),
 });
 
+export const toolingObjectPermissionSchema = z.object({
+  updateable: z.boolean(),
+  deletable: z.boolean(),
+});
+
 export const flowDefinitionRecordSchema: z.ZodType<FlowDefinitionRecord> = z.object({
   Id: salesforceIdSchema,
   DeveloperName: flowApiNameSchema,
