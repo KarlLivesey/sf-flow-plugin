@@ -4,6 +4,8 @@ All notable user-visible changes to this project will be documented in this file
 
 ## Unreleased
 
+## 1.1.0 - 2026-07-25
+
 ### Added
 
 - Added `sf flow versions` with active/latest markers and version timestamps.

@@ -13,7 +13,7 @@ The package is implemented in strict TypeScript using the current Salesforce ext
 
 ## Release status
 
-Version 1.0.0 is published publicly on npm. Tagged releases are validated and published from GitHub Actions through npm trusted publishing.
+Version 1.1.0 is published publicly on npm. Tagged releases are validated and published from GitHub Actions through npm trusted publishing.
 
 ## Local installation
 
@@ -27,7 +27,22 @@ sf plugins link .
 After publication, install a released version with:
 
 ```bash
-sf plugins install sf-flow-plugin
+sf plugins install sf-flow-plugin@1.1.0
+```
+
+To replace a locally linked development checkout with the published package:
+
+```bash
+sf plugins unlink sf-flow-plugin
+sf plugins install sf-flow-plugin@1.1.0
+```
+
+Useful installation-management commands:
+
+```bash
+sf plugins                          # List installed and linked plugins.
+sf plugins update                   # Update all installed plugins.
+sf plugins uninstall sf-flow-plugin
 ```
 
 Authenticate the target org before using the command:
