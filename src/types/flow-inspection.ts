@@ -18,9 +18,45 @@ export type FlowGraphLayout = 'auto' | 'dagre' | 'elk';
 
 export type FlowGraphResolvedLayout = Exclude<FlowGraphLayout, 'auto'>;
 
+export type FlowGraphLayoutSelection = FlowGraphLayout | FlowGraphLayout[];
+
 export type FlowGraphCurve = 'auto' | 'basis' | 'linear' | 'step' | 'step-after' | 'step-before';
 
 export type FlowGraphResolvedCurve = Exclude<FlowGraphCurve, 'auto'>;
+
+export type FlowGraphElkNodePlacement = 'auto' | 'brandes-koepf' | 'linear-segments' | 'network-simplex' | 'simple';
+
+export type FlowGraphResolvedElkNodePlacement = Exclude<FlowGraphElkNodePlacement, 'auto'>;
+
+export type FlowGraphElkModelOrder = 'auto' | 'none' | 'nodes-and-edges' | 'prefer-edges' | 'prefer-nodes';
+
+export type FlowGraphResolvedElkModelOrder = Exclude<FlowGraphElkModelOrder, 'auto'>;
+
+export type FlowGraphElkCycleBreaking =
+  | 'auto'
+  | 'depth-first'
+  | 'greedy'
+  | 'greedy-model-order'
+  | 'interactive'
+  | 'model-order';
+
+export type FlowGraphResolvedElkCycleBreaking = Exclude<FlowGraphElkCycleBreaking, 'auto'>;
+
+export interface FlowGraphElkOptions {
+  nodePlacement: FlowGraphElkNodePlacement;
+  modelOrder: FlowGraphElkModelOrder;
+  cycleBreaking: FlowGraphElkCycleBreaking;
+  mergeEdges: boolean;
+  forceNodeOrder: boolean;
+}
+
+export interface FlowGraphResolvedElkOptions {
+  nodePlacement: FlowGraphResolvedElkNodePlacement;
+  modelOrder: FlowGraphResolvedElkModelOrder;
+  cycleBreaking: FlowGraphResolvedElkCycleBreaking;
+  mergeEdges: boolean;
+  forceNodeOrder: boolean;
+}
 
 export type FlowGraphColorRole =
   | 'background'
@@ -66,8 +102,11 @@ export interface FlowGraphRequest extends FlowTraversalRequest {
   includeVariables: boolean;
   includeFormulas: boolean;
   direction: FlowGraphDirection;
-  layout: FlowGraphLayout;
+  layout: FlowGraphLayoutSelection;
   curve: FlowGraphCurve;
+  elk: FlowGraphElkOptions;
+  nodeSpacing: number;
+  rankSpacing: number;
   legend: boolean;
   labelWidth: number;
   style: FlowGraphStyle;
@@ -169,9 +208,14 @@ export interface FlowGraphResult extends FlowDescribeResult {
   requestedDirection: FlowGraphDirection;
   resolvedDirection: FlowGraphResolvedDirection;
   requestedLayout: FlowGraphLayout;
+  layoutCandidates: FlowGraphResolvedLayout[];
   resolvedLayout: FlowGraphResolvedLayout;
   requestedCurve: FlowGraphCurve;
   resolvedCurve: FlowGraphResolvedCurve;
+  requestedElk: FlowGraphElkOptions;
+  resolvedElk: FlowGraphResolvedElkOptions;
+  nodeSpacing: number;
+  rankSpacing: number;
   legend: boolean;
   labelWidth: number;
   style: FlowGraphStyle;

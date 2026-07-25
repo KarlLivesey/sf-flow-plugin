@@ -17,7 +17,12 @@ import type {
   FlowGraphColorRole,
   FlowGraphCurve,
   FlowGraphDirection,
+  FlowGraphElkCycleBreaking,
+  FlowGraphElkModelOrder,
+  FlowGraphElkNodePlacement,
+  FlowGraphElkOptions,
   FlowGraphLayout,
+  FlowGraphLayoutSelection,
   FlowGraphStyle,
   FlowSubflowVersionSelector,
 } from '../types/flow-inspection.js';
@@ -58,6 +63,11 @@ export const flowGraphDirectionSchema: z.ZodType<FlowGraphDirection> = z.enum(['
 
 export const flowGraphLayoutSchema: z.ZodType<FlowGraphLayout> = z.enum(['auto', 'dagre', 'elk']);
 
+export const flowGraphLayoutSelectionSchema: z.ZodType<FlowGraphLayoutSelection> = z.union([
+  flowGraphLayoutSchema,
+  z.array(flowGraphLayoutSchema).min(1),
+]);
+
 export const flowGraphCurveSchema: z.ZodType<FlowGraphCurve> = z.enum([
   'auto',
   'basis',
@@ -67,7 +77,42 @@ export const flowGraphCurveSchema: z.ZodType<FlowGraphCurve> = z.enum([
   'step-before',
 ]);
 
+export const flowGraphElkNodePlacementSchema: z.ZodType<FlowGraphElkNodePlacement> = z.enum([
+  'auto',
+  'brandes-koepf',
+  'linear-segments',
+  'network-simplex',
+  'simple',
+]);
+
+export const flowGraphElkModelOrderSchema: z.ZodType<FlowGraphElkModelOrder> = z.enum([
+  'auto',
+  'none',
+  'nodes-and-edges',
+  'prefer-edges',
+  'prefer-nodes',
+]);
+
+export const flowGraphElkCycleBreakingSchema: z.ZodType<FlowGraphElkCycleBreaking> = z.enum([
+  'auto',
+  'depth-first',
+  'greedy',
+  'greedy-model-order',
+  'interactive',
+  'model-order',
+]);
+
+export const flowGraphElkOptionsSchema: z.ZodType<FlowGraphElkOptions> = z.object({
+  nodePlacement: flowGraphElkNodePlacementSchema,
+  modelOrder: flowGraphElkModelOrderSchema,
+  cycleBreaking: flowGraphElkCycleBreakingSchema,
+  mergeEdges: z.boolean(),
+  forceNodeOrder: z.boolean(),
+});
+
 export const flowGraphLabelWidthSchema = z.number().int().min(12).max(80);
+
+export const flowGraphSpacingSchema = z.number().int().min(10).max(200);
 
 export const flowGraphColorRoleSchema: z.ZodType<FlowGraphColorRole> = z.enum([
   'background',

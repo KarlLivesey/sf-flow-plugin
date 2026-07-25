@@ -254,8 +254,15 @@ sf flow graph \
   [--include-variables] \
   [--include-formulas] \
   [--direction auto|top-down|left-right] \
-  [--layout auto|dagre|elk] \
+  [--layout auto|dagre|elk ...] \
   [--curve auto|basis|linear|step|step-after|step-before] \
+  [--node-placement auto|brandes-koepf|linear-segments|network-simplex|simple] \
+  [--model-order auto|none|nodes-and-edges|prefer-edges|prefer-nodes] \
+  [--cycle-breaking auto|depth-first|greedy|greedy-model-order|interactive|model-order] \
+  [--merge-edges] \
+  [--force-node-order] \
+  [--node-spacing NUMBER] \
+  [--rank-spacing NUMBER] \
   [--legend] \
   [--label-width NUMBER] \
   [--color ROLE=COLOUR ...] \
@@ -291,7 +298,15 @@ Both formats place each Flow in a labelled container and use distinct shapes for
 
 `--direction` accepts `auto`, `top-down` or `left-right` and defaults to `auto`. Automatic layout uses left-to-right for a short linear Flow and top-down for branched or recursive diagrams. Long labels wrap at approximately 32 characters; override that with `--label-width`.
 
-`--layout` accepts `auto`, `dagre` or `elk` and defaults to `auto`. Automatic selection uses Dagre for a small linear Flow and ELK for recursive, branched, merged, cyclic or larger Flows. `--curve` also defaults to `auto`, using smooth `basis` curves for simple Dagre graphs and `linear` segments that preserve ELK routing for complex graphs. Override either option only when a particular renderer or routing style works better for your diagram.
+`--layout` is repeatable and accepts `auto`, `dagre` or `elk`. Omitting it or using `--layout auto` allows every supported engine. One explicit engine pins the layout; multiple explicit engines form the allowed candidate set, with automatic selection choosing only from that set. Automatic selection uses Dagre for a small linear Flow and ELK for recursive, branched, merged, cyclic or larger Flows. `--curve` also defaults to `auto`, using smooth `basis` curves for simple Dagre graphs and `linear` segments that preserve ELK routing for complex graphs.
+
+For example, this allows automatic selection between Dagre and ELK:
+
+```bash
+sf flow graph --api-name Order_Processing --layout dagre --layout elk
+```
+
+The generated model lists elements in execution order to give both renderers a useful placement hint. Automatic ELK routing uses Brandes-Koepf placement for acyclic graphs, network-simplex placement with model-aware cycle breaking for cyclic graphs, and prioritises edges in recursive or otherwise complex graphs. Edge merging and forced node order remain disabled because both can make crossings harder to follow. Override these decisions with `--node-placement`, `--model-order`, `--cycle-breaking`, `--merge-edges` or `--force-node-order`; using any explicit ELK override also selects ELK when `--layout` remains `auto`. Use `--node-spacing` and `--rank-spacing` to tune density in either output format.
 
 Mermaid and DOT output use the same semantic theme. Override a role with repeatable `--color` or `--colour` flags; both spellings are equivalent. Values can be a supported named colour, `#RGB` or `#RRGGBB`:
 
@@ -303,7 +318,10 @@ sf flow graph \
   --color fault=crimson \
   --direction left-right \
   --layout elk \
-  --curve step \
+  --node-placement network-simplex \
+  --model-order prefer-edges \
+  --cycle-breaking greedy-model-order \
+  --curve linear \
   --legend \
   --label-width 28 \
   --font-family "Fira Code" \

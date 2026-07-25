@@ -10,10 +10,12 @@ import type {
   FlowFormulaSummary,
   FlowGraphCurve,
   FlowGraphDirection,
-  FlowGraphLayout,
-  FlowGraphResolvedLayout,
+  FlowGraphElkOptions,
+  FlowGraphLayoutSelection,
   FlowGraphResolvedCurve,
   FlowGraphResolvedDirection,
+  FlowGraphResolvedElkOptions,
+  FlowGraphResolvedLayout,
   FlowGraphStyle,
   FlowSubflowSummary,
   FlowVariableSummary,
@@ -25,6 +27,9 @@ export interface FlowGraphRenderOptions {
   direction: FlowGraphResolvedDirection;
   layout: FlowGraphResolvedLayout;
   curve: FlowGraphResolvedCurve;
+  elk: FlowGraphResolvedElkOptions;
+  nodeSpacing: number;
+  rankSpacing: number;
   legend: boolean;
   labelWidth: number;
   style: FlowGraphStyle;
@@ -32,18 +37,48 @@ export interface FlowGraphRenderOptions {
 
 export interface RenderFlow {
   description: FlowDescription;
+  elements: FlowElementSummary[];
   index: number;
   elementIds: Map<string, string>;
 }
 
+function flowAdjacency(flow: FlowDescription): Map<string, string[]> {
+  const adjacency = new Map<string, string[]>();
+  for (const connector of flow.connectors) {
+    adjacency.set(connector.source, [...(adjacency.get(connector.source) ?? []), connector.target]);
+  }
+  return adjacency;
+}
+
+function walkFlow(name: string, adjacency: ReadonlyMap<string, string[]>, visited: Set<string>): string[] {
+  if (visited.has(name)) {
+    return [];
+  }
+  visited.add(name);
+  return [name, ...(adjacency.get(name) ?? []).flatMap((target) => walkFlow(target, adjacency, visited))];
+}
+
+function orderFlowElements(flow: FlowDescription): FlowElementSummary[] {
+  const byName = new Map(flow.elements.map((element) => [element.name, element]));
+  const start = flow.elements.find((element) => element.type === 'Start') ?? byName.get('start');
+  if (start === undefined) {
+    return [...flow.elements];
+  }
+  const visited = new Set<string>();
+  const ordered = walkFlow(start.name, flowAdjacency(flow), visited).flatMap((name) => byName.get(name) ?? []);
+  return [...ordered, ...flow.elements.filter((element) => !visited.has(element.name))];
+}
+
 export function createRenderFlows(flows: ReadonlyArray<FlowDescription>): RenderFlow[] {
-  return flows.map((description, index) => ({
-    description,
-    index,
-    elementIds: new Map(
-      description.elements.map((element, elementIndex) => [element.name, `f${index}_e${elementIndex}`])
-    ),
-  }));
+  return flows.map((description, index) => {
+    const elements = orderFlowElements(description);
+    return {
+      description,
+      elements,
+      index,
+      elementIds: new Map(elements.map((element, elementIndex) => [element.name, `f${index}_e${elementIndex}`])),
+    };
+  });
 }
 
 function isShortLinearFlow(flow: FlowDescription): boolean {
@@ -115,18 +150,79 @@ function isComplexFlow(flow: FlowDescription): boolean {
   );
 }
 
+const SUPPORTED_LAYOUTS: FlowGraphResolvedLayout[] = ['dagre', 'elk'];
+
+export function resolveGraphLayoutCandidates(layout: FlowGraphLayoutSelection): FlowGraphResolvedLayout[] {
+  const requested = Array.isArray(layout) ? layout : [layout];
+  if (requested.includes('auto')) {
+    return [...SUPPORTED_LAYOUTS];
+  }
+  return [...new Set(requested)] as FlowGraphResolvedLayout[];
+}
+
 export function resolveGraphLayout(
   flows: ReadonlyArray<FlowDescription>,
-  layout: FlowGraphLayout
+  layout: FlowGraphLayoutSelection,
+  elk?: FlowGraphElkOptions
 ): FlowGraphResolvedLayout {
-  if (layout !== 'auto') {
-    return layout;
+  const candidates = resolveGraphLayoutCandidates(layout);
+  const onlyCandidate = candidates[0];
+  if (candidates.length === 1 && onlyCandidate !== undefined) {
+    return onlyCandidate;
   }
-  return flows.length > 1 || flows.some((flow) => isComplexFlow(flow)) ? 'elk' : 'dagre';
+  const preferred =
+    flows.length > 1 || flows.some((flow) => isComplexFlow(flow)) ? ('elk' as const) : ('dagre' as const);
+  if (
+    elk !== undefined &&
+    (elk.nodePlacement !== 'auto' ||
+      elk.modelOrder !== 'auto' ||
+      elk.cycleBreaking !== 'auto' ||
+      elk.mergeEdges ||
+      elk.forceNodeOrder)
+  ) {
+    return candidates.includes('elk') ? 'elk' : onlyCandidate ?? 'dagre';
+  }
+  return candidates.includes(preferred) ? preferred : onlyCandidate ?? 'dagre';
 }
 
 export function resolveGraphCurve(curve: FlowGraphCurve, layout: FlowGraphResolvedLayout): FlowGraphResolvedCurve {
   return curve === 'auto' ? (layout === 'elk' ? 'linear' : 'basis') : curve;
+}
+
+function resolveNodePlacement(
+  requested: FlowGraphElkOptions['nodePlacement'],
+  cyclic: boolean
+): FlowGraphResolvedElkOptions['nodePlacement'] {
+  if (requested !== 'auto') {
+    return requested;
+  }
+  return cyclic ? 'network-simplex' : 'brandes-koepf';
+}
+
+function resolveCycleBreaking(
+  requested: FlowGraphElkOptions['cycleBreaking'],
+  cyclic: boolean
+): FlowGraphResolvedElkOptions['cycleBreaking'] {
+  if (requested !== 'auto') {
+    return requested;
+  }
+  return cyclic ? 'greedy-model-order' : 'greedy';
+}
+
+export function resolveGraphElkOptions(
+  flows: ReadonlyArray<FlowDescription>,
+  requested: FlowGraphElkOptions
+): FlowGraphResolvedElkOptions {
+  const cyclic = flows.some((flow) => hasCycle(flow));
+  const edgeHeavy = flows.length > 1 || flows.some((flow) => isComplexFlow(flow));
+  return {
+    nodePlacement: resolveNodePlacement(requested.nodePlacement, cyclic),
+    modelOrder:
+      requested.modelOrder === 'auto' ? (edgeHeavy ? 'prefer-edges' : 'nodes-and-edges') : requested.modelOrder,
+    cycleBreaking: resolveCycleBreaking(requested.cycleBreaking, cyclic),
+    mergeEdges: requested.mergeEdges,
+    forceNodeOrder: requested.forceNodeOrder,
+  };
 }
 
 export function elementLabel(element: FlowElementSummary): string {

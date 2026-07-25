@@ -48,11 +48,39 @@ Graph layout direction: auto, top-down, or left-right.
 
 # flags.layout.summary
 
-Mermaid layout engine: auto, dagre, or elk. Auto uses ELK for complex graphs.
+Repeatable Mermaid layout engine candidate: auto, dagre, or elk. One explicit engine pins it; multiple engines are selected automatically.
 
 # flags.curve.summary
 
 Mermaid connector curve: auto, basis, linear, step, step-after, or step-before.
+
+# flags.node-placement.summary
+
+ELK node placement: auto, brandes-koepf, linear-segments, network-simplex, or simple.
+
+# flags.model-order.summary
+
+ELK model-order priority: auto, none, nodes-and-edges, prefer-edges, or prefer-nodes.
+
+# flags.cycle-breaking.summary
+
+ELK cycle-breaking strategy: auto, depth-first, greedy, greedy-model-order, interactive, or model-order.
+
+# flags.merge-edges.summary
+
+Allow ELK to merge compatible edge routes. Disabled by default for readability.
+
+# flags.force-node-order.summary
+
+Force ELK to retain execution model order instead of minimising crossings.
+
+# flags.node-spacing.summary
+
+Minimum spacing in pixels between graph nodes.
+
+# flags.rank-spacing.summary
+
+Minimum spacing in pixels between graph ranks.
 
 # flags.legend.summary
 
@@ -102,7 +130,7 @@ Salesforce API version to use for the Tooling API requests.
 
 - Use explicit routing for a dense Flow:
 
-  <%= config.bin %> <%= command.id %> --api-name Order_Processing --layout elk --curve step
+  <%= config.bin %> <%= command.id %> --api-name Order_Processing --layout elk --node-placement network-simplex --model-order prefer-edges --cycle-breaking greedy-model-order --curve linear
 
 - Write DOT source to a file:
 

@@ -183,9 +183,9 @@ function globalStyleLines(options: FlowGraphRenderOptions, theme: ResolvedFlowGr
       fontsize: options.style.fontSize,
       fontcolor: theme.text,
       pad: 0.3,
-      nodesep: 0.45,
+      nodesep: options.nodeSpacing / 72,
       newrank: 'true',
-      ranksep: 0.65,
+      ranksep: options.rankSpacing / 72,
       splines: 'spline',
     })}];`,
     `  node [${dotAttributes({
@@ -208,7 +208,7 @@ function globalStyleLines(options: FlowGraphRenderOptions, theme: ResolvedFlowGr
 }
 
 function flowBlock(flow: RenderFlow, options: FlowGraphRenderOptions, theme: ResolvedFlowGraphTheme): string[] {
-  const elements = flow.description.elements.map((element) =>
+  const elements = flow.elements.map((element) =>
     elementNode({
       id: flow.elementIds.get(element.name) ?? '',
       element,

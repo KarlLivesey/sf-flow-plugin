@@ -25,6 +25,28 @@ import {
 
 const NODE_CATEGORIES = ['node', 'start', 'decision', 'subflow', 'action', 'record', 'screen'] as const;
 
+const ELK_NODE_PLACEMENT = {
+  'brandes-koepf': 'BRANDES_KOEPF',
+  'linear-segments': 'LINEAR_SEGMENTS',
+  'network-simplex': 'NETWORK_SIMPLEX',
+  simple: 'SIMPLE',
+} as const;
+
+const ELK_MODEL_ORDER = {
+  none: 'NONE',
+  'nodes-and-edges': 'NODES_AND_EDGES',
+  'prefer-edges': 'PREFER_EDGES',
+  'prefer-nodes': 'PREFER_NODES',
+} as const;
+
+const ELK_CYCLE_BREAKING = {
+  'depth-first': 'DEPTH_FIRST',
+  greedy: 'GREEDY',
+  'greedy-model-order': 'GREEDY_MODEL_ORDER',
+  interactive: 'INTERACTIVE',
+  'model-order': 'MODEL_ORDER',
+} as const;
+
 interface MermaidConnector {
   kind: FlowConnectorSummary['kind'];
   line: string;
@@ -133,17 +155,20 @@ function mermaidHeader(options: FlowGraphRenderOptions, theme: ResolvedFlowGraph
     ...(options.layout === 'elk'
       ? {
           elk: {
-            mergeEdges: false,
-            nodePlacementStrategy: 'LINEAR_SEGMENTS',
+            cycleBreakingStrategy: ELK_CYCLE_BREAKING[options.elk.cycleBreaking],
+            considerModelOrder: ELK_MODEL_ORDER[options.elk.modelOrder],
+            forceNodeModelOrder: options.elk.forceNodeOrder,
+            mergeEdges: options.elk.mergeEdges,
+            nodePlacementStrategy: ELK_NODE_PLACEMENT[options.elk.nodePlacement],
           },
         }
       : {}),
     flowchart: {
       curve: mermaidCurve(options.curve),
       htmlLabels: true,
-      nodeSpacing: 35,
+      nodeSpacing: options.nodeSpacing,
       padding: 15,
-      rankSpacing: 45,
+      rankSpacing: options.rankSpacing,
     },
     theme: 'base',
     themeVariables: {
@@ -163,7 +188,7 @@ function flowBlock(flow: RenderFlow, options: FlowGraphRenderOptions): MermaidFl
   const label = mermaidText(
     `${flow.description.qualifiedName} v${flow.description.versionNumber} · ${flow.description.status}`
   );
-  const elements = flow.description.elements.map((element) =>
+  const elements = flow.elements.map((element) =>
     mermaidNode(flow.elementIds.get(element.name) ?? '', element, options.labelWidth)
   );
   return {

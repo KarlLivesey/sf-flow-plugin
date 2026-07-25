@@ -4,21 +4,19 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { writeFile } from 'node:fs/promises';
-
 import { Messages } from '@salesforce/core';
 import type { Org } from '@salesforce/core';
 import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
 import { FlowGraphService } from '../../services/flow-graph-service.js';
-import { flowInspectionFailed } from '../../errors/flow-errors.js';
-import { flowGraphColorRoleSchema, flowGraphColorSchema } from '../../schemas/flow.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type { FlowComparisonVersionSelector } from '../../types/flow-analysis.js';
 import type {
-  FlowGraphColorOverrides,
   FlowGraphCurve,
   FlowGraphDirection,
+  FlowGraphElkCycleBreaking,
+  FlowGraphElkModelOrder,
+  FlowGraphElkNodePlacement,
   FlowGraphFormat,
   FlowGraphLayout,
   FlowGraphRequest,
@@ -26,6 +24,7 @@ import type {
   FlowSubflowVersionSelector,
 } from '../../types/flow-inspection.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
+import { parseGraphColorOverrides, writeGraphOutput } from '../../utils/flow-graph-command.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
 import { parseInspectionVersionSelector } from './describe.js';
 
@@ -43,8 +42,15 @@ export interface GraphFlagValues {
   'include-variables': boolean;
   'include-formulas': boolean;
   direction: FlowGraphDirection;
-  layout: FlowGraphLayout;
+  layout: FlowGraphLayout[];
   curve: FlowGraphCurve;
+  'node-placement': FlowGraphElkNodePlacement;
+  'model-order': FlowGraphElkModelOrder;
+  'cycle-breaking': FlowGraphElkCycleBreaking;
+  'merge-edges': boolean;
+  'force-node-order': boolean;
+  'node-spacing': number;
+  'rank-spacing': number;
   legend: boolean;
   'label-width': number;
   color: string[];
@@ -53,37 +59,6 @@ export interface GraphFlagValues {
   'output-file': string | undefined;
   namespace: string | undefined;
   'api-version': string | undefined;
-}
-
-export function parseGraphColorOverrides(values: ReadonlyArray<string>): FlowGraphColorOverrides {
-  return values.reduce<FlowGraphColorOverrides>((colors, value) => {
-    const separator = value.indexOf('=');
-    const roleResult = flowGraphColorRoleSchema.safeParse(value.slice(0, separator));
-    const colorResult = flowGraphColorSchema.safeParse(value.slice(separator + 1).toLowerCase());
-    if (separator < 1 || !roleResult.success || !colorResult.success) {
-      throw flowInspectionFailed(
-        `Graph colour override "${value}" must use a supported ROLE=COLOUR or ROLE=#HEX value.`
-      );
-    }
-    return { ...colors, [roleResult.data]: colorResult.data };
-  }, {});
-}
-
-export async function writeGraphOutput(outputFile: string | undefined, graph: string): Promise<void> {
-  if (outputFile === undefined) {
-    return;
-  }
-  if (outputFile.trim().length === 0) {
-    throw flowInspectionFailed('The graph output file path must not be empty.');
-  }
-  try {
-    await writeFile(outputFile, graph, { encoding: 'utf8', flag: 'wx' });
-  } catch (error: unknown) {
-    if (error instanceof Error && 'code' in error && error.code === 'EEXIST') {
-      throw flowInspectionFailed(`Graph output file "${outputFile}" already exists.`);
-    }
-    throw flowInspectionFailed(`Failed to write graph output file "${outputFile}".`, error);
-  }
 }
 
 function createRequest(flags: GraphFlagValues, context: ReturnType<typeof createFlowCommandContext>): FlowGraphRequest {
@@ -99,6 +74,15 @@ function createRequest(flags: GraphFlagValues, context: ReturnType<typeof create
     direction: flags.direction,
     layout: flags.layout,
     curve: flags.curve,
+    elk: {
+      nodePlacement: flags['node-placement'],
+      modelOrder: flags['model-order'],
+      cycleBreaking: flags['cycle-breaking'],
+      mergeEdges: flags['merge-edges'],
+      forceNodeOrder: flags['force-node-order'],
+    },
+    nodeSpacing: flags['node-spacing'],
+    rankSpacing: flags['rank-spacing'],
     legend: flags.legend,
     labelWidth: flags['label-width'],
     style: {
@@ -171,7 +155,8 @@ export default class FlowGraph extends SfCommand<FlowGraphResult> {
       parse: (input: string): Promise<FlowGraphDirection> => Promise.resolve(input as FlowGraphDirection),
     })(),
     layout: Flags.custom<FlowGraphLayout>({
-      default: 'auto',
+      default: ['auto'],
+      multiple: true,
       options: ['auto', 'dagre', 'elk'],
       summary: messages.getMessage('flags.layout.summary'),
       parse: (input: string): Promise<FlowGraphLayout> => Promise.resolve(input as FlowGraphLayout),
@@ -182,6 +167,46 @@ export default class FlowGraph extends SfCommand<FlowGraphResult> {
       summary: messages.getMessage('flags.curve.summary'),
       parse: (input: string): Promise<FlowGraphCurve> => Promise.resolve(input as FlowGraphCurve),
     })(),
+    'node-placement': Flags.custom<FlowGraphElkNodePlacement>({
+      default: 'auto',
+      options: ['auto', 'brandes-koepf', 'linear-segments', 'network-simplex', 'simple'],
+      summary: messages.getMessage('flags.node-placement.summary'),
+      parse: (input: string): Promise<FlowGraphElkNodePlacement> => Promise.resolve(input as FlowGraphElkNodePlacement),
+    })(),
+    'model-order': Flags.custom<FlowGraphElkModelOrder>({
+      default: 'auto',
+      options: ['auto', 'none', 'nodes-and-edges', 'prefer-edges', 'prefer-nodes'],
+      summary: messages.getMessage('flags.model-order.summary'),
+      parse: (input: string): Promise<FlowGraphElkModelOrder> => Promise.resolve(input as FlowGraphElkModelOrder),
+    })(),
+    'cycle-breaking': Flags.custom<FlowGraphElkCycleBreaking>({
+      default: 'auto',
+      options: ['auto', 'depth-first', 'greedy', 'greedy-model-order', 'interactive', 'model-order'],
+      summary: messages.getMessage('flags.cycle-breaking.summary'),
+      parse: (input: string): Promise<FlowGraphElkCycleBreaking> => Promise.resolve(input as FlowGraphElkCycleBreaking),
+    })(),
+    'merge-edges': Flags.boolean({
+      allowNo: true,
+      default: false,
+      summary: messages.getMessage('flags.merge-edges.summary'),
+    }),
+    'force-node-order': Flags.boolean({
+      allowNo: true,
+      default: false,
+      summary: messages.getMessage('flags.force-node-order.summary'),
+    }),
+    'node-spacing': Flags.integer({
+      default: 35,
+      min: 10,
+      max: 200,
+      summary: messages.getMessage('flags.node-spacing.summary'),
+    }),
+    'rank-spacing': Flags.integer({
+      default: 45,
+      min: 10,
+      max: 200,
+      summary: messages.getMessage('flags.rank-spacing.summary'),
+    }),
     legend: Flags.boolean({
       default: false,
       summary: messages.getMessage('flags.legend.summary'),
