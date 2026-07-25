@@ -90,7 +90,6 @@ export interface FlowDescription {
 }
 
 export type FlowTraversalWarningKind =
-  | 'cycle'
   | 'depth-limit'
   | 'missing-subflow'
   | 'subflow-version-fallback'

@@ -8,33 +8,32 @@ import { expect } from 'chai';
 
 import { FlowDescribeService } from '../../src/services/flow-describe-service.js';
 import { renderFlowGraph } from '../../src/utils/flow-graph-renderer.js';
-import { cycleGateway, inspectionRequest } from '../helpers/flow-inspection-fixtures.js';
+import { inspectionRequest, nestedFlowGateway } from '../helpers/flow-inspection-fixtures.js';
 
 describe('renderFlowGraph', (): void => {
-  it('retains both call edges when rendering a recursive Mermaid cycle', async (): Promise<void> => {
-    const described = await new FlowDescribeService(cycleGateway()).describe(inspectionRequest());
+  it('renders a recursive Mermaid subflow call', async (): Promise<void> => {
+    const described = await new FlowDescribeService(nestedFlowGateway()).describe(inspectionRequest());
     const graph = renderFlowGraph(described.flows, 'mermaid', {
       includeVariables: false,
       includeFormulas: false,
     });
     expect(graph).to.include('flowchart TD');
-    expect(graph.match(/calls/g)).to.have.length(2);
+    expect(graph.match(/calls/g)).to.have.length(1);
     expect(graph).to.include('f0_e1 -. "calls" .-> f1_e0');
-    expect(graph).to.include('f1_e1 -. "calls" .-> f0_e0');
   });
 
-  it('renders DOT call edges for the same cycle', async (): Promise<void> => {
-    const described = await new FlowDescribeService(cycleGateway()).describe(inspectionRequest());
+  it('renders a recursive DOT subflow call', async (): Promise<void> => {
+    const described = await new FlowDescribeService(nestedFlowGateway()).describe(inspectionRequest());
     const graph = renderFlowGraph(described.flows, 'dot', {
       includeVariables: false,
       includeFormulas: false,
     });
     expect(graph).to.include('digraph Flow {');
-    expect(graph.match(/label="calls"/g)).to.have.length(2);
+    expect(graph.match(/label="calls"/g)).to.have.length(1);
   });
 
   it('includes variable and formula nodes only when requested', async (): Promise<void> => {
-    const described = await new FlowDescribeService(cycleGateway()).describe(inspectionRequest());
+    const described = await new FlowDescribeService(nestedFlowGateway()).describe(inspectionRequest());
     const graph = renderFlowGraph(described.flows, 'mermaid', {
       includeVariables: true,
       includeFormulas: true,

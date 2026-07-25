@@ -36,7 +36,7 @@ export function subflowMetadata(flowName: string): JsonObject {
   };
 }
 
-export function cycleGateway(): FakeFlowGateway {
+export function nestedFlowGateway(): FakeFlowGateway {
   const versionA = flowVersion(flowAId, 1, 'Active');
   const versionB = flowVersion(flowBId, 2, 'Active');
   const gateway = new FakeFlowGateway(
@@ -69,7 +69,7 @@ export function cycleGateway(): FakeFlowGateway {
     ],
     formulas: [{ name: 'Greeting', dataType: 'String', expression: '"Hello"' }],
   });
-  gateway.metadata.set(versionB.id, subflowMetadata('Flow_A'));
+  gateway.metadata.set(versionB.id, {});
   return gateway;
 }
 

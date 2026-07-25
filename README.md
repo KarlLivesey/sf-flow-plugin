@@ -240,7 +240,7 @@ sf flow describe \
   --json
 ```
 
-Recursive traversal reports missing subflows, active-to-latest fallbacks and depth limits as warnings. It tracks both visited definitions and the current call path. For example, if Flow A calls Flow B and B calls A, the result reports the exact cycle `Flow_A -> Flow_B -> Flow_A` and stops expanding the repeated A.
+Recursive traversal reports missing subflows, active-to-latest fallbacks and depth limits as warnings. It tracks visited definitions so a shared subflow is expanded only once.
 
 ## `sf flow graph`
 
@@ -278,7 +278,7 @@ sf flow graph \
   --include-formulas
 ```
 
-Recursive graphs use the same subflow-version selection, fallback, depth and cycle rules as `sf flow describe`. A cycle retains the call edge that closes the loop—for example, B still has a `calls` edge back to A—but does not expand A a second time.
+Recursive graphs use the same subflow-version selection, fallback, visited-definition and depth rules as `sf flow describe`.
 
 ## `sf flow deactivate`
 

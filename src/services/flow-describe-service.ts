@@ -34,7 +34,6 @@ interface VisitContext {
   version: FlowVersion;
   depth: number;
   path: string[];
-  definitionPath: string[];
 }
 
 interface ExpansionContext {
@@ -139,7 +138,7 @@ class FlowMetadataTraversal {
     const versions = await this.gateway.findVersions(definition.id);
     const version = selectVersion(definition, versions, this.request.version);
     const name = qualifiedFlowName(definition.apiName, definition.namespace);
-    const root = await this.visit({ definition, version, depth: 0, path: [name], definitionPath: [definition.id] });
+    const root = await this.visit({ definition, version, depth: 0, path: [name] });
     return { root, flows: this.flows, warnings: [...this.warnings.values()] };
   }
 
@@ -179,15 +178,14 @@ class FlowMetadataTraversal {
   }
 
   private shouldStopExpansion({ definition, parent, name, path }: ExpansionContext): boolean {
-    if (parent.definitionPath.includes(definition.id)) {
-      this.addWarning({ kind: 'cycle', flowName: name, path });
+    if (this.visited.has(definition.id)) {
       return true;
     }
     if (parent.depth >= this.request.maxDepth) {
       this.addWarning({ kind: 'depth-limit', flowName: name, path });
       return true;
     }
-    return this.visited.has(definition.id);
+    return false;
   }
 
   private async findSubflowDefinition(flowName: string, path: string[]): Promise<FlowDefinition | undefined> {
@@ -218,7 +216,6 @@ class FlowMetadataTraversal {
       version,
       depth: parent.depth + 1,
       path,
-      definitionPath: [...parent.definitionPath, definition.id],
     });
   }
 }

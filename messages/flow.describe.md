@@ -4,7 +4,7 @@ Describe the structure and dependencies of a Salesforce Flow version.
 
 # description
 
-Summarise Flow elements, variables, formulas, Apex actions, subflows and referenced objects. Recursive traversal follows selected subflow versions with cycle and depth protection.
+Summarise Flow elements, variables, formulas, Apex actions, subflows and referenced objects. Recursive traversal follows selected subflow versions with visited-definition and depth protection.
 
 # flags.api-name.summary
 
@@ -51,10 +51,6 @@ Salesforce API version to use for the Tooling API requests.
 # info.title
 
 Flow structure
-
-# warnings.cycle
-
-Stopped recursive expansion at subflow cycle: %s
 
 # warnings.depth-limit
 
