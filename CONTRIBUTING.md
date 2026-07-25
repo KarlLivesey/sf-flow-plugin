@@ -50,6 +50,29 @@ The manual `NUTs` GitHub Actions workflow expects a protected `salesforce-nut` e
 before deploying or mutating metadata. Repository environment and secret configuration are maintainer handover tasks
 and are not stored in this repository.
 
+## Releases
+
+Stable and prerelease npm publications are driven by version tags through `.github/workflows/release.yml`. The workflow
+verifies that the tag is exactly `v<package version>`, runs the full quality gate, publishes through npm trusted
+publishing, and creates the corresponding GitHub release only after npm accepts the package.
+
+Bootstrap trusted publishing after the package's initial publication:
+
+1. Configure the npm package's GitHub Actions trusted publisher with user `KarlLivesey`, repository
+   `sf-flow-plugin`, workflow `release.yml`, and permission to run `npm publish`.
+2. Require two-factor authentication and disallow traditional publish tokens in the package's npm publishing-access
+   settings.
+
+Create a release by updating the package version and pushing its generated tag:
+
+```bash
+npm version patch
+git push --follow-tags
+```
+
+Use `minor`, `major`, or an explicit semantic version instead of `patch` when appropriate. Semantic prerelease
+versions publish under their prerelease identifier rather than the `latest` npm dist-tag.
+
 ## Adding a command
 
 Generate the Salesforce command structure before implementing it:

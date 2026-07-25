@@ -39,6 +39,14 @@
     "sfdx-plugin"
   ],
   "license": "BSD-3-Clause",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KarlLivesey/sf-flow-plugin.git"
+  },
+  "homepage": "https://github.com/KarlLivesey/sf-flow-plugin#readme",
+  "bugs": {
+    "url": "https://github.com/KarlLivesey/sf-flow-plugin/issues"
+  },
   "oclif": {
     "commands": "./lib/commands",
     "bin": "sf",
