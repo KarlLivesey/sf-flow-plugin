@@ -1,5 +1,9 @@
-import { SfError } from '@salesforce/core';
-
+/*
+ * Copyright (c) 2026, Karl Livesey.
+ * All rights reserved.
+ * Licensed under the BSD 3-Clause license.
+ * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
 import {
   flowActivationFailed,
   flowActivationVerificationFailed,
@@ -76,10 +80,9 @@ export class FlowDefinitionService implements FlowDefinitionServiceContract {
   public constructor(private readonly gateway: FlowDefinitionGateway) {}
 
   public async planActivation(request: FlowActivationRequest): Promise<FlowActivationPlan> {
-    const lookup = createLookup(request);
-    const definitions = await this.gateway.findDefinitions(lookup);
+    const definitions = await this.findDefinitions(request);
     const definition = selectDefinition(request.apiName, definitions);
-    const versions = await this.gateway.findVersions(definition.id);
+    const versions = await this.findVersions(definition);
     const selectedVersion = resolveFlowVersion(request.apiName, request.requestedVersion, versions);
     const previousActiveVersion = activeVersionNumber(definition, versions);
     return {
@@ -105,20 +108,33 @@ export class FlowDefinitionService implements FlowDefinitionServiceContract {
     try {
       await this.gateway.updateActiveVersion(plan.definition.id, plan.selectedVersion.versionNumber);
     } catch (error: unknown) {
-      if (error instanceof SfError && error.name === 'FlowActivationFailed') {
-        throw error;
-      }
       throw flowActivationFailed(`Failed to activate Flow "${plan.definition.apiName}".`, error);
     }
   }
 
   private async verify(plan: FlowActivationPlan, request: FlowActivationRequest): Promise<void> {
-    const definitions = await this.gateway.findDefinitions(createLookup(request));
+    const definitions = await this.findDefinitions(request);
     const definition = selectDefinition(request.apiName, definitions);
-    const versions = await this.gateway.findVersions(definition.id);
+    const versions = await this.findVersions(definition);
     const verifiedVersion = activeVersionNumber(definition, versions);
     if (verifiedVersion !== plan.selectedVersion.versionNumber) {
       throw flowActivationVerificationFailed(plan.definition.apiName, plan.selectedVersion.versionNumber);
+    }
+  }
+
+  private async findDefinitions(request: FlowActivationRequest): Promise<ReadonlyArray<FlowDefinition>> {
+    try {
+      return await this.gateway.findDefinitions(createLookup(request));
+    } catch (error: unknown) {
+      throw flowActivationFailed(`Failed to query the definition for Flow "${request.apiName}".`, error);
+    }
+  }
+
+  private async findVersions(definition: FlowDefinition): Promise<ReadonlyArray<FlowVersion>> {
+    try {
+      return await this.gateway.findVersions(definition.id);
+    } catch (error: unknown) {
+      throw flowActivationFailed(`Failed to query versions for Flow "${definition.apiName}".`, error);
     }
   }
 }

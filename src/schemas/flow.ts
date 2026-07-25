@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026, Karl Livesey.
+ * All rights reserved.
+ * Licensed under the BSD 3-Clause license.
+ * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
 import { z } from 'zod';
 
 import type { FlowDefinitionRecord, FlowVersionRecord } from '../types/flow.js';
@@ -26,8 +32,8 @@ export const toolingQueryResultSchema = z.object({
 
 export const flowDefinitionRecordSchema: z.ZodType<FlowDefinitionRecord> = z.object({
   Id: salesforceIdSchema,
-  DeveloperName: z.string(),
-  NamespacePrefix: z.string().nullable(),
+  DeveloperName: flowApiNameSchema,
+  NamespacePrefix: namespaceSchema.nullable(),
   ActiveVersionId: salesforceIdSchema.nullable(),
   LatestVersionId: salesforceIdSchema.nullable(),
 });
@@ -36,7 +42,7 @@ export const flowVersionRecordSchema: z.ZodType<FlowVersionRecord> = z.object({
   Id: salesforceIdSchema,
   DefinitionId: salesforceIdSchema,
   VersionNumber: positiveFlowVersionSchema,
-  Status: z.string(),
-  MasterLabel: z.string(),
-  ProcessType: z.string(),
+  Status: z.string().min(1),
+  MasterLabel: z.string().min(1),
+  ProcessType: z.string().min(1),
 });

@@ -12,9 +12,9 @@ All notable user-visible changes to this project will be documented in this file
 - Added dry-run and idempotent activation behaviour.
 - Added stable JSON output and named error codes.
 - Added post-update Tooling API verification.
-- Added Zod validation for command inputs and untrusted Salesforce responses.
+- Added Zod validation for Flow names, Salesforce identifiers, version numbers, and untrusted Salesforce responses.
 
 ### Compatibility
 
-- Requires Node.js 18.18 or later.
+- Requires Node.js 22.19 or later.
 - Uses the Salesforce CLI external-plugin architecture with ESM TypeScript.

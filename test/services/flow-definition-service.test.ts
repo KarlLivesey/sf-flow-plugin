@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026, Karl Livesey.
+ * All rights reserved.
+ * Licensed under the BSD 3-Clause license.
+ * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
 import { expect } from 'chai';
 
 import { FlowDefinitionService } from '../../src/services/flow-definition-service.js';
@@ -18,6 +24,7 @@ interface UpdateCall {
 class FakeGateway implements FlowDefinitionGateway {
   public readonly lookups: FlowDefinitionLookup[] = [];
   public readonly updates: UpdateCall[] = [];
+  public definitionError?: Error;
   public updateError?: Error;
   private definitionCall = 0;
   private versionCall = 0;
@@ -28,6 +35,9 @@ class FakeGateway implements FlowDefinitionGateway {
   ) {}
 
   public async findDefinitions(lookup: FlowDefinitionLookup): Promise<ReadonlyArray<FlowDefinition>> {
+    if (this.definitionError !== undefined) {
+      throw this.definitionError;
+    }
     this.lookups.push(lookup);
     const response = this.definitionResponses[this.definitionCall] ?? this.definitionResponses.at(-1) ?? [];
     this.definitionCall += 1;
@@ -80,13 +90,16 @@ function request(overrides: Partial<FlowActivationRequest> = {}): FlowActivation
   };
 }
 
-async function expectError(promise: Promise<unknown>, name: string): Promise<void> {
+async function expectError(promise: Promise<unknown>, name: string, messagePart?: string): Promise<void> {
   try {
     await promise;
     expect.fail(`Expected ${name}.`);
   } catch (error: unknown) {
     expect(error).to.be.instanceOf(Error);
     expect((error as Error).name).to.equal(name);
+    if (messagePart !== undefined) {
+      expect((error as Error).message).to.contain(messagePart);
+    }
   }
 }
 
@@ -126,6 +139,16 @@ describe('FlowDefinitionService planning', (): void => {
     const service = new FlowDefinitionService(new FakeGateway([[definition()]], [[version(1), version(2)]]));
     await expectError(service.planActivation(request({ requestedVersion: 9 })), 'FlowVersionNotFound');
   });
+
+  it('adds the Flow API name to query failures', async (): Promise<void> => {
+    const gateway = new FakeGateway([], []);
+    gateway.definitionError = new Error('request failed');
+    await expectError(
+      new FlowDefinitionService(gateway).planActivation(request()),
+      'FlowActivationFailed',
+      'Order_Processing'
+    );
+  });
 });
 
 describe('FlowDefinitionService activation', (): void => {
@@ -162,7 +185,7 @@ describe('FlowDefinitionService activation', (): void => {
     const gateway = new FakeGateway([[definition()]], [[version(1), version(2)]]);
     gateway.updateError = new Error('request failed');
     const activation = new FlowDefinitionService(gateway).activate(request());
-    await expectError(activation, 'FlowActivationFailed');
+    await expectError(activation, 'FlowActivationFailed', 'Order_Processing');
   });
 
   it('rejects a verification mismatch', async (): Promise<void> => {

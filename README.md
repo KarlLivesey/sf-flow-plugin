@@ -6,13 +6,20 @@ The package is implemented in strict TypeScript using the current Salesforce ext
 
 ## Requirements
 
-- Node.js 18.18 or later.
+- Node.js 22.19 or later.
 - A current Salesforce CLI installation. The packaged plugin is verified with `@salesforce/cli` 2.144.6.
 - An authenticated Salesforce org whose user can read Flow Tooling API records and update `FlowDefinition`.
 
 ## Release status
 
 The plugin is implemented for local validation and has not yet been published to npm.
+
+## Maintainer handover
+
+No Git remote, hosted repository, release tag, or npm publication is created by this implementation. `klivesey` owns
+those release steps. Before enabling the retained release workflows, configure the repository protection and npm
+publishing settings; configure the protected `salesforce-nut` environment and `SF_NUT_AUTH_URL` secret before running
+the manual NUT workflow.
 
 ## Local installation
 

@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026, Karl Livesey.
+ * All rights reserved.
+ * Licensed under the BSD 3-Clause license.
+ * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
 import { flowActivationFailed } from '../errors/flow-errors.js';
 import { flowApiNameSchema, namespaceSchema, salesforceIdSchema } from '../schemas/flow.js';
 

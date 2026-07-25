@@ -1,6 +1,7 @@
 module.exports = {
   extends: [
     'eslint-config-salesforce-typescript',
+    'eslint-config-salesforce-license',
     'plugin:sf-plugin/recommended',
     'plugin:@typescript-eslint/strict-type-checked',
     'plugin:@typescript-eslint/stylistic-type-checked',
@@ -33,7 +34,21 @@ module.exports = {
     complexity: ['error', 20],
     curly: ['error', 'all'],
     eqeqeq: ['error', 'always'],
-    header: 'off',
+    'header/header': [
+      'error',
+      'block',
+      [
+        '',
+        {
+          pattern: ' \\* Copyright \\(c\\) \\d{4}, Karl Livesey\\.',
+          template: ' * Copyright (c) 2026, Karl Livesey.',
+        },
+        ' * All rights reserved.',
+        ' * Licensed under the BSD 3-Clause license.',
+        ' * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause',
+        ' ',
+      ],
+    ],
     'max-depth': ['error', 4],
     'max-lines': ['error', 300],
     'max-lines-per-function': ['error', 50],

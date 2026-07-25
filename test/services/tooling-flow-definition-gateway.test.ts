@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026, Karl Livesey.
+ * All rights reserved.
+ * Licensed under the BSD 3-Clause license.
+ * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
 import type { Connection } from '@salesforce/core';
 import { expect } from 'chai';
 
@@ -119,8 +125,18 @@ describe('ToolingFlowDefinitionGateway queries', (): void => {
     const connection = new ConnectionDouble([page([versionRecord(1), versionRecord(2)])]);
     const gateway = new ToolingFlowDefinitionGateway(connection.asConnection());
     const versions = await gateway.findVersions('300000000000001');
-    expect(connection.queries[0]).to.contain('ORDER BY VersionNumber ASC');
+    expect(connection.queries[0]).to.equal(
+      "SELECT Id, DefinitionId, VersionNumber, Status, MasterLabel, ProcessType FROM Flow WHERE DefinitionId = '300000000000001' ORDER BY VersionNumber ASC"
+    );
     expect(versions.map((item) => item.versionNumber)).to.deep.equal([1, 2]);
+    expect(versions[0]).to.include({ status: 'Active', label: 'Version 1', processType: 'Flow' });
+  });
+
+  it('maps nullable Salesforce definition fields', async (): Promise<void> => {
+    const record = { ...definitionRecord(), ActiveVersionId: null, LatestVersionId: null };
+    const gateway = new ToolingFlowDefinitionGateway(new ConnectionDouble([page([record])]).asConnection());
+    const definitions = await gateway.findDefinitions({ apiName: 'Order_Processing' });
+    expect(definitions[0]).to.include({ namespace: null, activeVersionId: null, latestVersionId: null });
   });
 
   it('collects paginated query results', async (): Promise<void> => {
@@ -142,11 +158,6 @@ describe('ToolingFlowDefinitionGateway validation and update', (): void => {
     expect(connection.queries).to.deep.equal([]);
   });
 
-  it('rejects malformed Salesforce records', async (): Promise<void> => {
-    const gateway = new ToolingFlowDefinitionGateway(new ConnectionDouble([page([{ Id: 42 }])]).asConnection());
-    await expectError(gateway.findDefinitions({ apiName: 'Order_Processing' }), 'FlowActivationFailed');
-  });
-
   it('sends the expected PATCH path and metadata body', async (): Promise<void> => {
     const connection = new ConnectionDouble([]);
     const gateway = new ToolingFlowDefinitionGateway(connection.asConnection());
@@ -162,7 +173,40 @@ describe('ToolingFlowDefinitionGateway validation and update', (): void => {
     const connection = new ConnectionDouble([]);
     connection.requestError = new Error('secret response');
     const gateway = new ToolingFlowDefinitionGateway(connection.asConnection());
-    await expectError(gateway.updateActiveVersion('300000000000001', 7), 'FlowActivationFailed');
+    try {
+      await gateway.updateActiveVersion('300000000000001', 7);
+      expect.fail('Expected the update to fail.');
+    } catch (error: unknown) {
+      expect(error).to.be.instanceOf(Error);
+      expect((error as Error).name).to.equal('FlowActivationFailed');
+      expect((error as Error).message).not.to.contain('secret response');
+    }
+  });
+});
+
+describe('ToolingFlowDefinitionGateway response validation', (): void => {
+  it('rejects malformed Salesforce records', async (): Promise<void> => {
+    const gateway = new ToolingFlowDefinitionGateway(new ConnectionDouble([page([{ Id: 42 }])]).asConnection());
+    await expectError(gateway.findDefinitions({ apiName: 'Order_Processing' }), 'FlowActivationFailed');
+  });
+
+  it('rejects unsafe names returned by Salesforce', async (): Promise<void> => {
+    const record = { ...definitionRecord(), DeveloperName: "Flow' OR Name != '" };
+    const gateway = new ToolingFlowDefinitionGateway(new ConnectionDouble([page([record])]).asConnection());
+    await expectError(gateway.findDefinitions({ apiName: 'Order_Processing' }), 'FlowActivationFailed');
+  });
+
+  it('rejects malformed Tooling query pages', async (): Promise<void> => {
+    const gateway = new ToolingFlowDefinitionGateway(
+      new ConnectionDouble([{ done: true, totalSize: 1, records: 'not-an-array' }]).asConnection()
+    );
+    await expectError(gateway.findDefinitions({ apiName: 'Order_Processing' }), 'FlowActivationFailed');
+  });
+
+  it('rejects malformed Flow version records', async (): Promise<void> => {
+    const record = { ...versionRecord(1), Status: '' };
+    const gateway = new ToolingFlowDefinitionGateway(new ConnectionDouble([page([record])]).asConnection());
+    await expectError(gateway.findVersions('300000000000001'), 'FlowActivationFailed');
   });
 });
 
@@ -193,6 +237,13 @@ describe('ToolingFlowDefinitionGateway defensive validation', (): void => {
     const gateway = new ToolingFlowDefinitionGateway(
       new ConnectionDouble([new Error('unfiltered Salesforce error')]).asConnection()
     );
-    await expectError(gateway.findDefinitions({ apiName: 'Order_Processing' }), 'FlowActivationFailed');
+    try {
+      await gateway.findDefinitions({ apiName: 'Order_Processing' });
+      expect.fail('Expected the query to fail.');
+    } catch (error: unknown) {
+      expect(error).to.be.instanceOf(Error);
+      expect((error as Error).name).to.equal('FlowActivationFailed');
+      expect((error as Error).message).not.to.contain('unfiltered Salesforce error');
+    }
   });
 });

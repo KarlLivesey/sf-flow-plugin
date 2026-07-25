@@ -1,4 +1,11 @@
-import type { Connection, Org } from '@salesforce/core';
+/*
+ * Copyright (c) 2026, Karl Livesey.
+ * All rights reserved.
+ * Licensed under the BSD 3-Clause license.
+ * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
+import { Org } from '@salesforce/core';
+import type { Connection } from '@salesforce/core';
 import { TestContext } from '@salesforce/core/testSetup';
 import { expect } from 'chai';
 import { stubSfCommandUx } from '@salesforce/sf-plugins-core';
@@ -62,9 +69,17 @@ describe('flow activate flags', (): void => {
     expect(FlowActivate.flags['api-name'].char).to.equal('n');
   });
 
-  it('uses the configured default target org when the flag is omitted', (): void => {
+  it('uses the standard Salesforce default-org resolver when the flag is omitted', async (): Promise<void> => {
+    const org = createOrg({} as Connection);
+    const create = $$.SANDBOX.stub(Org, 'create').resolves(org);
+    const defaultResolver = FlowActivate.flags['target-org'].default;
     expect(FlowActivate.flags['target-org'].required).to.equal(false);
-    expect(FlowActivate.flags['target-org'].default).to.be.a('function');
+    if (typeof defaultResolver !== 'function') {
+      expect.fail('Expected the target-org flag to provide a default resolver.');
+    }
+    const resolved = await defaultResolver({} as never);
+    expect(resolved).to.equal(org);
+    expect(create.calledWith({ aliasOrUsername: undefined })).to.equal(true);
     expect(FlowActivate.flags['target-org'].char).to.equal('o');
   });
 
@@ -94,9 +109,11 @@ describe('parseFlowVersionSelector', (): void => {
 describe('flow activate command execution', (): void => {
   it('passes namespace and dry-run to the service and returns its result', async (): Promise<void> => {
     const connection = {} as Connection;
+    const getConnection = $$.SANDBOX.stub().withArgs('65.0').returns(connection);
+    const targetOrg = { getConnection, getUsername: (): string => 'admin@example.com' } as unknown as Org;
     const flags = {
       'api-name': 'Order_Processing',
-      'target-org': createOrg(connection),
+      'target-org': targetOrg,
       version: 'latest' as const,
       namespace: 'example',
       'api-version': '65.0',
@@ -113,6 +130,7 @@ describe('flow activate command execution', (): void => {
       apiVersion: '65.0',
       dryRun: true,
     });
+    expect(getConnection.calledOnce).to.equal(true);
     expect(actual).to.equal(result);
   });
 
