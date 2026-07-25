@@ -11,6 +11,7 @@ import type { FlowDefinitionRecord, FlowPruneOrder, FlowVersionRecord } from '..
 const FLOW_API_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
 const NAMESPACE_PATTERN = /^[A-Za-z][A-Za-z0-9]{0,14}$/;
 const SALESFORCE_ID_PATTERN = /^[A-Za-z0-9]{15}(?:[A-Za-z0-9]{3})?$/;
+const SALESFORCE_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:?\d{2})$/;
 
 export const flowApiNameSchema = z
   .string()
@@ -20,6 +21,11 @@ export const flowApiNameSchema = z
 export const namespaceSchema = z.string().regex(NAMESPACE_PATTERN);
 
 export const salesforceIdSchema = z.string().regex(SALESFORCE_ID_PATTERN);
+
+export const salesforceDateTimeSchema = z
+  .string()
+  .regex(SALESFORCE_DATETIME_PATTERN)
+  .refine((value) => !Number.isNaN(Date.parse(value)));
 
 export const positiveFlowVersionSchema = z.number().int().positive().safe();
 
@@ -49,6 +55,6 @@ export const flowVersionRecordSchema: z.ZodType<FlowVersionRecord> = z.object({
   Status: z.string().min(1),
   MasterLabel: z.string().min(1),
   ProcessType: z.string().min(1),
-  CreatedDate: z.string().datetime({ offset: true }),
-  LastModifiedDate: z.string().datetime({ offset: true }),
+  CreatedDate: salesforceDateTimeSchema,
+  LastModifiedDate: salesforceDateTimeSchema,
 });

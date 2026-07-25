@@ -78,7 +78,7 @@
     "prepare": "husky install",
     "test": "wireit",
     "test:coverage": "wireit",
-    "test:nuts": "nyc mocha \"test/**/*.nut.ts\" --slow 4500 --timeout 600000 --parallel",
+    "test:nuts": "yarn build && nyc mocha \"test/**/*.nut.ts\" --slow 4500 --timeout 600000 --parallel",
     "test:only": "wireit",
     "test:unit": "wireit",
     "typecheck": "wireit",

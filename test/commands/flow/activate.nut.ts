@@ -228,12 +228,16 @@ describe('Flow lifecycle command NUTs', (): void => {
   });
 
   it('prunes an old inactive version while protecting active and latest', (): void => {
-    runActivation('--version 1');
     deployFixture('v3');
-    const preview = runFlowCommand<FlowPruneResult>('prune', '--api-name Plugin_Test_Flow --keep 0');
+    runActivation('--version 3');
+    const preview = runFlowCommand<FlowPruneResult>('prune', '--api-name Plugin_Test_Flow --keep 0 --ignore 1');
     expect(preview.result.plannedDeletions.map((version) => version.versionNumber)).to.deep.equal([2]);
-    const output = runFlowCommand<FlowPruneResult>('prune', '--api-name Plugin_Test_Flow --keep 0 --no-dry-run');
+    const output = runFlowCommand<FlowPruneResult>(
+      'prune',
+      '--api-name Plugin_Test_Flow --keep 0 --ignore 1 --no-dry-run'
+    );
     expect(output.result.deletedVersions.map((version) => version.versionNumber)).to.deep.equal([2]);
-    expect(output.result.protectedVersions.map((version) => version.versionNumber)).to.have.members([1, 3]);
+    expect(output.result.protectedVersions.map((version) => version.versionNumber)).to.deep.equal([3]);
+    expect(output.result.ignoredVersions.map((version) => version.versionNumber)).to.deep.equal([1]);
   });
 });

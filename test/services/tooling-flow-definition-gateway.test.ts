@@ -233,6 +233,28 @@ describe('ToolingFlowDefinitionGateway response validation', (): void => {
     const gateway = new ToolingFlowDefinitionGateway(new ConnectionDouble([page([record])]).asConnection());
     await expectError(gateway.findVersions('300000000000001'), 'FlowQueryFailed');
   });
+
+  it('rejects malformed Salesforce datetimes', async (): Promise<void> => {
+    const record = { ...versionRecord(1), CreatedDate: 'not-a-datetime' };
+    const gateway = new ToolingFlowDefinitionGateway(new ConnectionDouble([page([record])]).asConnection());
+    await expectError(gateway.findVersions('300000000000001'), 'FlowQueryFailed');
+  });
+});
+
+describe('ToolingFlowDefinitionGateway Salesforce datetime validation', (): void => {
+  it('accepts compact UTC offsets', async (): Promise<void> => {
+    const record = {
+      ...versionRecord(1),
+      CreatedDate: '2026-07-25T19:55:31.000+0000',
+      LastModifiedDate: '2026-07-25T19:55:32.000+0000',
+    };
+    const gateway = new ToolingFlowDefinitionGateway(new ConnectionDouble([page([record])]).asConnection());
+    const versions = await gateway.findVersions('300000000000001');
+    expect(versions[0]).to.include({
+      createdDate: '2026-07-25T19:55:31.000+0000',
+      lastModifiedDate: '2026-07-25T19:55:32.000+0000',
+    });
+  });
 });
 
 describe('ToolingFlowDefinitionGateway defensive validation', (): void => {
