@@ -1,0 +1,323 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowDescribeResult",
+  "definitions": {
+    "FlowDescribeResult": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "requestedVersion": {
+          "$ref": "#/definitions/FlowComparisonVersionSelector"
+        },
+        "resolvedVersion": {
+          "$ref": "#/definitions/FlowVersionNumber"
+        },
+        "subflowVersion": {
+          "$ref": "#/definitions/FlowSubflowVersionSelector"
+        },
+        "recursive": {
+          "type": "boolean"
+        },
+        "maxDepth": {
+          "type": "number"
+        },
+        "flows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowDescription"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowTraversalWarning"
+          }
+        },
+        "targetOrg": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "apiName",
+        "namespace",
+        "requestedVersion",
+        "resolvedVersion",
+        "subflowVersion",
+        "recursive",
+        "maxDepth",
+        "flows",
+        "warnings",
+        "targetOrg"
+      ],
+      "additionalProperties": false
+    },
+    "FlowComparisonVersionSelector": {
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "active"
+        },
+        {
+          "type": "string",
+          "const": "latest"
+        },
+        {
+          "$ref": "#/definitions/FlowVersionNumber"
+        }
+      ]
+    },
+    "FlowVersionNumber": {
+      "type": "number"
+    },
+    "FlowSubflowVersionSelector": {
+      "type": "string",
+      "enum": ["active", "latest"]
+    },
+    "FlowDescription": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "qualifiedName": {
+          "type": "string"
+        },
+        "definitionId": {
+          "type": "string"
+        },
+        "versionId": {
+          "type": "string"
+        },
+        "versionNumber": {
+          "$ref": "#/definitions/FlowVersionNumber"
+        },
+        "status": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "processType": {
+          "type": "string"
+        },
+        "depth": {
+          "type": "number"
+        },
+        "variables": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowVariableSummary"
+          }
+        },
+        "formulas": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowFormulaSummary"
+          }
+        },
+        "apexActions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowApexActionSummary"
+          }
+        },
+        "subflows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowSubflowSummary"
+          }
+        },
+        "referencedObjects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "elements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowElementSummary"
+          }
+        },
+        "connectors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowConnectorSummary"
+          }
+        }
+      },
+      "required": [
+        "apiName",
+        "namespace",
+        "qualifiedName",
+        "definitionId",
+        "versionId",
+        "versionNumber",
+        "status",
+        "label",
+        "processType",
+        "depth",
+        "variables",
+        "formulas",
+        "apexActions",
+        "subflows",
+        "referencedObjects",
+        "elements",
+        "connectors"
+      ],
+      "additionalProperties": false
+    },
+    "FlowVariableSummary": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "dataType": {
+          "type": "string"
+        },
+        "objectType": {
+          "type": ["string", "null"]
+        },
+        "apexClass": {
+          "type": ["string", "null"]
+        },
+        "collection": {
+          "type": "boolean"
+        },
+        "input": {
+          "type": "boolean"
+        },
+        "output": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["name", "dataType", "objectType", "apexClass", "collection", "input", "output", "description"],
+      "additionalProperties": false
+    },
+    "FlowFormulaSummary": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "dataType": {
+          "type": "string"
+        },
+        "expression": {
+          "type": "string"
+        },
+        "scale": {
+          "type": ["number", "null"]
+        }
+      },
+      "required": ["name", "dataType", "expression", "scale"],
+      "additionalProperties": false
+    },
+    "FlowApexActionSummary": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "label": {
+          "type": ["string", "null"]
+        },
+        "actionName": {
+          "type": ["string", "null"]
+        },
+        "actionType": {
+          "type": "string"
+        }
+      },
+      "required": ["name", "label", "actionName", "actionType"],
+      "additionalProperties": false
+    },
+    "FlowSubflowSummary": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "label": {
+          "type": ["string", "null"]
+        },
+        "flowName": {
+          "type": "string"
+        }
+      },
+      "required": ["name", "label", "flowName"],
+      "additionalProperties": false
+    },
+    "FlowElementSummary": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "label": {
+          "type": ["string", "null"]
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": ["name", "label", "type"],
+      "additionalProperties": false
+    },
+    "FlowConnectorSummary": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "label": {
+          "type": ["string", "null"]
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["default", "fault", "normal", "outcome"]
+        }
+      },
+      "required": ["source", "target", "label", "kind"],
+      "additionalProperties": false
+    },
+    "FlowTraversalWarning": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/definitions/FlowTraversalWarningKind"
+        },
+        "flowName": {
+          "type": "string"
+        },
+        "path": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["kind", "flowName", "path"],
+      "additionalProperties": false
+    },
+    "FlowTraversalWarningKind": {
+      "type": "string",
+      "enum": ["depth-limit", "missing-subflow", "subflow-version-fallback", "missing-subflow-version"]
+    }
+  }
+}

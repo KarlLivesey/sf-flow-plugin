@@ -6,9 +6,42 @@
  */
 import { writeFile } from 'node:fs/promises';
 
-import { flowInspectionFailed } from '../errors/flow-errors.js';
+import { flowGraphOptionsInvalid, flowInspectionFailed } from '../errors/flow-errors.js';
 import { flowGraphColorRoleSchema, flowGraphColorSchema } from '../schemas/flow.js';
-import type { FlowGraphColorOverrides } from '../types/flow-inspection.js';
+import type {
+  FlowGraphColorOverrides,
+  FlowGraphCurve,
+  FlowGraphElkCycleBreaking,
+  FlowGraphElkModelOrder,
+  FlowGraphElkNodePlacement,
+  FlowGraphFormat,
+  FlowGraphLayout,
+} from '../types/flow-inspection.js';
+
+export interface FlowGraphFormatOptions {
+  format: FlowGraphFormat;
+  layout: FlowGraphLayout[];
+  curve: FlowGraphCurve;
+  nodePlacement: FlowGraphElkNodePlacement;
+  modelOrder: FlowGraphElkModelOrder;
+  cycleBreaking: FlowGraphElkCycleBreaking;
+  mergeEdges: boolean;
+  forceNodeOrder: boolean;
+}
+
+export function validateGraphFormatOptions(options: FlowGraphFormatOptions): void {
+  const mermaidRouting =
+    options.layout.some((layout) => layout !== 'auto') ||
+    options.curve !== 'auto' ||
+    options.nodePlacement !== 'auto' ||
+    options.modelOrder !== 'auto' ||
+    options.cycleBreaking !== 'auto' ||
+    options.mergeEdges ||
+    options.forceNodeOrder;
+  if (options.format === 'dot' && mermaidRouting) {
+    throw flowGraphOptionsInvalid('Mermaid routing flags cannot be used with DOT output.');
+  }
+}
 
 export function parseGraphColorOverrides(values: ReadonlyArray<string>): FlowGraphColorOverrides {
   return values.reduce<FlowGraphColorOverrides>((colors, value) => {

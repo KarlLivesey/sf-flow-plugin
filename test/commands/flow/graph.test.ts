@@ -14,7 +14,11 @@ import { expect } from 'chai';
 import FlowGraph, { type GraphFlagValues } from '../../../src/commands/flow/graph.js';
 import { FlowGraphService } from '../../../src/services/flow-graph-service.js';
 import type { FlowGraphResult } from '../../../src/types/flow-inspection.js';
-import { parseGraphColorOverrides, writeGraphOutput } from '../../../src/utils/flow-graph-command.js';
+import {
+  parseGraphColorOverrides,
+  validateGraphFormatOptions,
+  writeGraphOutput,
+} from '../../../src/utils/flow-graph-command.js';
 import { createCommandOrg } from '../../helpers/command-org.js';
 import { commandTestContext as $$ } from '../../helpers/command-test-context.js';
 
@@ -29,7 +33,7 @@ const result: FlowGraphResult = {
   flows: [],
   warnings: [],
   targetOrg: 'admin@example.com',
-  format: 'dot',
+  format: 'mermaid',
   includeVariables: true,
   includeFormulas: true,
   requestedDirection: 'left-right',
@@ -62,16 +66,16 @@ const result: FlowGraphResult = {
     fontFamily: 'Inter',
     fontSize: 16,
   },
-  graph: 'digraph Flow {}',
+  graph: 'flowchart TD',
 };
 
 function graphFlags(): GraphFlagValues {
   return {
     'api-name': 'Order_Processing',
     'target-org': createCommandOrg({} as Connection),
-    version: 3,
+    'flow-version': 3,
     'subflow-version': 'latest',
-    format: 'dot',
+    format: 'mermaid',
     recursive: true,
     'max-depth': 4,
     'include-variables': true,
@@ -101,6 +105,7 @@ describe('flow graph flags', (): void => {
   it('defaults to Mermaid without resource annotations or recursion', (): void => {
     expect({
       format: FlowGraph.flags.format.default,
+      flowVersion: FlowGraph.flags['flow-version'].default,
       subflowVersion: FlowGraph.flags['subflow-version'].default,
       recursive: FlowGraph.flags.recursive.default,
       includeVariables: FlowGraph.flags['include-variables'].default,
@@ -119,6 +124,7 @@ describe('flow graph flags', (): void => {
       labelWidth: FlowGraph.flags['label-width'].default,
     }).to.deep.equal({
       format: 'mermaid',
+      flowVersion: 'latest',
       subflowVersion: 'active',
       recursive: false,
       includeVariables: false,
@@ -141,7 +147,7 @@ describe('flow graph flags', (): void => {
 
 describe('flow graph styling flags', (): void => {
   it('defaults graph styling and file output safely', (): void => {
-    expect(FlowGraph.flags.color.default).to.deep.equal([]);
+    expect(FlowGraph.flags.color.default).to.equal(undefined);
     expect(FlowGraph.flags.color.aliases).to.deep.equal(['colour']);
     expect(FlowGraph.flags['font-family'].default).to.equal('Arial');
     expect(FlowGraph.flags['font-size'].default).to.equal(14);
@@ -168,6 +174,38 @@ describe('flow graph styling flags', (): void => {
   });
 });
 
+describe('flow graph format validation', (): void => {
+  it('rejects Mermaid routing controls for DOT output', (): void => {
+    expect(() => {
+      validateGraphFormatOptions({
+        format: 'dot',
+        layout: ['elk'],
+        curve: 'auto',
+        nodePlacement: 'auto',
+        modelOrder: 'auto',
+        cycleBreaking: 'auto',
+        mergeEdges: false,
+        forceNodeOrder: false,
+      });
+    }).to.throw('Mermaid routing flags cannot be used with DOT output');
+  });
+
+  it('accepts cross-format graph controls for DOT output', (): void => {
+    expect(() => {
+      validateGraphFormatOptions({
+        format: 'dot',
+        layout: ['auto'],
+        curve: 'auto',
+        nodePlacement: 'auto',
+        modelOrder: 'auto',
+        cycleBreaking: 'auto',
+        mergeEdges: false,
+        forceNodeOrder: false,
+      });
+    }).to.not.throw();
+  });
+});
+
 describe('flow graph command execution', (): void => {
   it('passes graph and recursive traversal options to the service', async (): Promise<void> => {
     const flags = graphFlags();
@@ -179,7 +217,7 @@ describe('flow graph command execution', (): void => {
       targetOrg: 'admin@example.com',
       version: 3,
       subflowVersion: 'latest',
-      format: 'dot',
+      format: 'mermaid',
       recursive: true,
       maxDepth: 4,
       includeVariables: true,

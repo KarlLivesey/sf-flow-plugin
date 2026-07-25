@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowAuditResult",
+  "definitions": {
+    "FlowAuditResult": {
+      "type": "object",
+      "properties": {
+        "targetOrg": {
+          "type": "string"
+        },
+        "definitionsScanned": {
+          "type": "number"
+        },
+        "flowsWithIssues": {
+          "type": "number"
+        },
+        "flows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowAuditEntry"
+          }
+        }
+      },
+      "required": ["targetOrg", "definitionsScanned", "flowsWithIssues", "flows"],
+      "additionalProperties": false
+    },
+    "FlowAuditEntry": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "definitionId": {
+          "type": "string"
+        },
+        "activeVersion": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowVersionNumber"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "latestVersion": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowVersionNumber"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "draftVersions": {
+          "type": "number"
+        },
+        "obsoleteVersions": {
+          "type": "number"
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowAuditIssueCode"
+          }
+        }
+      },
+      "required": [
+        "apiName",
+        "namespace",
+        "definitionId",
+        "activeVersion",
+        "latestVersion",
+        "draftVersions",
+        "obsoleteVersions",
+        "issues"
+      ],
+      "additionalProperties": false
+    },
+    "FlowVersionNumber": {
+      "type": "number"
+    },
+    "FlowAuditIssueCode": {
+      "type": "string",
+      "enum": ["ActiveVersionBehindLatest", "NoActiveVersion", "DraftVersionsPresent", "ObsoleteVersionsPresent"]
+    }
+  }
+}

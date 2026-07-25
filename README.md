@@ -71,22 +71,22 @@ Commands show an automatic Salesforce-style progress spinner while they query or
 sf flow activate \
   --api-name Order_Processing \
   [--target-org ORG] \
-  [--version latest|NUMBER] \
+  [--flow-version latest|NUMBER] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--dry-run] \
   [--json]
 ```
 
-| Flag            | Short | Required | Default               | Description                                     |
-| --------------- | ----- | -------- | --------------------- | ----------------------------------------------- |
-| `--api-name`    | `-n`  | Yes      | —                     | Flow definition developer name.                 |
-| `--target-org`  | `-o`  | No       | Configured target org | Authenticated org username or alias.            |
-| `--version`     | `-v`  | No       | `latest`              | Positive Flow version number or `latest`.       |
-| `--namespace`   | —     | No       | —                     | Namespace used to identify a packaged Flow.     |
-| `--api-version` | —     | No       | Connection default    | Salesforce API version override.                |
-| `--dry-run`     | —     | No       | `false`               | Resolve and report without changing Salesforce. |
-| `--json`        | —     | No       | `false`               | Return the standard structured command result.  |
+| Flag             | Short | Required | Default               | Description                                     |
+| ---------------- | ----- | -------- | --------------------- | ----------------------------------------------- |
+| `--api-name`     | `-n`  | Yes      | —                     | Flow definition developer name.                 |
+| `--target-org`   | `-o`  | No       | Configured target org | Authenticated org username or alias.            |
+| `--flow-version` | —     | No       | `latest`              | Positive Flow version number or `latest`.       |
+| `--namespace`    | —     | No       | —                     | Namespace used to identify a packaged Flow.     |
+| `--api-version`  | —     | No       | Connection default    | Salesforce API version override.                |
+| `--dry-run`      | —     | No       | `false`               | Resolve and report without changing Salesforce. |
+| `--json`         | —     | No       | `false`               | Return the standard structured command result.  |
 
 Activate the latest eligible version:
 
@@ -102,7 +102,7 @@ Activate an explicit version:
 sf flow activate \
   --target-org MySandbox \
   --api-name Order_Processing \
-  --version 7
+  --flow-version 7
 ```
 
 Resolve a namespaced Flow without changing it:
@@ -112,7 +112,7 @@ sf flow activate \
   --target-org MySandbox \
   --api-name Order_Processing \
   --namespace example \
-  --version latest \
+  --flow-version latest \
   --dry-run \
   --json
 ```
@@ -211,7 +211,7 @@ This command reports Salesforce's `MetadataComponentDependency` index. Salesforc
 sf flow describe \
   --api-name Order_Processing \
   [--target-org ORG] \
-  [--version active|latest|NUMBER] \
+  [--flow-version active|latest|NUMBER] \
   [--recursive] \
   [--subflow-version active|latest] \
   [--max-depth NUMBER] \
@@ -231,7 +231,7 @@ Use `--recursive` to follow referenced subflows. `--subflow-version` defaults to
 ```bash
 sf flow describe \
   --api-name Order_Processing \
-  --version active \
+  --flow-version active \
   --recursive \
   --subflow-version latest \
   --max-depth 5 \
@@ -246,7 +246,7 @@ Recursive traversal reports missing subflows, active-to-latest fallbacks and dep
 sf flow graph \
   --api-name Order_Processing \
   [--target-org ORG] \
-  [--version active|latest|NUMBER] \
+  [--flow-version active|latest|NUMBER] \
   [--format mermaid|dot] \
   [--recursive] \
   [--subflow-version active|latest] \
@@ -307,6 +307,8 @@ sf flow graph --api-name Order_Processing --layout dagre --layout elk
 ```
 
 The generated model lists elements in execution order to give both renderers a useful placement hint. Automatic ELK routing uses Brandes-Koepf placement for acyclic graphs, network-simplex placement with model-aware cycle breaking for cyclic graphs, and prioritises edges in recursive or otherwise complex graphs. Edge merging and forced node order remain disabled because both can make crossings harder to follow. Override these decisions with `--node-placement`, `--model-order`, `--cycle-breaking`, `--merge-edges` or `--force-node-order`; using any explicit ELK override also selects ELK when `--layout` remains `auto`. Use `--node-spacing` and `--rank-spacing` to tune density in either output format.
+
+`--layout`, `--curve` and the ELK-specific routing flags apply only to Mermaid output. DOT uses Graphviz for routing, so the command rejects Mermaid-only controls when `--format dot` is selected instead of silently ignoring them. In JSON results for DOT, `layoutCandidates`, `resolvedLayout`, `resolvedCurve` and `resolvedElk` are `null`.
 
 Mermaid and DOT output use the same semantic theme. Override a role with repeatable `--color` or `--colour` flags; both spellings are equivalent. Values can be a supported named colour, `#RGB` or `#RRGGBB`:
 
@@ -484,7 +486,7 @@ yarn build
 yarn run check
 ```
 
-`yarn run check` is the complete local gate. The explicit `run` is required because Yarn 1 reserves `yarn check` for its deprecated dependency-integrity command. The project gate requires Prettier, zero-warning ESLint, production and test TypeScript compilation, real V8 coverage thresholds, unit tests, and a build.
+`yarn run check` is the complete local gate. The explicit `run` is required because Yarn 1 reserves `yarn check` for its deprecated dependency-integrity command. The project gate requires Prettier, zero-warning ESLint, production and test TypeScript compilation, real V8 coverage thresholds, unit tests, a build, generated command-reference validation, command deprecation-policy snapshots, and JSON result-schema compatibility.
 
 Run a command directly:
 

@@ -22,19 +22,31 @@ import type {
   FlowGraphRequest,
   FlowGraphResult,
   FlowSubflowVersionSelector,
+  FlowTraversalWarningKind,
 } from '../../types/flow-inspection.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
-import { parseGraphColorOverrides, writeGraphOutput } from '../../utils/flow-graph-command.js';
+import {
+  parseGraphColorOverrides,
+  validateGraphFormatOptions,
+  writeGraphOutput,
+} from '../../utils/flow-graph-command.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
 import { parseInspectionVersionSelector } from './describe.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('sf-flow-plugin', 'flow.graph');
 
+const warningMessages: Record<FlowTraversalWarningKind, (path: string) => string> = {
+  'depth-limit': (path) => messages.getMessage('warnings.depth-limit', [path]),
+  'missing-subflow': (path) => messages.getMessage('warnings.missing-subflow', [path]),
+  'missing-subflow-version': (path) => messages.getMessage('warnings.missing-subflow-version', [path]),
+  'subflow-version-fallback': (path) => messages.getMessage('warnings.subflow-version-fallback', [path]),
+};
+
 export interface GraphFlagValues {
   'api-name': string;
   'target-org': Org | undefined;
-  version: FlowComparisonVersionSelector;
+  'flow-version': FlowComparisonVersionSelector;
   'subflow-version': FlowSubflowVersionSelector;
   format: FlowGraphFormat;
   recursive: boolean;
@@ -53,7 +65,7 @@ export interface GraphFlagValues {
   'rank-spacing': number;
   legend: boolean;
   'label-width': number;
-  color: string[];
+  color: string[] | undefined;
   'font-family': string;
   'font-size': number;
   'output-file': string | undefined;
@@ -64,7 +76,7 @@ export interface GraphFlagValues {
 function createRequest(flags: GraphFlagValues, context: ReturnType<typeof createFlowCommandContext>): FlowGraphRequest {
   return {
     ...createNamedFlowRequest(flags, context),
-    version: flags.version,
+    version: flags['flow-version'],
     subflowVersion: flags['subflow-version'],
     format: flags.format,
     recursive: flags.recursive,
@@ -86,11 +98,24 @@ function createRequest(flags: GraphFlagValues, context: ReturnType<typeof create
     legend: flags.legend,
     labelWidth: flags['label-width'],
     style: {
-      colors: parseGraphColorOverrides(flags.color),
+      colors: parseGraphColorOverrides(flags.color ?? []),
       fontFamily: flags['font-family'],
       fontSize: flags['font-size'],
     },
   };
+}
+
+function validateFormat(flags: GraphFlagValues): void {
+  validateGraphFormatOptions({
+    format: flags.format,
+    layout: flags.layout,
+    curve: flags.curve,
+    nodePlacement: flags['node-placement'],
+    modelOrder: flags['model-order'],
+    cycleBreaking: flags['cycle-breaking'],
+    mergeEdges: flags['merge-edges'],
+    forceNodeOrder: flags['force-node-order'],
+  });
 }
 
 export default class FlowGraph extends SfCommand<FlowGraphResult> {
@@ -109,10 +134,9 @@ export default class FlowGraph extends SfCommand<FlowGraphResult> {
       required: false,
       summary: messages.getMessage('flags.target-org.summary'),
     }),
-    version: Flags.custom<FlowComparisonVersionSelector>({
-      char: 'v',
+    'flow-version': Flags.custom<FlowComparisonVersionSelector>({
       default: 'latest',
-      summary: messages.getMessage('flags.version.summary'),
+      summary: messages.getMessage('flags.flow-version.summary'),
       parse: (input: string): Promise<FlowComparisonVersionSelector> =>
         Promise.resolve(parseInspectionVersionSelector(input)),
     })(),
@@ -219,7 +243,6 @@ export default class FlowGraph extends SfCommand<FlowGraphResult> {
     }),
     color: Flags.string({
       aliases: ['colour'],
-      default: [],
       multiple: true,
       summary: messages.getMessage('flags.color.summary'),
     }),
@@ -247,6 +270,7 @@ export default class FlowGraph extends SfCommand<FlowGraphResult> {
   public async run(): Promise<FlowGraphResult> {
     const flags = await this.parseFlags();
     validateNamedFlowFlags(flags);
+    validateFormat(flags);
     const context = createFlowCommandContext(flags);
     const service = new FlowGraphService(new ToolingFlowDefinitionGateway(context.connection));
     const result = await withFlowProgress(this.spinner, 'graph', async (progress) =>
@@ -268,7 +292,7 @@ export default class FlowGraph extends SfCommand<FlowGraphResult> {
     }
     this.log(outputFile === undefined ? result.graph : messages.getMessage('info.written', [outputFile]));
     for (const warning of result.warnings) {
-      this.warn(messages.getMessage(`warnings.${warning.kind}`, [warning.path.join(' -> ')]));
+      this.warn(warningMessages[warning.kind](warning.path.join(' -> ')));
     }
   }
 }

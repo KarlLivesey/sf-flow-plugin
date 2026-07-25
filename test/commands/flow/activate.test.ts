@@ -72,7 +72,7 @@ describe('flow activate flags', (): void => {
   });
 
   it('defaults the version to latest', (): void => {
-    expect(FlowActivate.flags.version.default).to.equal('latest');
+    expect(FlowActivate.flags['flow-version'].default).to.equal('latest');
   });
 });
 
@@ -102,7 +102,7 @@ describe('flow activate command execution', (): void => {
     const flags = {
       'api-name': 'Order_Processing',
       'target-org': targetOrg,
-      version: 'latest' as const,
+      'flow-version': 'latest' as const,
       namespace: 'example',
       'api-version': '65.0',
       'dry-run': true,
@@ -126,7 +126,7 @@ describe('flow activate command execution', (): void => {
     const flags = {
       'api-name': 'Order_Processing',
       'target-org': createOrg({} as Connection),
-      version: 'latest' as const,
+      'flow-version': 'latest' as const,
       namespace: undefined,
       'api-version': undefined,
       'dry-run': false,
@@ -143,7 +143,7 @@ describe('flow activate command output and errors', (): void => {
     const flags = {
       'api-name': 'Order_Processing',
       'target-org': createOrg({} as Connection),
-      version: 'latest' as const,
+      'flow-version': 'latest' as const,
       namespace: undefined,
       'api-version': undefined,
       'dry-run': false,
@@ -159,7 +159,7 @@ describe('flow activate command output and errors', (): void => {
     const flags = {
       'api-name': 'Order_Processing',
       'target-org': undefined,
-      version: 'latest' as const,
+      'flow-version': 'latest' as const,
       namespace: undefined,
       'api-version': undefined,
       'dry-run': false,

@@ -20,7 +20,7 @@ Every change must pass:
 yarn run check
 ```
 
-The gate enforces formatting, the Salesforce TypeScript and plugin ESLint configurations, additional strict type-aware and complexity rules, zero lint warnings, strict production and test compilation, unit tests, coverage thresholds, and the package build.
+The gate enforces formatting, the Salesforce TypeScript and plugin ESLint configurations, additional strict type-aware and complexity rules, zero lint warnings, strict production and test compilation, unit tests, coverage thresholds, the package build, generated command-reference validation, command deprecation-policy snapshots, and JSON result-schema compatibility.
 
 Do not disable or weaken a rule to accommodate an implementation. Refactor the implementation unless a documented Salesforce toolchain incompatibility requires a targeted exception.
 
@@ -90,6 +90,7 @@ Keep CLI parsing and output in the command, business decisions in a service, Sal
 - Salesforce responses receive runtime validation.
 - Normal, edge, and failure cases have tests.
 - Human and JSON output remain stable.
+- `command-snapshot.json` and `schemas/` are regenerated when command flags or JSON result types change.
 - `yarn run check` passes.
 - NUTs pass when the change affects Salesforce integration behaviour.
 - No authentication material, org response secrets, generated archives, or coverage output is committed.

@@ -17,6 +17,7 @@ import type {
   FlowDescribeResult,
   FlowDescription,
   FlowSubflowVersionSelector,
+  FlowTraversalWarningKind,
   FlowVariableSummary,
 } from '../../types/flow-inspection.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
@@ -25,10 +26,17 @@ import { withFlowProgress } from '../../utils/flow-progress.js';
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('sf-flow-plugin', 'flow.describe');
 
+const warningMessages: Record<FlowTraversalWarningKind, (path: string) => string> = {
+  'depth-limit': (path) => messages.getMessage('warnings.depth-limit', [path]),
+  'missing-subflow': (path) => messages.getMessage('warnings.missing-subflow', [path]),
+  'missing-subflow-version': (path) => messages.getMessage('warnings.missing-subflow-version', [path]),
+  'subflow-version-fallback': (path) => messages.getMessage('warnings.subflow-version-fallback', [path]),
+};
+
 export interface DescribeFlagValues {
   'api-name': string;
   'target-org': Org | undefined;
-  version: FlowComparisonVersionSelector;
+  'flow-version': FlowComparisonVersionSelector;
   'subflow-version': FlowSubflowVersionSelector;
   recursive: boolean;
   'max-depth': number;
@@ -52,7 +60,7 @@ function createRequest(
 ): FlowDescribeRequest {
   return {
     ...createNamedFlowRequest(flags, context),
-    version: flags.version,
+    version: flags['flow-version'],
     subflowVersion: flags['subflow-version'],
     recursive: flags.recursive,
     maxDepth: flags['max-depth'],
@@ -101,10 +109,9 @@ export default class FlowDescribe extends SfCommand<FlowDescribeResult> {
       required: false,
       summary: messages.getMessage('flags.target-org.summary'),
     }),
-    version: Flags.custom<FlowComparisonVersionSelector>({
-      char: 'v',
+    'flow-version': Flags.custom<FlowComparisonVersionSelector>({
       default: 'latest',
-      summary: messages.getMessage('flags.version.summary'),
+      summary: messages.getMessage('flags.flow-version.summary'),
       parse: (input: string): Promise<FlowComparisonVersionSelector> =>
         Promise.resolve(parseInspectionVersionSelector(input)),
     })(),
@@ -170,7 +177,7 @@ export default class FlowDescribe extends SfCommand<FlowDescribeResult> {
     });
     if (!this.jsonEnabled()) {
       for (const warning of result.warnings) {
-        this.warn(messages.getMessage(`warnings.${warning.kind}`, [warning.path.join(' -> ')]));
+        this.warn(warningMessages[warning.kind](warning.path.join(' -> ')));
       }
     }
   }

@@ -128,8 +128,11 @@ export default class FlowPrune extends SfCommand<FlowPruneResult> {
         this.log(messages.getMessage('info.unchanged', [name, result.keep]));
         return;
       }
-      const messageKey = result.dryRun ? 'info.dry-run' : 'info.pruned';
-      this.log(messages.getMessage(messageKey, [result.plannedDeletions.length, name, result.keep]));
+      if (result.dryRun) {
+        this.log(messages.getMessage('info.dry-run', [result.plannedDeletions.length, name, result.keep]));
+      } else {
+        this.log(messages.getMessage('info.pruned', [result.plannedDeletions.length, name, result.keep]));
+      }
     }
   }
 }

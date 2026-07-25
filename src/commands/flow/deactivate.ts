@@ -83,7 +83,13 @@ export default class FlowDeactivate extends SfCommand<FlowDeactivationResult> {
       return;
     }
     const name = qualifiedFlowName(result.apiName, result.namespace);
-    const messageKey = result.dryRun ? 'info.dry-run' : result.changed ? 'info.deactivated' : 'info.unchanged';
-    this.log(messages.getMessage(messageKey, [name, result.previousActiveVersion ?? 'none']));
+    const previous = result.previousActiveVersion ?? 'none';
+    if (result.dryRun) {
+      this.log(messages.getMessage('info.dry-run', [name, previous]));
+    } else if (result.changed) {
+      this.log(messages.getMessage('info.deactivated', [name, previous]));
+    } else {
+      this.log(messages.getMessage('info.unchanged', [name, previous]));
+    }
   }
 }

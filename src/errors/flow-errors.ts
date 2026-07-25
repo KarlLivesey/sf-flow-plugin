@@ -52,7 +52,7 @@ export function flowVersionNotFound(apiName: string, version: FlowVersionSelecto
   return createFlowError({
     code: 'FlowVersionNotFound',
     message: `Flow "${apiName}" does not have version "${version}".`,
-    action: 'Choose an existing Flow version or use --version latest.',
+    action: 'Choose an existing Flow version or use --flow-version latest.',
   });
 }
 
@@ -157,6 +157,14 @@ export function flowInspectionFailed(message: string, cause?: unknown): SfError 
     message,
     action: 'Check the requested Flow version and confirm that your user can read Flow metadata.',
     ...(cause === undefined ? {} : { cause }),
+  });
+}
+
+export function flowGraphOptionsInvalid(message: string): SfError {
+  return createFlowError({
+    code: 'FlowInspectionFailed',
+    message,
+    action: 'Use Mermaid output or remove the Mermaid-only routing flags.',
   });
 }
 

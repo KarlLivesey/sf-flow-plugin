@@ -208,12 +208,12 @@ export interface FlowGraphResult extends FlowDescribeResult {
   requestedDirection: FlowGraphDirection;
   resolvedDirection: FlowGraphResolvedDirection;
   requestedLayout: FlowGraphLayout;
-  layoutCandidates: FlowGraphResolvedLayout[];
-  resolvedLayout: FlowGraphResolvedLayout;
+  layoutCandidates: FlowGraphResolvedLayout[] | null;
+  resolvedLayout: FlowGraphResolvedLayout | null;
   requestedCurve: FlowGraphCurve;
-  resolvedCurve: FlowGraphResolvedCurve;
+  resolvedCurve: FlowGraphResolvedCurve | null;
   requestedElk: FlowGraphElkOptions;
-  resolvedElk: FlowGraphResolvedElkOptions;
+  resolvedElk: FlowGraphResolvedElkOptions | null;
   nodeSpacing: number;
   rankSpacing: number;
   legend: boolean;

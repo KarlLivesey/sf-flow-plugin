@@ -21,7 +21,7 @@ const messages = Messages.loadMessages('sf-flow-plugin', 'flow.activate');
 export interface ActivateFlagValues {
   'api-name': string;
   'target-org': Org | undefined;
-  version: FlowVersionSelector;
+  'flow-version': FlowVersionSelector;
   namespace: string | undefined;
   'api-version': string | undefined;
   'dry-run': boolean;
@@ -67,7 +67,7 @@ function createRequest(flags: ActivateFlagValues, targetOrg: Org): FlowActivatio
   const base = {
     apiName: flags['api-name'],
     targetOrg: username,
-    requestedVersion: flags.version,
+    requestedVersion: flags['flow-version'],
     dryRun: flags['dry-run'],
   };
   const withNamespace = flags.namespace === undefined ? base : { ...base, namespace: flags.namespace };
@@ -90,10 +90,9 @@ export default class FlowActivate extends SfCommand<FlowActivationResult> {
       required: false,
       summary: messages.getMessage('flags.target-org.summary'),
     }),
-    version: Flags.custom<FlowVersionSelector>({
-      char: 'v',
+    'flow-version': Flags.custom<FlowVersionSelector>({
       default: 'latest',
-      summary: messages.getMessage('flags.version.summary'),
+      summary: messages.getMessage('flags.flow-version.summary'),
       parse: (input: string): Promise<FlowVersionSelector> => Promise.resolve(parseFlowVersionSelector(input)),
     })(),
     namespace: Flags.string({
@@ -131,7 +130,12 @@ export default class FlowActivate extends SfCommand<FlowActivationResult> {
       return;
     }
     const qualifiedName = result.namespace === null ? result.apiName : `${result.namespace}__${result.apiName}`;
-    const messageKey = result.dryRun ? 'info.dry-run' : result.changed ? 'info.activated' : 'info.unchanged';
-    this.log(messages.getMessage(messageKey, [qualifiedName, result.activeVersion]));
+    if (result.dryRun) {
+      this.log(messages.getMessage('info.dry-run', [qualifiedName, result.activeVersion]));
+    } else if (result.changed) {
+      this.log(messages.getMessage('info.activated', [qualifiedName, result.activeVersion]));
+    } else {
+      this.log(messages.getMessage('info.unchanged', [qualifiedName, result.activeVersion]));
+    }
   }
 }

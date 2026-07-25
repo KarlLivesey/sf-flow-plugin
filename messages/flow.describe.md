@@ -14,7 +14,7 @@ API name of the Flow definition.
 
 Username or alias of the target org. Uses the configured target org when omitted.
 
-# flags.version.summary
+# flags.flow-version.summary
 
 Flow version to describe: active, latest, or a positive version number.
 
@@ -46,7 +46,7 @@ Salesforce API version to use for the Tooling API requests.
 
 - Recursively describe called subflows:
 
-  <%= config.bin %> <%= command.id %> --api-name Order_Processing --version active --recursive --subflow-version latest
+  <%= config.bin %> <%= command.id %> --api-name Order_Processing --flow-version active --recursive --subflow-version latest
 
 # info.title
 

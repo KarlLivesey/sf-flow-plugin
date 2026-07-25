@@ -1,0 +1,131 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowPruneResult",
+  "definitions": {
+    "FlowPruneResult": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "definitionId": {
+          "type": "string"
+        },
+        "keep": {
+          "type": "number"
+        },
+        "keepVersions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowVersionNumber"
+          }
+        },
+        "ignoreVersions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowVersionNumber"
+          }
+        },
+        "keepBy": {
+          "$ref": "#/definitions/FlowPruneOrder"
+        },
+        "protectedVersions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowPruneVersion"
+          }
+        },
+        "ignoredVersions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowPruneVersion"
+          }
+        },
+        "retainedVersions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowPruneVersion"
+          }
+        },
+        "plannedDeletions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowPruneVersion"
+          }
+        },
+        "deletedVersions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowPruneVersion"
+          }
+        },
+        "skippedVersions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowPruneVersion"
+          }
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "targetOrg": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "apiName",
+        "namespace",
+        "definitionId",
+        "keep",
+        "keepVersions",
+        "ignoreVersions",
+        "keepBy",
+        "protectedVersions",
+        "ignoredVersions",
+        "retainedVersions",
+        "plannedDeletions",
+        "deletedVersions",
+        "skippedVersions",
+        "changed",
+        "dryRun",
+        "targetOrg"
+      ],
+      "additionalProperties": false
+    },
+    "FlowVersionNumber": {
+      "type": "number"
+    },
+    "FlowPruneOrder": {
+      "type": "string",
+      "enum": ["created", "modified"]
+    },
+    "FlowPruneVersion": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "versionNumber": {
+          "$ref": "#/definitions/FlowVersionNumber"
+        },
+        "status": {
+          "type": "string"
+        },
+        "createdDate": {
+          "type": "string"
+        },
+        "lastModifiedDate": {
+          "type": "string"
+        }
+      },
+      "required": ["id", "versionNumber", "status", "createdDate", "lastModifiedDate"],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowDependenciesResult",
+  "definitions": {
+    "FlowDependenciesResult": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "definitionId": {
+          "type": "string"
+        },
+        "direction": {
+          "$ref": "#/definitions/FlowDependencyDirection"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowDependency"
+          }
+        },
+        "targetOrg": {
+          "type": "string"
+        }
+      },
+      "required": ["apiName", "namespace", "definitionId", "direction", "dependencies", "targetOrg"],
+      "additionalProperties": false
+    },
+    "FlowDependencyDirection": {
+      "type": "string",
+      "enum": ["uses", "used-by", "both"]
+    },
+    "FlowDependency": {
+      "type": "object",
+      "properties": {
+        "direction": {
+          "$ref": "#/definitions/FlowDependencyQueryDirection"
+        },
+        "componentId": {
+          "type": ["string", "null"]
+        },
+        "name": {
+          "type": ["string", "null"]
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "type": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["direction", "componentId", "name", "namespace", "type"],
+      "additionalProperties": false
+    },
+    "FlowDependencyQueryDirection": {
+      "type": "string",
+      "enum": ["uses", "used-by"]
+    }
+  }
+}

@@ -1,0 +1,671 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowGraphResult",
+  "definitions": {
+    "FlowGraphResult": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "requestedVersion": {
+          "$ref": "#/definitions/FlowComparisonVersionSelector"
+        },
+        "resolvedVersion": {
+          "$ref": "#/definitions/FlowVersionNumber"
+        },
+        "subflowVersion": {
+          "$ref": "#/definitions/FlowSubflowVersionSelector"
+        },
+        "recursive": {
+          "type": "boolean"
+        },
+        "maxDepth": {
+          "type": "number"
+        },
+        "flows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowDescription"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowTraversalWarning"
+          }
+        },
+        "targetOrg": {
+          "type": "string"
+        },
+        "format": {
+          "$ref": "#/definitions/FlowGraphFormat"
+        },
+        "includeVariables": {
+          "type": "boolean"
+        },
+        "includeFormulas": {
+          "type": "boolean"
+        },
+        "requestedDirection": {
+          "$ref": "#/definitions/FlowGraphDirection"
+        },
+        "resolvedDirection": {
+          "$ref": "#/definitions/FlowGraphResolvedDirection"
+        },
+        "requestedLayout": {
+          "$ref": "#/definitions/FlowGraphLayout"
+        },
+        "layoutCandidates": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/FlowGraphResolvedLayout"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resolvedLayout": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowGraphResolvedLayout"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requestedCurve": {
+          "$ref": "#/definitions/FlowGraphCurve"
+        },
+        "resolvedCurve": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowGraphResolvedCurve"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requestedElk": {
+          "$ref": "#/definitions/FlowGraphElkOptions"
+        },
+        "resolvedElk": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowGraphResolvedElkOptions"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nodeSpacing": {
+          "type": "number"
+        },
+        "rankSpacing": {
+          "type": "number"
+        },
+        "legend": {
+          "type": "boolean"
+        },
+        "labelWidth": {
+          "type": "number"
+        },
+        "style": {
+          "$ref": "#/definitions/FlowGraphStyle"
+        },
+        "graph": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "apiName",
+        "flows",
+        "format",
+        "graph",
+        "includeFormulas",
+        "includeVariables",
+        "labelWidth",
+        "layoutCandidates",
+        "legend",
+        "maxDepth",
+        "namespace",
+        "nodeSpacing",
+        "rankSpacing",
+        "recursive",
+        "requestedCurve",
+        "requestedDirection",
+        "requestedElk",
+        "requestedLayout",
+        "requestedVersion",
+        "resolvedCurve",
+        "resolvedDirection",
+        "resolvedElk",
+        "resolvedLayout",
+        "resolvedVersion",
+        "style",
+        "subflowVersion",
+        "targetOrg",
+        "warnings"
+      ],
+      "additionalProperties": false
+    },
+    "FlowComparisonVersionSelector": {
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "active"
+        },
+        {
+          "type": "string",
+          "const": "latest"
+        },
+        {
+          "$ref": "#/definitions/FlowVersionNumber"
+        }
+      ]
+    },
+    "FlowVersionNumber": {
+      "type": "number"
+    },
+    "FlowSubflowVersionSelector": {
+      "type": "string",
+      "enum": ["active", "latest"]
+    },
+    "FlowDescription": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "qualifiedName": {
+          "type": "string"
+        },
+        "definitionId": {
+          "type": "string"
+        },
+        "versionId": {
+          "type": "string"
+        },
+        "versionNumber": {
+          "$ref": "#/definitions/FlowVersionNumber"
+        },
+        "status": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "processType": {
+          "type": "string"
+        },
+        "depth": {
+          "type": "number"
+        },
+        "variables": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowVariableSummary"
+          }
+        },
+        "formulas": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowFormulaSummary"
+          }
+        },
+        "apexActions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowApexActionSummary"
+          }
+        },
+        "subflows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowSubflowSummary"
+          }
+        },
+        "referencedObjects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "elements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowElementSummary"
+          }
+        },
+        "connectors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowConnectorSummary"
+          }
+        }
+      },
+      "required": [
+        "apiName",
+        "namespace",
+        "qualifiedName",
+        "definitionId",
+        "versionId",
+        "versionNumber",
+        "status",
+        "label",
+        "processType",
+        "depth",
+        "variables",
+        "formulas",
+        "apexActions",
+        "subflows",
+        "referencedObjects",
+        "elements",
+        "connectors"
+      ],
+      "additionalProperties": false
+    },
+    "FlowVariableSummary": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "dataType": {
+          "type": "string"
+        },
+        "objectType": {
+          "type": ["string", "null"]
+        },
+        "apexClass": {
+          "type": ["string", "null"]
+        },
+        "collection": {
+          "type": "boolean"
+        },
+        "input": {
+          "type": "boolean"
+        },
+        "output": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["name", "dataType", "objectType", "apexClass", "collection", "input", "output", "description"],
+      "additionalProperties": false
+    },
+    "FlowFormulaSummary": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "dataType": {
+          "type": "string"
+        },
+        "expression": {
+          "type": "string"
+        },
+        "scale": {
+          "type": ["number", "null"]
+        }
+      },
+      "required": ["name", "dataType", "expression", "scale"],
+      "additionalProperties": false
+    },
+    "FlowApexActionSummary": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "label": {
+          "type": ["string", "null"]
+        },
+        "actionName": {
+          "type": ["string", "null"]
+        },
+        "actionType": {
+          "type": "string"
+        }
+      },
+      "required": ["name", "label", "actionName", "actionType"],
+      "additionalProperties": false
+    },
+    "FlowSubflowSummary": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "label": {
+          "type": ["string", "null"]
+        },
+        "flowName": {
+          "type": "string"
+        }
+      },
+      "required": ["name", "label", "flowName"],
+      "additionalProperties": false
+    },
+    "FlowElementSummary": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "label": {
+          "type": ["string", "null"]
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": ["name", "label", "type"],
+      "additionalProperties": false
+    },
+    "FlowConnectorSummary": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "label": {
+          "type": ["string", "null"]
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["default", "fault", "normal", "outcome"]
+        }
+      },
+      "required": ["source", "target", "label", "kind"],
+      "additionalProperties": false
+    },
+    "FlowTraversalWarning": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/definitions/FlowTraversalWarningKind"
+        },
+        "flowName": {
+          "type": "string"
+        },
+        "path": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["kind", "flowName", "path"],
+      "additionalProperties": false
+    },
+    "FlowTraversalWarningKind": {
+      "type": "string",
+      "enum": ["depth-limit", "missing-subflow", "subflow-version-fallback", "missing-subflow-version"]
+    },
+    "FlowGraphFormat": {
+      "type": "string",
+      "enum": ["mermaid", "dot"]
+    },
+    "FlowGraphDirection": {
+      "type": "string",
+      "enum": ["auto", "left-right", "top-down"]
+    },
+    "FlowGraphResolvedDirection": {
+      "type": "string",
+      "enum": ["left-right", "top-down"]
+    },
+    "FlowGraphLayout": {
+      "type": "string",
+      "enum": ["auto", "dagre", "elk"]
+    },
+    "FlowGraphResolvedLayout": {
+      "type": "string",
+      "enum": ["dagre", "elk"]
+    },
+    "FlowGraphCurve": {
+      "type": "string",
+      "enum": ["auto", "basis", "linear", "step", "step-after", "step-before"]
+    },
+    "FlowGraphResolvedCurve": {
+      "type": "string",
+      "enum": ["basis", "linear", "step", "step-after", "step-before"]
+    },
+    "FlowGraphElkOptions": {
+      "type": "object",
+      "properties": {
+        "nodePlacement": {
+          "$ref": "#/definitions/FlowGraphElkNodePlacement"
+        },
+        "modelOrder": {
+          "$ref": "#/definitions/FlowGraphElkModelOrder"
+        },
+        "cycleBreaking": {
+          "$ref": "#/definitions/FlowGraphElkCycleBreaking"
+        },
+        "mergeEdges": {
+          "type": "boolean"
+        },
+        "forceNodeOrder": {
+          "type": "boolean"
+        }
+      },
+      "required": ["nodePlacement", "modelOrder", "cycleBreaking", "mergeEdges", "forceNodeOrder"],
+      "additionalProperties": false
+    },
+    "FlowGraphElkNodePlacement": {
+      "type": "string",
+      "enum": ["auto", "brandes-koepf", "linear-segments", "network-simplex", "simple"]
+    },
+    "FlowGraphElkModelOrder": {
+      "type": "string",
+      "enum": ["auto", "none", "nodes-and-edges", "prefer-edges", "prefer-nodes"]
+    },
+    "FlowGraphElkCycleBreaking": {
+      "type": "string",
+      "enum": ["auto", "depth-first", "greedy", "greedy-model-order", "interactive", "model-order"]
+    },
+    "FlowGraphResolvedElkOptions": {
+      "type": "object",
+      "properties": {
+        "nodePlacement": {
+          "$ref": "#/definitions/FlowGraphResolvedElkNodePlacement"
+        },
+        "modelOrder": {
+          "$ref": "#/definitions/FlowGraphResolvedElkModelOrder"
+        },
+        "cycleBreaking": {
+          "$ref": "#/definitions/FlowGraphResolvedElkCycleBreaking"
+        },
+        "mergeEdges": {
+          "type": "boolean"
+        },
+        "forceNodeOrder": {
+          "type": "boolean"
+        }
+      },
+      "required": ["nodePlacement", "modelOrder", "cycleBreaking", "mergeEdges", "forceNodeOrder"],
+      "additionalProperties": false
+    },
+    "FlowGraphResolvedElkNodePlacement": {
+      "type": "string",
+      "enum": ["brandes-koepf", "linear-segments", "network-simplex", "simple"]
+    },
+    "FlowGraphResolvedElkModelOrder": {
+      "type": "string",
+      "enum": ["none", "nodes-and-edges", "prefer-edges", "prefer-nodes"]
+    },
+    "FlowGraphResolvedElkCycleBreaking": {
+      "type": "string",
+      "enum": ["depth-first", "greedy", "greedy-model-order", "interactive", "model-order"]
+    },
+    "FlowGraphStyle": {
+      "type": "object",
+      "properties": {
+        "colors": {
+          "$ref": "#/definitions/FlowGraphColorOverrides"
+        },
+        "fontFamily": {
+          "type": "string"
+        },
+        "fontSize": {
+          "type": "number"
+        }
+      },
+      "required": ["colors", "fontFamily", "fontSize"],
+      "additionalProperties": false
+    },
+    "FlowGraphColorOverrides": {
+      "type": "object",
+      "properties": {
+        "background": {
+          "$ref": "#/definitions/FlowGraphColor"
+        },
+        "cluster": {
+          "$ref": "#/definitions/FlowGraphColor"
+        },
+        "text": {
+          "$ref": "#/definitions/FlowGraphColor"
+        },
+        "node": {
+          "$ref": "#/definitions/FlowGraphColor"
+        },
+        "start": {
+          "$ref": "#/definitions/FlowGraphColor"
+        },
+        "decision": {
+          "$ref": "#/definitions/FlowGraphColor"
+        },
+        "subflow": {
+          "$ref": "#/definitions/FlowGraphColor"
+        },
+        "action": {
+          "$ref": "#/definitions/FlowGraphColor"
+        },
+        "record": {
+          "$ref": "#/definitions/FlowGraphColor"
+        },
+        "screen": {
+          "$ref": "#/definitions/FlowGraphColor"
+        },
+        "resource": {
+          "$ref": "#/definitions/FlowGraphColor"
+        },
+        "connector": {
+          "$ref": "#/definitions/FlowGraphColor"
+        },
+        "call": {
+          "$ref": "#/definitions/FlowGraphColor"
+        },
+        "outcome": {
+          "$ref": "#/definitions/FlowGraphColor"
+        },
+        "default": {
+          "$ref": "#/definitions/FlowGraphColor"
+        },
+        "fault": {
+          "$ref": "#/definitions/FlowGraphColor"
+        }
+      },
+      "additionalProperties": false
+    },
+    "FlowGraphColor": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/FlowGraphNamedColor"
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "FlowGraphNamedColor": {
+      "type": "string",
+      "enum": [
+        "aliceblue",
+        "amber",
+        "aqua",
+        "aquamarine",
+        "azure",
+        "beige",
+        "bisque",
+        "black",
+        "blue",
+        "brown",
+        "chocolate",
+        "coral",
+        "cornflowerblue",
+        "crimson",
+        "cyan",
+        "darkblue",
+        "darkcyan",
+        "darkgreen",
+        "darkgrey",
+        "darkorange",
+        "darkred",
+        "deeppink",
+        "deepskyblue",
+        "emerald",
+        "fuchsia",
+        "gold",
+        "goldenrod",
+        "gray",
+        "green",
+        "grey",
+        "hotpink",
+        "indigo",
+        "ivory",
+        "khaki",
+        "lavender",
+        "lime",
+        "magenta",
+        "maroon",
+        "navy",
+        "olive",
+        "orange",
+        "orchid",
+        "pink",
+        "plum",
+        "purple",
+        "red",
+        "rose",
+        "salmon",
+        "seagreen",
+        "silver",
+        "sky",
+        "skyblue",
+        "slate",
+        "slateblue",
+        "slategray",
+        "slategrey",
+        "tan",
+        "teal",
+        "tomato",
+        "turquoise",
+        "violet",
+        "white",
+        "yellow",
+        "yellowgreen"
+      ]
+    }
+  }
+}

@@ -71,4 +71,16 @@ describe('FlowGraphService', (): void => {
     expect(result.graph).to.include('flowchart LR');
     expect(result.graph).to.include('subgraph flowLegend["Legend"]');
   });
+
+  it('reports Mermaid routing as not applicable for DOT output', async (): Promise<void> => {
+    const result = await new FlowGraphService(nestedFlowGateway()).graph({ ...graphRequest(), format: 'dot' });
+    expect(result).to.include({
+      format: 'dot',
+      layoutCandidates: null,
+      resolvedLayout: null,
+      resolvedCurve: null,
+      resolvedElk: null,
+    });
+    expect(result.graph).to.include('digraph Flow');
+  });
 });

@@ -1,0 +1,98 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowVersionsResult",
+  "definitions": {
+    "FlowVersionsResult": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "definitionId": {
+          "type": "string"
+        },
+        "activeVersion": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowVersionNumber"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "latestVersion": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowVersionNumber"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "versions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowVersionSummary"
+          }
+        },
+        "targetOrg": {
+          "type": "string"
+        }
+      },
+      "required": ["apiName", "namespace", "definitionId", "activeVersion", "latestVersion", "versions", "targetOrg"],
+      "additionalProperties": false
+    },
+    "FlowVersionNumber": {
+      "type": "number"
+    },
+    "FlowVersionSummary": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "versionNumber": {
+          "$ref": "#/definitions/FlowVersionNumber"
+        },
+        "status": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "processType": {
+          "type": "string"
+        },
+        "createdDate": {
+          "type": "string"
+        },
+        "lastModifiedDate": {
+          "type": "string"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "latest": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "versionNumber",
+        "status",
+        "label",
+        "processType",
+        "createdDate",
+        "lastModifiedDate",
+        "active",
+        "latest"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

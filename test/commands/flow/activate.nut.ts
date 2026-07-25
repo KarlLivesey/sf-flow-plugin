@@ -158,14 +158,14 @@ describe('flow activate read-only NUTs', (): void => {
   });
 
   it('resolves latest during a dry run without changing the active version', (): void => {
-    const dryRun = runActivation('--version latest --dry-run');
-    const unchanged = runActivation('--version 1');
+    const dryRun = runActivation('--flow-version latest --dry-run');
+    const unchanged = runActivation('--flow-version 1');
     expect(dryRun.result).to.include({ resolvedVersion: 2, changed: false, dryRun: true });
     expect(unchanged.result).to.include({ activeVersion: 1, changed: false });
   });
 
   it('returns the documented JSON result shape', (): void => {
-    const output = runActivation('--version latest --dry-run');
+    const output = runActivation('--flow-version latest --dry-run');
     expect(output.result).to.have.all.keys(
       'apiName',
       'namespace',
@@ -183,17 +183,17 @@ describe('flow activate read-only NUTs', (): void => {
 
 describe('flow activate mutation NUTs', (): void => {
   it('activates an explicit version', (): void => {
-    const output = runActivation('--version 2');
+    const output = runActivation('--flow-version 2');
     expect(output.result).to.include({ resolvedVersion: 2, activeVersion: 2, changed: true });
   });
 
   it('is idempotent when the version is already active', (): void => {
-    const output = runActivation('--version 2');
+    const output = runActivation('--flow-version 2');
     expect(output.result).to.include({ activeVersion: 2, changed: false });
   });
 
   it('resolves latest to the expected version', (): void => {
-    const output = runActivation('--version latest');
+    const output = runActivation('--flow-version latest');
     expect(output.result).to.include({ resolvedVersion: 2, activeVersion: 2 });
   });
 });
@@ -206,7 +206,7 @@ describe('flow activate error NUTs', (): void => {
   });
 
   it('returns FlowVersionNotFound for an unknown version', (): void => {
-    const output = runActivation('--version 999', 1);
+    const output = runActivation('--flow-version 999', 1);
     expect(output).to.have.property('name', 'FlowVersionNotFound');
   });
 });
@@ -271,7 +271,7 @@ describe('Flow lifecycle mutation NUTs', (): void => {
 
   it('prunes an old inactive version while protecting active and latest', (): void => {
     deployFixture('v3');
-    runActivation('--version 3');
+    runActivation('--flow-version 3');
     const preview = runFlowCommand<FlowPruneResult>('prune', '--api-name Plugin_Test_Flow --keep 0 --ignore 1');
     expect(preview.result.plannedDeletions.map((version) => version.versionNumber)).to.deep.equal([2]);
     const output = runFlowCommand<FlowPruneResult>(

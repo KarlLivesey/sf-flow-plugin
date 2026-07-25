@@ -1,0 +1,127 @@
+[
+  {
+    "alias": [],
+    "command": "flow:activate",
+    "flagAliases": [],
+    "flagChars": ["n", "o"],
+    "flags": ["api-name", "api-version", "dry-run", "flags-dir", "flow-version", "json", "namespace", "target-org"],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
+    "command": "flow:audit",
+    "flagAliases": [],
+    "flagChars": ["o"],
+    "flags": ["api-version", "flags-dir", "json", "target-org"],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
+    "command": "flow:compare",
+    "flagAliases": [],
+    "flagChars": ["f", "n", "o", "t"],
+    "flags": ["api-name", "api-version", "flags-dir", "from", "json", "namespace", "target-org", "to"],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
+    "command": "flow:deactivate",
+    "flagAliases": [],
+    "flagChars": ["n", "o"],
+    "flags": ["api-name", "api-version", "dry-run", "flags-dir", "json", "namespace", "target-org"],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
+    "command": "flow:dependencies",
+    "flagAliases": [],
+    "flagChars": ["d", "n", "o"],
+    "flags": ["api-name", "api-version", "direction", "flags-dir", "json", "namespace", "target-org"],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
+    "command": "flow:describe",
+    "flagAliases": [],
+    "flagChars": ["n", "o", "r"],
+    "flags": [
+      "api-name",
+      "api-version",
+      "flags-dir",
+      "flow-version",
+      "json",
+      "max-depth",
+      "namespace",
+      "recursive",
+      "subflow-version",
+      "target-org"
+    ],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
+    "command": "flow:graph",
+    "flagAliases": ["colour"],
+    "flagChars": ["f", "n", "o", "r"],
+    "flags": [
+      "api-name",
+      "api-version",
+      "color",
+      "curve",
+      "cycle-breaking",
+      "direction",
+      "flags-dir",
+      "flow-version",
+      "font-family",
+      "font-size",
+      "force-node-order",
+      "format",
+      "include-formulas",
+      "include-variables",
+      "json",
+      "label-width",
+      "layout",
+      "legend",
+      "max-depth",
+      "merge-edges",
+      "model-order",
+      "namespace",
+      "node-placement",
+      "node-spacing",
+      "output-file",
+      "rank-spacing",
+      "recursive",
+      "subflow-version",
+      "target-org"
+    ],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
+    "command": "flow:prune",
+    "flagAliases": [],
+    "flagChars": ["n", "o"],
+    "flags": [
+      "api-name",
+      "api-version",
+      "dry-run",
+      "flags-dir",
+      "ignore",
+      "json",
+      "keep",
+      "keep-by",
+      "keep-version",
+      "namespace",
+      "target-org"
+    ],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
+    "command": "flow:versions",
+    "flagAliases": [],
+    "flagChars": ["n", "o"],
+    "flags": ["api-name", "api-version", "flags-dir", "json", "namespace", "target-org"],
+    "plugin": "sf-flow-plugin"
+  }
+]

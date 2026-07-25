@@ -39,6 +39,33 @@ export type FlowProgressReporter = (stage: FlowProgressStage, detail?: string) =
 
 export const noFlowProgress: FlowProgressReporter = () => undefined;
 
+const actionMessages: Record<FlowProgressAction, string> = {
+  activate: messages.getMessage('actions.activate'),
+  audit: messages.getMessage('actions.audit'),
+  compare: messages.getMessage('actions.compare'),
+  deactivate: messages.getMessage('actions.deactivate'),
+  dependencies: messages.getMessage('actions.dependencies'),
+  describe: messages.getMessage('actions.describe'),
+  graph: messages.getMessage('actions.graph'),
+  prune: messages.getMessage('actions.prune'),
+  versions: messages.getMessage('actions.versions'),
+};
+
+const stageMessages: Record<FlowProgressStage, string> = {
+  'analysing-results': messages.getMessage('stages.analysing-results'),
+  'applying-change': messages.getMessage('stages.applying-change'),
+  'checking-permissions': messages.getMessage('stages.checking-permissions'),
+  'comparing-metadata': messages.getMessage('stages.comparing-metadata'),
+  'deleting-versions': messages.getMessage('stages.deleting-versions'),
+  'loading-dependencies': messages.getMessage('stages.loading-dependencies'),
+  'loading-flows': messages.getMessage('stages.loading-flows'),
+  'loading-metadata': messages.getMessage('stages.loading-metadata'),
+  'loading-versions': messages.getMessage('stages.loading-versions'),
+  'rendering-graph': messages.getMessage('stages.rendering-graph'),
+  'resolving-flow': messages.getMessage('stages.resolving-flow'),
+  'verifying-change': messages.getMessage('stages.verifying-change'),
+};
+
 interface FlowProgressWork<Result> {
   stage: FlowProgressStage;
   detail: string;
@@ -58,10 +85,10 @@ export async function withFlowProgress<Result>(
   action: FlowProgressAction,
   operation: (progress: FlowProgressReporter) => Promise<Result>
 ): Promise<Result> {
-  spinner.start(messages.getMessage(`actions.${action}`));
+  spinner.start(actionMessages[action]);
   const output = spinner;
   const progress: FlowProgressReporter = (stage, detail) => {
-    const message = messages.getMessage(`stages.${stage}`);
+    const message = stageMessages[stage];
     output.status = detail === undefined ? message : `${message}: ${detail}`;
   };
   try {

@@ -14,7 +14,7 @@ API name of the Flow definition.
 
 Username or alias of the target Salesforce org. Uses the configured default `target-org` when omitted.
 
-# flags.version.summary
+# flags.flow-version.summary
 
 Flow version to activate: a positive whole number or `latest`.
 
@@ -38,7 +38,7 @@ Resolve and report the activation without changing Salesforce.
 
 - Activate version 7:
 
-  <%= config.bin %> <%= command.id %> --target-org MySandbox --api-name Order_Processing --version 7
+  <%= config.bin %> <%= command.id %> --target-org MySandbox --api-name Order_Processing --flow-version 7
 
 - Resolve the latest version without changing Salesforce:
 
