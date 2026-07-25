@@ -11,7 +11,12 @@ import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 import { FlowGraphService } from '../../services/flow-graph-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type { FlowComparisonVersionSelector } from '../../types/flow-analysis.js';
-import type { FlowGraphFormat, FlowGraphRequest, FlowGraphResult } from '../../types/flow-inspection.js';
+import type {
+  FlowGraphFormat,
+  FlowGraphRequest,
+  FlowGraphResult,
+  FlowSubflowVersionSelector,
+} from '../../types/flow-inspection.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
 import { parseInspectionVersionSelector } from './describe.js';
 
@@ -22,6 +27,7 @@ export interface GraphFlagValues {
   'api-name': string;
   'target-org': Org | undefined;
   version: FlowComparisonVersionSelector;
+  'subflow-version': FlowSubflowVersionSelector;
   format: FlowGraphFormat;
   recursive: boolean;
   'max-depth': number;
@@ -35,6 +41,7 @@ function createRequest(flags: GraphFlagValues, context: ReturnType<typeof create
   return {
     ...createNamedFlowRequest(flags, context),
     version: flags.version,
+    subflowVersion: flags['subflow-version'],
     format: flags.format,
     recursive: flags.recursive,
     maxDepth: flags['max-depth'],
@@ -65,6 +72,13 @@ export default class FlowGraph extends SfCommand<FlowGraphResult> {
       summary: messages.getMessage('flags.version.summary'),
       parse: (input: string): Promise<FlowComparisonVersionSelector> =>
         Promise.resolve(parseInspectionVersionSelector(input)),
+    })(),
+    'subflow-version': Flags.custom<FlowSubflowVersionSelector>({
+      default: 'active',
+      options: ['active', 'latest'],
+      summary: messages.getMessage('flags.subflow-version.summary'),
+      parse: (input: string): Promise<FlowSubflowVersionSelector> =>
+        Promise.resolve(input === 'latest' ? 'latest' : 'active'),
     })(),
     format: Flags.custom<FlowGraphFormat>({
       char: 'f',

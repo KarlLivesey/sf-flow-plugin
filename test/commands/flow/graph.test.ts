@@ -18,6 +18,7 @@ const result: FlowGraphResult = {
   namespace: null,
   requestedVersion: 'latest',
   resolvedVersion: 2,
+  subflowVersion: 'latest',
   recursive: true,
   maxDepth: 4,
   flows: [],
@@ -32,6 +33,7 @@ const result: FlowGraphResult = {
 describe('flow graph flags', (): void => {
   it('defaults to Mermaid without resource annotations or recursion', (): void => {
     expect(FlowGraph.flags.format.default).to.equal('mermaid');
+    expect(FlowGraph.flags['subflow-version'].default).to.equal('active');
     expect(FlowGraph.flags.recursive.default).to.equal(false);
     expect(FlowGraph.flags['include-variables'].default).to.equal(false);
     expect(FlowGraph.flags['include-formulas'].default).to.equal(false);
@@ -44,6 +46,7 @@ describe('flow graph command execution', (): void => {
       'api-name': 'Order_Processing',
       'target-org': createCommandOrg({} as Connection),
       version: 3 as const,
+      'subflow-version': 'latest' as const,
       format: 'dot' as const,
       recursive: true,
       'max-depth': 4,
@@ -59,6 +62,7 @@ describe('flow graph command execution', (): void => {
       apiName: 'Order_Processing',
       targetOrg: 'admin@example.com',
       version: 3,
+      subflowVersion: 'latest',
       format: 'dot',
       recursive: true,
       maxDepth: 4,

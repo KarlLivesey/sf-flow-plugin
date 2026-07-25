@@ -215,6 +215,7 @@ sf flow describe \
   [--target-org ORG] \
   [--version active|latest|NUMBER] \
   [--recursive] \
+  [--subflow-version active|latest] \
   [--max-depth NUMBER] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
@@ -227,18 +228,19 @@ The command summarises inputs, outputs, variables, formulas, executable elements
 sf flow describe --api-name Order_Processing
 ```
 
-Use `--recursive` to follow the active version of each referenced subflow. `--max-depth` defaults to `10`; a value of `0` describes only the requested Flow:
+Use `--recursive` to follow referenced subflows. `--subflow-version` defaults to `active`: it follows the active version when one exists and otherwise falls back to latest with a warning. Specify `latest` to always follow each subflow's latest version. `--max-depth` defaults to `10`; a value of `0` describes only the requested Flow:
 
 ```bash
 sf flow describe \
   --api-name Order_Processing \
   --version active \
   --recursive \
+  --subflow-version latest \
   --max-depth 5 \
   --json
 ```
 
-Recursive traversal reports missing or inactive subflows and depth limits as warnings. It tracks both visited definitions and the current call path. For example, if Flow A calls Flow B and B calls A, the result reports the exact cycle `Flow_A -> Flow_B -> Flow_A` and stops expanding the repeated A.
+Recursive traversal reports missing subflows, active-to-latest fallbacks and depth limits as warnings. It tracks both visited definitions and the current call path. For example, if Flow A calls Flow B and B calls A, the result reports the exact cycle `Flow_A -> Flow_B -> Flow_A` and stops expanding the repeated A.
 
 ## `sf flow graph`
 
@@ -249,6 +251,7 @@ sf flow graph \
   [--version active|latest|NUMBER] \
   [--format mermaid|dot] \
   [--recursive] \
+  [--subflow-version active|latest] \
   [--max-depth NUMBER] \
   [--include-variables] \
   [--include-formulas] \
@@ -270,11 +273,12 @@ sf flow graph \
   --api-name Order_Processing \
   --format dot \
   --recursive \
+  --subflow-version latest \
   --include-variables \
   --include-formulas
 ```
 
-Recursive graphs use the same active-subflow, depth and cycle rules as `sf flow describe`. A cycle retains the call edge that closes the loop—for example, B still has a `calls` edge back to A—but does not expand A a second time.
+Recursive graphs use the same subflow-version selection, fallback, depth and cycle rules as `sf flow describe`. A cycle retains the call edge that closes the loop—for example, B still has a `calls` edge back to A—but does not expand A a second time.
 
 ## `sf flow deactivate`
 

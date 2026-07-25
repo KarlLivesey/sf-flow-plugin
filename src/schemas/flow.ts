@@ -11,6 +11,7 @@ import type {
   FlowMetadataRecord,
   MetadataComponentDependencyRecord,
 } from '../types/flow-analysis.js';
+import type { FlowSubflowVersionSelector } from '../types/flow-inspection.js';
 import type { FlowDefinitionRecord, FlowPruneOrder, FlowVersionRecord } from '../types/flow.js';
 
 const FLOW_API_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
@@ -39,6 +40,8 @@ export const nonnegativeIntegerSchema = z.number().int().nonnegative().safe();
 export const flowPruneOrderSchema: z.ZodType<FlowPruneOrder> = z.enum(['created', 'modified']);
 
 export const flowDependencyDirectionSchema: z.ZodType<FlowDependencyDirection> = z.enum(['uses', 'used-by', 'both']);
+
+export const flowSubflowVersionSelectorSchema: z.ZodType<FlowSubflowVersionSelector> = z.enum(['active', 'latest']);
 
 export const toolingQueryResultSchema = z.object({
   done: z.boolean(),

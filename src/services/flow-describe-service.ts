@@ -5,13 +5,19 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import { flowDefinitionAmbiguous, flowInspectionFailed, flowVersionNotFound } from '../errors/flow-errors.js';
-import { flowApiNameSchema, namespaceSchema, nonnegativeIntegerSchema } from '../schemas/flow.js';
+import {
+  flowApiNameSchema,
+  flowSubflowVersionSelectorSchema,
+  namespaceSchema,
+  nonnegativeIntegerSchema,
+} from '../schemas/flow.js';
 import type { FlowComparisonVersionSelector, FlowMetadataGateway } from '../types/flow-analysis.js';
 import type { FlowDefinition, FlowDefinitionGateway, FlowDefinitionLookup, FlowVersion } from '../types/flow.js';
 import type {
   FlowDescribeRequest,
   FlowDescribeResult,
   FlowDescription,
+  FlowSubflowVersionSelector,
   FlowTraversalWarning,
 } from '../types/flow-inspection.js';
 import { analyseFlowMetadata } from '../utils/flow-metadata-analysis.js';
@@ -62,6 +68,10 @@ interface VersionReference {
   selector: 'active' | 'latest';
 }
 
+interface SubflowVersionReference extends VersionReference {
+  fallback: boolean;
+}
+
 function versionForId(
   definition: FlowDefinition,
   versions: ReadonlyArray<FlowVersion>,
@@ -94,6 +104,17 @@ function selectVersion(
     throw flowVersionNotFound(definition.apiName, selector);
   }
   return version;
+}
+
+function subflowVersionReference(
+  definition: FlowDefinition,
+  selector: FlowSubflowVersionSelector
+): SubflowVersionReference {
+  if (selector === 'latest' || definition.activeVersionId !== null) {
+    const id = selector === 'latest' ? definition.latestVersionId : definition.activeVersionId;
+    return { id, selector, fallback: false };
+  }
+  return { id: definition.latestVersionId, selector: 'latest', fallback: definition.latestVersionId !== null };
 }
 
 function warningKey(warning: FlowTraversalWarning): string {
@@ -154,7 +175,7 @@ class FlowMetadataTraversal {
     if (this.shouldStopExpansion({ definition, parent, name, path })) {
       return;
     }
-    await this.visitActiveSubflow(definition, parent, path);
+    await this.visitSubflow(definition, parent, path);
   }
 
   private shouldStopExpansion({ definition, parent, name, path }: ExpansionContext): boolean {
@@ -181,13 +202,17 @@ class FlowMetadataTraversal {
     return definitions[0];
   }
 
-  private async visitActiveSubflow(definition: FlowDefinition, parent: VisitContext, path: string[]): Promise<void> {
+  private async visitSubflow(definition: FlowDefinition, parent: VisitContext, path: string[]): Promise<void> {
     const versions = await this.gateway.findVersions(definition.id);
-    if (definition.activeVersionId === null) {
-      this.addWarning({ kind: 'inactive-subflow', flowName: path.at(-1) ?? definition.apiName, path });
+    const reference = subflowVersionReference(definition, this.request.subflowVersion);
+    if (reference.id === null) {
+      this.addWarning({ kind: 'missing-subflow-version', flowName: path.at(-1) ?? definition.apiName, path });
       return;
     }
-    const version = versionForId(definition, versions, { id: definition.activeVersionId, selector: 'active' });
+    if (reference.fallback) {
+      this.addWarning({ kind: 'subflow-version-fallback', flowName: path.at(-1) ?? definition.apiName, path });
+    }
+    const version = versionForId(definition, versions, reference);
     await this.visit({
       definition,
       version,
@@ -204,6 +229,7 @@ function createResult(request: FlowDescribeRequest, traversal: TraversalResult):
     namespace: traversal.root.namespace,
     requestedVersion: request.version,
     resolvedVersion: traversal.root.versionNumber,
+    subflowVersion: request.subflowVersion,
     recursive: request.recursive,
     maxDepth: request.maxDepth,
     flows: traversal.flows,
@@ -227,6 +253,9 @@ export class FlowDescribeService {
   public async describe(request: FlowDescribeRequest): Promise<FlowDescribeResult> {
     if (!nonnegativeIntegerSchema.safeParse(request.maxDepth).success) {
       throw flowInspectionFailed('The recursive Flow traversal depth must be a non-negative whole number.');
+    }
+    if (!flowSubflowVersionSelectorSchema.safeParse(request.subflowVersion).success) {
+      throw flowInspectionFailed('The recursive subflow version selector must be active or latest.');
     }
     try {
       return createResult(request, await new FlowMetadataTraversal(this.gateway, request).traverse());

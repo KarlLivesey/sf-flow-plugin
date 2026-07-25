@@ -9,13 +9,14 @@ import type { FlowDescribeRequest } from '../../src/types/flow-inspection.js';
 import { FakeFlowGateway, flowDefinition, flowVersion } from './fake-flow-gateway.js';
 
 const flowAId = '300000000000001';
-const flowBId = '300000000000002';
+const flowBId = '300000000000101';
 
 export function inspectionRequest(overrides: Partial<FlowDescribeRequest> = {}): FlowDescribeRequest {
   return {
     apiName: 'Flow_A',
     targetOrg: 'admin@example.com',
     version: 'latest',
+    subflowVersion: 'active',
     recursive: true,
     maxDepth: 10,
     ...overrides,
@@ -69,5 +70,32 @@ export function cycleGateway(): FakeFlowGateway {
     formulas: [{ name: 'Greeting', dataType: 'String', expression: '"Hello"' }],
   });
   gateway.metadata.set(versionB.id, subflowMetadata('Flow_A'));
+  return gateway;
+}
+
+export function versionedSubflowGateway(active: boolean): FakeFlowGateway {
+  const rootVersion = flowVersion(flowAId, 1, 'Active');
+  const activeChild = flowVersion(flowBId, 1, 'Active');
+  const latestChild = flowVersion(flowBId, 2, 'Draft');
+  const gateway = new FakeFlowGateway(
+    [
+      flowDefinition({
+        id: flowAId,
+        apiName: 'Flow_A',
+        activeVersionId: rootVersion.id,
+        latestVersionId: rootVersion.id,
+      }),
+      flowDefinition({
+        id: flowBId,
+        apiName: 'Flow_B',
+        activeVersionId: active ? activeChild.id : null,
+        latestVersionId: latestChild.id,
+      }),
+    ],
+    [rootVersion, activeChild, latestChild]
+  );
+  gateway.metadata.set(rootVersion.id, subflowMetadata('Flow_B'));
+  gateway.metadata.set(activeChild.id, {});
+  gateway.metadata.set(latestChild.id, {});
   return gateway;
 }

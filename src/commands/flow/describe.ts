@@ -16,6 +16,7 @@ import type {
   FlowDescribeRequest,
   FlowDescribeResult,
   FlowDescription,
+  FlowSubflowVersionSelector,
   FlowVariableSummary,
 } from '../../types/flow-inspection.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
@@ -27,6 +28,7 @@ export interface DescribeFlagValues {
   'api-name': string;
   'target-org': Org | undefined;
   version: FlowComparisonVersionSelector;
+  'subflow-version': FlowSubflowVersionSelector;
   recursive: boolean;
   'max-depth': number;
   namespace: string | undefined;
@@ -50,6 +52,7 @@ function createRequest(
   return {
     ...createNamedFlowRequest(flags, context),
     version: flags.version,
+    subflowVersion: flags['subflow-version'],
     recursive: flags.recursive,
     maxDepth: flags['max-depth'],
   };
@@ -103,6 +106,13 @@ export default class FlowDescribe extends SfCommand<FlowDescribeResult> {
       summary: messages.getMessage('flags.version.summary'),
       parse: (input: string): Promise<FlowComparisonVersionSelector> =>
         Promise.resolve(parseInspectionVersionSelector(input)),
+    })(),
+    'subflow-version': Flags.custom<FlowSubflowVersionSelector>({
+      default: 'active',
+      options: ['active', 'latest'],
+      summary: messages.getMessage('flags.subflow-version.summary'),
+      parse: (input: string): Promise<FlowSubflowVersionSelector> =>
+        Promise.resolve(input === 'latest' ? 'latest' : 'active'),
     })(),
     recursive: Flags.boolean({
       char: 'r',

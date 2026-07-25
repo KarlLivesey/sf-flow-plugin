@@ -18,6 +18,7 @@ const result: FlowDescribeResult = {
   namespace: null,
   requestedVersion: 'latest',
   resolvedVersion: 2,
+  subflowVersion: 'active',
   recursive: true,
   maxDepth: 4,
   flows: [],
@@ -28,6 +29,7 @@ const result: FlowDescribeResult = {
 describe('flow describe flags', (): void => {
   it('defaults to the latest version without recursion', (): void => {
     expect(FlowDescribe.flags.version.default).to.equal('latest');
+    expect(FlowDescribe.flags['subflow-version'].default).to.equal('active');
     expect(FlowDescribe.flags.recursive.default).to.equal(false);
     expect(FlowDescribe.flags['max-depth'].default).to.equal(10);
   });
@@ -47,6 +49,7 @@ describe('flow describe command execution', (): void => {
       'api-name': 'Order_Processing',
       'target-org': createCommandOrg({} as Connection),
       version: 'active' as const,
+      'subflow-version': 'latest' as const,
       recursive: true,
       'max-depth': 4,
       namespace: undefined,
@@ -59,6 +62,7 @@ describe('flow describe command execution', (): void => {
       apiName: 'Order_Processing',
       targetOrg: 'admin@example.com',
       version: 'active',
+      subflowVersion: 'latest',
       recursive: true,
       maxDepth: 4,
     });

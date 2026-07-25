@@ -7,7 +7,7 @@
 import { expect } from 'chai';
 
 import { FlowDescribeService } from '../../src/services/flow-describe-service.js';
-import { cycleGateway, inspectionRequest } from '../helpers/flow-inspection-fixtures.js';
+import { cycleGateway, inspectionRequest, versionedSubflowGateway } from '../helpers/flow-inspection-fixtures.js';
 
 describe('FlowDescribeService', (): void => {
   it('describes only the requested Flow when recursion is disabled', async (): Promise<void> => {
@@ -36,5 +36,33 @@ describe('FlowDescribeService', (): void => {
       flowName: 'Flow_B',
       path: ['Flow_A', 'Flow_B'],
     });
+  });
+});
+
+describe('FlowDescribeService subflow version selection', (): void => {
+  it('follows the active subflow version by default', async (): Promise<void> => {
+    const result = await new FlowDescribeService(versionedSubflowGateway(true)).describe(inspectionRequest());
+    expect(result.flows[1]?.versionNumber).to.equal(1);
+    expect(result.warnings).to.deep.equal([]);
+  });
+
+  it('can follow the latest subflow version explicitly', async (): Promise<void> => {
+    const result = await new FlowDescribeService(versionedSubflowGateway(true)).describe(
+      inspectionRequest({ subflowVersion: 'latest' })
+    );
+    expect(result.flows[1]?.versionNumber).to.equal(2);
+    expect(result.subflowVersion).to.equal('latest');
+  });
+
+  it('falls back to latest when no active subflow version exists', async (): Promise<void> => {
+    const result = await new FlowDescribeService(versionedSubflowGateway(false)).describe(inspectionRequest());
+    expect(result.flows[1]?.versionNumber).to.equal(2);
+    expect(result.warnings).to.deep.equal([
+      {
+        kind: 'subflow-version-fallback',
+        flowName: 'Flow_B',
+        path: ['Flow_A', 'Flow_B'],
+      },
+    ]);
   });
 });

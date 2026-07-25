@@ -245,7 +245,10 @@ describe('Flow inspection command NUTs', (): void => {
   });
 
   it('renders a Mermaid graph with requested variable annotations', (): void => {
-    const output = runFlowCommand<FlowGraphResult>('graph', '--api-name Plugin_Test_Flow --include-variables');
+    const output = runFlowCommand<FlowGraphResult>(
+      'graph',
+      '--api-name Plugin_Test_Flow --subflow-version latest --include-variables'
+    );
     expect(output.result.graph).to.include('flowchart TD');
     expect(output.result.graph).to.include('Assignment: Set Output');
     expect(output.result.graph).to.include('Variable: Result');

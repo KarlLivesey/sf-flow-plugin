@@ -4,7 +4,7 @@ Generate a Mermaid or DOT graph for a Salesforce Flow version.
 
 # description
 
-Render Flow elements and connectors as Mermaid or Graphviz DOT. Recursive traversal follows active subflow versions, preserves call edges and stops safely at call cycles or the configured depth.
+Render Flow elements and connectors as Mermaid or Graphviz DOT. Recursive traversal follows selected subflow versions, preserves call edges and stops safely at call cycles or the configured depth.
 
 # flags.api-name.summary
 
@@ -24,7 +24,11 @@ Graph output format: mermaid or dot.
 
 # flags.recursive.summary
 
-Recursively graph active versions of called subflows.
+Recursively graph called subflows.
+
+# flags.subflow-version.summary
+
+Subflow version to follow: active (falling back to latest) or latest.
 
 # flags.max-depth.summary
 
@@ -54,7 +58,7 @@ Salesforce API version to use for the Tooling API requests.
 
 - Recursively generate DOT with variables and formulas:
 
-  <%= config.bin %> <%= command.id %> --api-name Order_Processing --version active --recursive --format dot --include-variables --include-formulas
+  <%= config.bin %> <%= command.id %> --api-name Order_Processing --version active --recursive --subflow-version latest --format dot --include-variables --include-formulas
 
 # warnings.cycle
 
@@ -68,6 +72,10 @@ Stopped recursive expansion at the configured depth: %s
 
 Could not find referenced subflow: %s
 
-# warnings.inactive-subflow
+# warnings.subflow-version-fallback
 
-Referenced subflow has no active version: %s
+Referenced subflow has no active version; used latest: %s
+
+# warnings.missing-subflow-version
+
+Referenced subflow has no selectable version: %s

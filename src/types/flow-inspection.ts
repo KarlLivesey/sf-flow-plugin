@@ -9,8 +9,11 @@ import type { FlowComparisonVersionSelector } from './flow-analysis.js';
 
 export type FlowGraphFormat = 'mermaid' | 'dot';
 
+export type FlowSubflowVersionSelector = 'active' | 'latest';
+
 export interface FlowTraversalRequest extends NamedFlowRequest {
   version: FlowComparisonVersionSelector;
+  subflowVersion: FlowSubflowVersionSelector;
   recursive: boolean;
   maxDepth: number;
 }
@@ -86,7 +89,12 @@ export interface FlowDescription {
   connectors: FlowConnectorSummary[];
 }
 
-export type FlowTraversalWarningKind = 'cycle' | 'depth-limit' | 'missing-subflow' | 'inactive-subflow';
+export type FlowTraversalWarningKind =
+  | 'cycle'
+  | 'depth-limit'
+  | 'missing-subflow'
+  | 'subflow-version-fallback'
+  | 'missing-subflow-version';
 
 export interface FlowTraversalWarning {
   kind: FlowTraversalWarningKind;
@@ -99,6 +107,7 @@ export interface FlowDescribeResult {
   namespace: string | null;
   requestedVersion: FlowComparisonVersionSelector;
   resolvedVersion: FlowVersionNumber;
+  subflowVersion: FlowSubflowVersionSelector;
   recursive: boolean;
   maxDepth: number;
   flows: FlowDescription[];
