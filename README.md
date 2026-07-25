@@ -1,6 +1,6 @@
 # sf-flow-plugin
 
-`sf-flow-plugin` adds Salesforce CLI commands for inspecting, auditing, activating, deactivating and pruning Flow versions through the authenticated org's Tooling API. The commands do not require a Salesforce DX project.
+`sf-flow-plugin` adds Salesforce CLI commands for inspecting, comparing, auditing, activating, deactivating and pruning Flow versions through the authenticated org's Tooling API. It can also report indexed metadata dependencies. The commands do not require a Salesforce DX project.
 
 The package is implemented in strict TypeScript using the current Salesforce external-plugin template, `@salesforce/core`, `@salesforce/sf-plugins-core`, oclif, and Zod runtime validation.
 
@@ -40,13 +40,15 @@ If `--target-org` is omitted, the command uses the Salesforce CLI `target-org` c
 
 ## Commands
 
-| Command              | Purpose                                                         |
-| -------------------- | --------------------------------------------------------------- |
-| `sf flow activate`   | Activate and verify a selected Flow version.                    |
-| `sf flow versions`   | List every version and identify the active and latest versions. |
-| `sf flow deactivate` | Deactivate a Flow and verify the resulting state.               |
-| `sf flow audit`      | Report Flow definitions with version-state issues.              |
-| `sf flow prune`      | Safely plan or delete old inactive Flow versions.               |
+| Command                | Purpose                                                         |
+| ---------------------- | --------------------------------------------------------------- |
+| `sf flow activate`     | Activate and verify a selected Flow version.                    |
+| `sf flow versions`     | List every version and identify the active and latest versions. |
+| `sf flow compare`      | Compare the structure of two Flow versions.                     |
+| `sf flow dependencies` | Show indexed incoming and outgoing dependencies.                |
+| `sf flow deactivate`   | Deactivate a Flow and verify the resulting state.               |
+| `sf flow audit`        | Report Flow definitions with version-state issues.              |
+| `sf flow prune`        | Safely plan or delete old inactive Flow versions.               |
 
 ## `sf flow activate`
 
@@ -141,6 +143,52 @@ The command lists every Flow version with its status, creation date, last-modifi
 ```bash
 sf flow versions --target-org MySandbox --api-name Order_Processing
 ```
+
+## `sf flow compare`
+
+```bash
+sf flow compare \
+  --api-name Order_Processing \
+  [--target-org ORG] \
+  [--from active|latest|NUMBER] \
+  [--to active|latest|NUMBER] \
+  [--namespace NAMESPACE] \
+  [--api-version VERSION] \
+  [--json]
+```
+
+The default comparison is the active version against the latest version. Compare two explicit versions with:
+
+```bash
+sf flow compare \
+  --api-name Order_Processing \
+  --from 4 \
+  --to 7
+```
+
+The command retrieves each version's validated `Flow.Metadata` value and reports `added`, `removed` and `changed` paths. Named Flow elements are matched by name so array reordering does not produce false changes. Top-level lifecycle `status` is excluded because `sf flow versions` already reports version state.
+
+## `sf flow dependencies`
+
+```bash
+sf flow dependencies \
+  --api-name Order_Processing \
+  [--target-org ORG] \
+  [--direction uses|used-by|both] \
+  [--namespace NAMESPACE] \
+  [--api-version VERSION] \
+  [--json]
+```
+
+`--direction` defaults to `both`. Use `uses` for components referenced by the Flow and `used-by` for components that reference the Flow:
+
+```bash
+sf flow dependencies \
+  --api-name Order_Processing \
+  --direction used-by
+```
+
+This command reports Salesforce's `MetadataComponentDependency` index. Salesforce can omit unsupported dependency types, and the index represents component-level rather than historical version-specific relationships.
 
 ## `sf flow deactivate`
 
@@ -251,6 +299,8 @@ Only Draft, Obsolete and InvalidDraft versions are eligible for deletion. Other 
 | `FlowDeactivationFailed`             | Flow deactivation could not be completed.                                   |
 | `FlowDeactivationVerificationFailed` | Salesforce still reported an active version after deactivation.             |
 | `FlowAuditFailed`                    | The org-wide Flow audit could not be completed.                             |
+| `FlowDependenciesFailed`             | Indexed Flow dependencies could not be queried.                             |
+| `FlowComparisonFailed`               | The requested versions or their Flow metadata could not be compared.        |
 | `FlowPruneFailed`                    | Flow prune planning or deletion failed.                                     |
 | `FlowPruneVerificationFailed`        | Salesforce still returned a deleted version after pruning.                  |
 

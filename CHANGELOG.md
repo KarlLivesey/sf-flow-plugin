@@ -13,6 +13,8 @@ All notable user-visible changes to this project will be documented in this file
 - Added creation-date and last-modified-date retention ordering.
 - Added repeatable `--keep-version` retention within the keep quota.
 - Added repeatable, invocation-scoped `--ignore` protection outside the keep quota.
+- Added `sf flow dependencies` for indexed incoming and outgoing metadata dependencies.
+- Added `sf flow compare` for stable structural comparisons between Flow versions.
 
 ## 1.0.0 - 2026-07-25
 
