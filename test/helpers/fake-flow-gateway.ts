@@ -6,6 +6,7 @@
  */
 import { expect } from 'chai';
 
+import type { FlowDependency, FlowDependencyQueryDirection, JsonObject } from '../../src/types/flow-analysis.js';
 import type {
   FlowDefinition,
   FlowDefinitionGateway,
@@ -29,6 +30,8 @@ export interface FlowDefinitionFixture {
 export class FakeFlowGateway implements FlowDefinitionGateway {
   public readonly updates: ActiveVersionUpdate[] = [];
   public readonly deletes: string[] = [];
+  public readonly dependencies: FlowDependency[] = [];
+  public readonly metadata = new Map<string, JsonObject>();
   public persistUpdates = true;
   public persistDeletes = true;
   public queryError?: Error;
@@ -63,6 +66,23 @@ export class FakeFlowGateway implements FlowDefinitionGateway {
   public async findAllVersions(): Promise<ReadonlyArray<FlowVersion>> {
     this.throwQueryError();
     return this.versions;
+  }
+
+  public async findDependencies(
+    _definitionId: string,
+    direction: FlowDependencyQueryDirection
+  ): Promise<ReadonlyArray<FlowDependency>> {
+    this.throwQueryError();
+    return this.dependencies.filter((dependency) => dependency.direction === direction);
+  }
+
+  public async getVersionMetadata(versionId: string): Promise<JsonObject> {
+    this.throwQueryError();
+    const metadata = this.metadata.get(versionId);
+    if (metadata === undefined) {
+      throw new Error(`Missing fake metadata for version ${versionId}.`);
+    }
+    return metadata;
   }
 
   public async setActiveVersion(definitionId: string, versionNumber: FlowVersionNumber | null): Promise<void> {

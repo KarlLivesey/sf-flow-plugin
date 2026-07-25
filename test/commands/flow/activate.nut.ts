@@ -11,6 +11,7 @@ import type { JsonOutput } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
 import { z } from 'zod';
 
+import type { FlowCompareResult, FlowDependenciesResult } from '../../../src/types/flow-analysis.js';
 import type {
   FlowActivationResult,
   FlowAuditResult,
@@ -214,6 +215,22 @@ describe('Flow lifecycle command NUTs', (): void => {
     const output = runFlowCommand<FlowVersionsResult>('versions', '--api-name Plugin_Test_Flow');
     expect(output.result.versions.map((version) => version.versionNumber)).to.deep.equal([1, 2]);
     expect(output.result.versions.find((version) => version.active)?.versionNumber).to.equal(2);
+  });
+
+  it('compares two Flow versions structurally', (): void => {
+    const output = runFlowCommand<FlowCompareResult>('compare', '--api-name Plugin_Test_Flow --from 1 --to 2');
+    const valueChange = output.result.changes.find((change) => change.path.endsWith('.value.stringValue'));
+    expect(output.result).to.include({ fromVersion: 1, toVersion: 2, different: true });
+    expect(valueChange).to.include({ kind: 'changed', before: 'version-one', after: 'version-two' });
+  });
+
+  it('queries indexed Flow dependencies in both directions', (): void => {
+    const output = runFlowCommand<FlowDependenciesResult>(
+      'dependencies',
+      '--api-name Plugin_Test_Flow --direction both'
+    );
+    expect(output.result).to.include({ apiName: 'Plugin_Test_Flow', direction: 'both' });
+    expect(output.result.dependencies).to.be.an('array');
   });
 
   it('audits the fixture Flow', (): void => {

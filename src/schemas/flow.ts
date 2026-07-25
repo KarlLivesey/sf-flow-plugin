@@ -6,6 +6,11 @@
  */
 import { z } from 'zod';
 
+import type {
+  FlowDependencyDirection,
+  FlowMetadataRecord,
+  MetadataComponentDependencyRecord,
+} from '../types/flow-analysis.js';
 import type { FlowDefinitionRecord, FlowPruneOrder, FlowVersionRecord } from '../types/flow.js';
 
 const FLOW_API_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
@@ -33,6 +38,8 @@ export const nonnegativeIntegerSchema = z.number().int().nonnegative().safe();
 
 export const flowPruneOrderSchema: z.ZodType<FlowPruneOrder> = z.enum(['created', 'modified']);
 
+export const flowDependencyDirectionSchema: z.ZodType<FlowDependencyDirection> = z.enum(['uses', 'used-by', 'both']);
+
 export const toolingQueryResultSchema = z.object({
   done: z.boolean(),
   totalSize: z.number().int().nonnegative().safe(),
@@ -57,4 +64,22 @@ export const flowVersionRecordSchema: z.ZodType<FlowVersionRecord> = z.object({
   ProcessType: z.string().min(1),
   CreatedDate: salesforceDateTimeSchema,
   LastModifiedDate: salesforceDateTimeSchema,
+});
+
+export const flowMetadataRecordSchema: z.ZodType<FlowMetadataRecord> = z.object({
+  Id: salesforceIdSchema,
+  Metadata: z.record(z.string(), z.json()),
+});
+
+const dependencyTextSchema = z.string().min(1).nullable();
+
+export const metadataComponentDependencyRecordSchema: z.ZodType<MetadataComponentDependencyRecord> = z.object({
+  MetadataComponentId: dependencyTextSchema,
+  MetadataComponentName: dependencyTextSchema,
+  MetadataComponentNamespace: namespaceSchema.nullable(),
+  MetadataComponentType: dependencyTextSchema,
+  RefMetadataComponentId: dependencyTextSchema,
+  RefMetadataComponentName: dependencyTextSchema,
+  RefMetadataComponentNamespace: namespaceSchema.nullable(),
+  RefMetadataComponentType: dependencyTextSchema,
 });

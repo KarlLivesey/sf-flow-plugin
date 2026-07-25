@@ -125,6 +125,24 @@ export function flowAuditFailed(message: string, cause?: unknown): SfError {
   });
 }
 
+export function flowDependenciesFailed(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowDependenciesFailed',
+    message,
+    action: 'Confirm the org supports Tooling API metadata dependency queries and that your user has permission.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
+export function flowComparisonFailed(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowComparisonFailed',
+    message,
+    action: 'Check the requested Flow versions and confirm that your user can read Flow metadata.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
 export function flowPruneFailed(message: string, cause?: unknown): SfError {
   return createFlowError({
     code: 'FlowPruneFailed',

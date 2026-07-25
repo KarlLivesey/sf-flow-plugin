@@ -23,6 +23,8 @@ export type FlowErrorCode =
   | 'FlowDeactivationFailed'
   | 'FlowDeactivationVerificationFailed'
   | 'FlowAuditFailed'
+  | 'FlowDependenciesFailed'
+  | 'FlowComparisonFailed'
   | 'FlowPruneFailed'
   | 'FlowPruneVerificationFailed';
 

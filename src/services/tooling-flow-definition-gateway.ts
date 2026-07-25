@@ -10,10 +10,18 @@ import type { z } from 'zod';
 import { flowMutationFailed, flowQueryFailed } from '../errors/flow-errors.js';
 import {
   flowDefinitionRecordSchema,
+  flowMetadataRecordSchema,
   flowVersionRecordSchema,
+  metadataComponentDependencyRecordSchema,
   positiveFlowVersionSchema,
   toolingQueryResultSchema,
 } from '../schemas/flow.js';
+import type {
+  FlowDependency,
+  FlowDependencyQueryDirection,
+  JsonObject,
+  MetadataComponentDependencyRecord,
+} from '../types/flow-analysis.js';
 import type {
   FlowDefinition,
   FlowDefinitionGateway,
@@ -64,6 +72,39 @@ function parseVersion(value: unknown): FlowVersion {
   };
 }
 
+function parseMetadata(value: unknown, versionId: string): JsonObject {
+  const external = parseSalesforceValue(flowMetadataRecordSchema, value, 'Flow metadata record');
+  if (external.Id !== versionId) {
+    throw flowQueryFailed('Salesforce returned metadata for an unexpected Flow version.');
+  }
+  return external.Metadata;
+}
+
+function dependencyFields(
+  external: MetadataComponentDependencyRecord,
+  direction: FlowDependencyQueryDirection
+): Omit<FlowDependency, 'direction'> {
+  if (direction === 'uses') {
+    return {
+      componentId: external.RefMetadataComponentId,
+      name: external.RefMetadataComponentName,
+      namespace: external.RefMetadataComponentNamespace,
+      type: external.RefMetadataComponentType,
+    };
+  }
+  return {
+    componentId: external.MetadataComponentId,
+    name: external.MetadataComponentName,
+    namespace: external.MetadataComponentNamespace,
+    type: external.MetadataComponentType,
+  };
+}
+
+function parseDependency(value: unknown, direction: FlowDependencyQueryDirection): FlowDependency {
+  const external = parseSalesforceValue(metadataComponentDependencyRecordSchema, value, 'metadata dependency record');
+  return { direction, ...dependencyFields(external, direction) };
+}
+
 function buildDefinitionQuery(lookup: FlowDefinitionLookup): string {
   const fields = 'Id, DeveloperName, NamespacePrefix, ActiveVersionId, LatestVersionId';
   const namespaceClause = lookup.namespace === undefined ? '' : ` AND NamespacePrefix = '${lookup.namespace}'`;
@@ -81,6 +122,19 @@ function buildVersionQuery(definitionId: string): string {
 
 function buildAllVersionsQuery(): string {
   return 'SELECT Id, DefinitionId, VersionNumber, Status, MasterLabel, ProcessType, CreatedDate, LastModifiedDate FROM Flow ORDER BY DefinitionId ASC, VersionNumber ASC';
+}
+
+const DEPENDENCY_FIELDS =
+  'MetadataComponentId, MetadataComponentName, MetadataComponentNamespace, MetadataComponentType, ' +
+  'RefMetadataComponentId, RefMetadataComponentName, RefMetadataComponentNamespace, RefMetadataComponentType';
+
+function buildDependencyQuery(definitionId: string, direction: FlowDependencyQueryDirection): string {
+  const idField = direction === 'uses' ? 'MetadataComponentId' : 'RefMetadataComponentId';
+  return `SELECT ${DEPENDENCY_FIELDS} FROM MetadataComponentDependency WHERE ${idField} = '${definitionId}'`;
+}
+
+function buildMetadataQuery(versionId: string): string {
+  return `SELECT Id, Metadata FROM Flow WHERE Id = '${versionId}'`;
 }
 
 export class ToolingFlowDefinitionGateway implements FlowDefinitionGateway {
@@ -113,6 +167,24 @@ export class ToolingFlowDefinitionGateway implements FlowDefinitionGateway {
   public async findAllVersions(): Promise<ReadonlyArray<FlowVersion>> {
     const records = await this.queryAll(buildAllVersionsQuery());
     return records.map(parseVersion);
+  }
+
+  public async findDependencies(
+    definitionId: string,
+    direction: FlowDependencyQueryDirection
+  ): Promise<ReadonlyArray<FlowDependency>> {
+    validateSalesforceId(definitionId, 'Flow definition ID');
+    const records = await this.queryAll(buildDependencyQuery(definitionId, direction));
+    return records.map((record) => parseDependency(record, direction));
+  }
+
+  public async getVersionMetadata(versionId: string): Promise<JsonObject> {
+    validateSalesforceId(versionId, 'Flow version ID');
+    const records = await this.queryAll(buildMetadataQuery(versionId));
+    if (records.length !== 1) {
+      throw flowQueryFailed('Salesforce did not return exactly one Flow metadata record.');
+    }
+    return parseMetadata(records[0], versionId);
   }
 
   public async setActiveVersion(definitionId: string, versionNumber: FlowVersionNumber | null): Promise<void> {
