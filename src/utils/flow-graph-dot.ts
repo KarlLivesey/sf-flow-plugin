@@ -31,12 +31,6 @@ interface DotNodeOptions {
   text: string;
 }
 
-interface AnnotationNodeOptions {
-  id: string;
-  label: string;
-  root: string;
-}
-
 interface ElementNodeOptions {
   id: string;
   element: FlowElementSummary;
@@ -88,49 +82,45 @@ function elementNode(options: ElementNodeOptions): string {
   });
 }
 
-function annotationNode(options: AnnotationNodeOptions, theme: ResolvedFlowGraphTheme): string[] {
-  return [
-    dotNode({
-      id: options.id,
-      label: options.label,
-      shape: 'note',
-      colors: theme.resource,
-      text: theme.text,
-    }),
-    `    ${options.root} -> ${options.id} [style="dashed", label="defines"];`,
-  ];
-}
-
-function dotAnnotations(flow: RenderFlow, options: FlowGraphRenderOptions, theme: ResolvedFlowGraphTheme): string[] {
-  const root = flow.elementIds.get('start');
-  if (root === undefined) {
-    return [];
-  }
+function dotResources(flow: RenderFlow, options: FlowGraphRenderOptions, theme: ResolvedFlowGraphTheme): string[] {
   const variables = options.includeVariables
-    ? flow.description.variables.flatMap((variable, index) =>
-        annotationNode(
-          {
-            id: `f${flow.index}_v${index}`,
-            label: wrapGraphLabel(variableLabel(variable), options.labelWidth, '\n'),
-            root,
-          },
-          theme
-        )
+    ? flow.description.variables.map((variable, index) =>
+        dotNode({
+          id: `f${flow.index}_v${index}`,
+          label: wrapGraphLabel(variableLabel(variable), options.labelWidth, '\n'),
+          shape: 'note',
+          colors: theme.resource,
+          text: theme.text,
+        })
       )
     : [];
   const formulas = options.includeFormulas
-    ? flow.description.formulas.flatMap((formula, index) =>
-        annotationNode(
-          {
-            id: `f${flow.index}_x${index}`,
-            label: wrapGraphLabel(formulaLabel(formula), options.labelWidth, '\n'),
-            root,
-          },
-          theme
-        )
+    ? flow.description.formulas.map((formula, index) =>
+        dotNode({
+          id: `f${flow.index}_x${index}`,
+          label: wrapGraphLabel(formulaLabel(formula), options.labelWidth, '\n'),
+          shape: 'note',
+          colors: theme.resource,
+          text: theme.text,
+        })
       )
     : [];
-  return [...variables, ...formulas];
+  const resources = [...variables, ...formulas];
+  return resources.length === 0
+    ? []
+    : [
+        `    subgraph cluster_f${flow.index}_resources {`,
+        `      graph [${dotAttributes({
+          label: 'Resources',
+          style: 'rounded,filled',
+          fillcolor: theme.cluster.fill,
+          color: theme.cluster.stroke,
+          fontcolor: theme.text,
+          penwidth: 1,
+        })}];`,
+        ...resources.map((resource) => `  ${resource}`),
+        '    }',
+      ];
 }
 
 function connectorAttributes(
@@ -167,8 +157,9 @@ function dotConnectors(flow: RenderFlow, options: FlowGraphRenderOptions, theme:
 function dotCalls(flow: RenderFlow, flows: ReadonlyArray<RenderFlow>, theme: ResolvedFlowGraphTheme): string[] {
   return flow.description.subflows.flatMap((subflow) => {
     const source = flow.elementIds.get(subflow.name);
-    const target = calledFlow(flows, subflow)?.elementIds.get('start');
-    return source === undefined || target === undefined
+    const targetFlow = calledFlow(flows, subflow);
+    const target = targetFlow?.elementIds.get('start');
+    return source === undefined || target === undefined || targetFlow === undefined
       ? []
       : [
           `  ${source} -> ${target} [${dotAttributes({
@@ -177,6 +168,7 @@ function dotCalls(flow: RenderFlow, flows: ReadonlyArray<RenderFlow>, theme: Res
             color: theme.call,
             fontcolor: theme.call,
             penwidth: 2,
+            lhead: `cluster_f${targetFlow.index}`,
           })}];`,
         ];
   });
@@ -236,8 +228,8 @@ function flowBlock(flow: RenderFlow, options: FlowGraphRenderOptions, theme: Res
     `  subgraph cluster_f${flow.index} {`,
     `    graph [${cluster}];`,
     ...elements,
+    ...dotResources(flow, options, theme),
     ...dotConnectors(flow, options, theme),
-    ...dotAnnotations(flow, options, theme),
     '  }',
   ];
 }

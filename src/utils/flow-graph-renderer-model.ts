@@ -8,7 +8,11 @@ import type {
   FlowDescription,
   FlowElementSummary,
   FlowFormulaSummary,
+  FlowGraphCurve,
   FlowGraphDirection,
+  FlowGraphLayout,
+  FlowGraphResolvedLayout,
+  FlowGraphResolvedCurve,
   FlowGraphResolvedDirection,
   FlowGraphStyle,
   FlowSubflowSummary,
@@ -19,6 +23,8 @@ export interface FlowGraphRenderOptions {
   includeVariables: boolean;
   includeFormulas: boolean;
   direction: FlowGraphResolvedDirection;
+  layout: FlowGraphResolvedLayout;
+  curve: FlowGraphResolvedCurve;
   legend: boolean;
   labelWidth: number;
   style: FlowGraphStyle;
@@ -60,6 +66,67 @@ export function resolveGraphDirection(
     return direction;
   }
   return flows.length === 1 && flows[0] !== undefined && isShortLinearFlow(flows[0]) ? 'left-right' : 'top-down';
+}
+
+function hasRepeatedEndpoint(connectors: FlowDescription['connectors'], endpoint: 'source' | 'target'): boolean {
+  const seen = new Set<string>();
+  return connectors.some((connector) => {
+    const value = connector[endpoint];
+    if (seen.has(value)) {
+      return true;
+    }
+    seen.add(value);
+    return false;
+  });
+}
+
+function hasCycle(flow: FlowDescription): boolean {
+  const adjacency = new Map<string, string[]>();
+  for (const connector of flow.connectors) {
+    adjacency.set(connector.source, [...(adjacency.get(connector.source) ?? []), connector.target]);
+  }
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const visit = (node: string): boolean => {
+    if (visiting.has(node)) {
+      return true;
+    }
+    if (visited.has(node)) {
+      return false;
+    }
+    visiting.add(node);
+    if ((adjacency.get(node) ?? []).some((target) => visit(target))) {
+      return true;
+    }
+    visiting.delete(node);
+    visited.add(node);
+    return false;
+  };
+  return flow.elements.some((element) => visit(element.name));
+}
+
+function isComplexFlow(flow: FlowDescription): boolean {
+  return (
+    flow.elements.length > 12 ||
+    flow.connectors.length > 12 ||
+    hasRepeatedEndpoint(flow.connectors, 'source') ||
+    hasRepeatedEndpoint(flow.connectors, 'target') ||
+    hasCycle(flow)
+  );
+}
+
+export function resolveGraphLayout(
+  flows: ReadonlyArray<FlowDescription>,
+  layout: FlowGraphLayout
+): FlowGraphResolvedLayout {
+  if (layout !== 'auto') {
+    return layout;
+  }
+  return flows.length > 1 || flows.some((flow) => isComplexFlow(flow)) ? 'elk' : 'dagre';
+}
+
+export function resolveGraphCurve(curve: FlowGraphCurve, layout: FlowGraphResolvedLayout): FlowGraphResolvedCurve {
+  return curve === 'auto' ? (layout === 'elk' ? 'linear' : 'basis') : curve;
 }
 
 export function elementLabel(element: FlowElementSummary): string {

@@ -9,7 +9,11 @@ import { expect } from 'chai';
 import { FlowDescribeService } from '../../src/services/flow-describe-service.js';
 import type { FlowDescription, FlowGraphStyle } from '../../src/types/flow-inspection.js';
 import { renderFlowGraph } from '../../src/utils/flow-graph-renderer.js';
-import { resolveGraphDirection } from '../../src/utils/flow-graph-renderer-model.js';
+import {
+  resolveGraphCurve,
+  resolveGraphDirection,
+  resolveGraphLayout,
+} from '../../src/utils/flow-graph-renderer-model.js';
 import { inspectionRequest, nestedFlowGateway } from '../helpers/flow-inspection-fixtures.js';
 
 const defaultStyle = {
@@ -33,6 +37,8 @@ describe('renderFlowGraph defaults', (): void => {
       includeVariables: false,
       includeFormulas: false,
       direction: 'top-down',
+      layout: 'dagre',
+      curve: 'step',
       legend: false,
       labelWidth: 32,
       style: defaultStyle,
@@ -40,7 +46,7 @@ describe('renderFlowGraph defaults', (): void => {
     expect(graph).to.include('%%{init:');
     expect(graph).to.include('flowchart TD');
     expect(graph.match(/calls/g)).to.have.length(1);
-    expect(graph).to.include('f0_e1 -. "calls" .-> f1_e0');
+    expect(graph).to.include('f0_e1 -. "calls" .-> f1');
     expect(graph).to.include('classDef flowDecision');
     expect(graph).to.include('stroke:#B45309');
   });
@@ -51,6 +57,8 @@ describe('renderFlowGraph defaults', (): void => {
       includeVariables: false,
       includeFormulas: false,
       direction: 'top-down',
+      layout: 'dagre',
+      curve: 'step',
       legend: false,
       labelWidth: 32,
       style: defaultStyle,
@@ -59,16 +67,19 @@ describe('renderFlowGraph defaults', (): void => {
     expect(graph.match(/label="calls"/g)).to.have.length(1);
     expect(graph).to.include('style="rounded,filled"');
     expect(graph).to.include('fontname="Arial"');
+    expect(graph).to.include('lhead="cluster_f1"');
   });
 });
 
-describe('renderFlowGraph layout and annotations', (): void => {
+describe('renderFlowGraph resource annotations', (): void => {
   it('includes variable and formula nodes only when requested', async (): Promise<void> => {
     const described = await new FlowDescribeService(nestedFlowGateway()).describe(inspectionRequest());
     const graph = renderFlowGraph(described.flows, 'mermaid', {
       includeVariables: true,
       includeFormulas: true,
       direction: 'top-down',
+      layout: 'dagre',
+      curve: 'step',
       legend: false,
       labelWidth: 32,
       style: defaultStyle,
@@ -76,15 +87,45 @@ describe('renderFlowGraph layout and annotations', (): void => {
     expect(graph).to.include('Variable: InputValue');
     expect(graph).to.include('Formula: Greeting =');
     expect(graph).to.include('&quot;Hello&quot;');
-    expect(graph.match(/defines/g)).to.have.length(2);
+    expect(graph).to.include('subgraph f0_resources["Resources"]');
+    expect(graph).not.to.include('defines');
   });
+});
 
+describe('renderFlowGraph automatic layout', (): void => {
   it('selects layout based on Flow structure in automatic mode', async (): Promise<void> => {
     const recursive = await new FlowDescribeService(nestedFlowGateway()).describe(inspectionRequest());
     const single = await new FlowDescribeService(nestedFlowGateway()).describe(inspectionRequest({ recursive: false }));
-    expect(resolveGraphDirection(recursive.flows, 'auto')).to.equal('top-down');
-    expect(resolveGraphDirection(single.flows, 'auto')).to.equal('left-right');
-    expect(resolveGraphDirection(recursive.flows, 'left-right')).to.equal('left-right');
+    expect({
+      recursiveDirection: resolveGraphDirection(recursive.flows, 'auto'),
+      singleDirection: resolveGraphDirection(single.flows, 'auto'),
+      directionOverride: resolveGraphDirection(recursive.flows, 'left-right'),
+      recursiveLayout: resolveGraphLayout(recursive.flows, 'auto'),
+      singleLayout: resolveGraphLayout(single.flows, 'auto'),
+      layoutOverride: resolveGraphLayout(single.flows, 'elk'),
+      elkCurve: resolveGraphCurve('auto', 'elk'),
+      dagreCurve: resolveGraphCurve('auto', 'dagre'),
+      curveOverride: resolveGraphCurve('step', 'elk'),
+    }).to.deep.equal({
+      recursiveDirection: 'top-down',
+      singleDirection: 'left-right',
+      directionOverride: 'left-right',
+      recursiveLayout: 'elk',
+      singleLayout: 'dagre',
+      layoutOverride: 'elk',
+      elkCurve: 'linear',
+      dagreCurve: 'basis',
+      curveOverride: 'step',
+    });
+  });
+
+  it('uses ELK automatically for a cyclic Flow', async (): Promise<void> => {
+    const described = await new FlowDescribeService(nestedFlowGateway()).describe(
+      inspectionRequest({ recursive: false })
+    );
+    const flow = firstFlow(described.flows);
+    flow.connectors.push({ source: 'Call_Subflow', target: 'start', label: 'Next', kind: 'normal' });
+    expect(resolveGraphLayout(described.flows, 'auto')).to.equal('elk');
   });
 });
 
@@ -101,11 +142,13 @@ describe('renderFlowGraph semantic presentation', (): void => {
       includeVariables: false,
       includeFormulas: false,
       direction: 'left-right',
+      layout: 'elk',
+      curve: 'step-after',
       legend: true,
       labelWidth: 12,
       style: defaultStyle,
     });
-    expect(graph).to.include('flowchart LR');
+    expect(graph).to.include('flowchart LR').and.include('"layout":"elk"').and.include('"curve":"stepAfter"');
     expect(graph).to.include('subgraph flowLegend["Legend"]');
     expect(graph).to.include('Subflow:<br/>Call Flow_B');
     expect(graph).to.include('stroke:#FF0000');
@@ -120,6 +163,8 @@ describe('renderFlowGraph semantic presentation', (): void => {
       includeVariables: false,
       includeFormulas: false,
       direction: 'left-right',
+      layout: 'dagre',
+      curve: 'step',
       legend: true,
       labelWidth: 12,
       style: defaultStyle,
@@ -147,6 +192,8 @@ describe('renderFlowGraph overrides', (): void => {
       includeVariables: false,
       includeFormulas: false,
       direction: 'top-down',
+      layout: 'dagre',
+      curve: 'step',
       legend: false,
       labelWidth: 32,
       style,
@@ -155,6 +202,8 @@ describe('renderFlowGraph overrides', (): void => {
       includeVariables: false,
       includeFormulas: false,
       direction: 'top-down',
+      layout: 'dagre',
+      curve: 'step',
       legend: false,
       labelWidth: 32,
       style,

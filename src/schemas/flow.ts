@@ -15,7 +15,9 @@ import type {
 import type {
   FlowGraphColor,
   FlowGraphColorRole,
+  FlowGraphCurve,
   FlowGraphDirection,
+  FlowGraphLayout,
   FlowGraphStyle,
   FlowSubflowVersionSelector,
 } from '../types/flow-inspection.js';
@@ -53,6 +55,17 @@ export const flowDependencyDirectionSchema: z.ZodType<FlowDependencyDirection> =
 export const flowSubflowVersionSelectorSchema: z.ZodType<FlowSubflowVersionSelector> = z.enum(['active', 'latest']);
 
 export const flowGraphDirectionSchema: z.ZodType<FlowGraphDirection> = z.enum(['auto', 'left-right', 'top-down']);
+
+export const flowGraphLayoutSchema: z.ZodType<FlowGraphLayout> = z.enum(['auto', 'dagre', 'elk']);
+
+export const flowGraphCurveSchema: z.ZodType<FlowGraphCurve> = z.enum([
+  'auto',
+  'basis',
+  'linear',
+  'step',
+  'step-after',
+  'step-before',
+]);
 
 export const flowGraphLabelWidthSchema = z.number().int().min(12).max(80);
 

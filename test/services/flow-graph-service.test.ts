@@ -17,6 +17,8 @@ function graphRequest(): FlowGraphRequest {
     includeVariables: false,
     includeFormulas: false,
     direction: 'auto',
+    layout: 'auto',
+    curve: 'auto',
     legend: true,
     labelWidth: 24,
     style: {
@@ -30,10 +32,16 @@ function graphRequest(): FlowGraphRequest {
 describe('FlowGraphService', (): void => {
   it('resolves automatic layout and reports all rendering options', async (): Promise<void> => {
     const result = await new FlowGraphService(nestedFlowGateway()).graph(graphRequest());
-    expect(result.requestedDirection).to.equal('auto');
-    expect(result.resolvedDirection).to.equal('left-right');
-    expect(result.legend).to.equal(true);
-    expect(result.labelWidth).to.equal(24);
+    expect(result).to.deep.include({
+      requestedDirection: 'auto',
+      resolvedDirection: 'left-right',
+      requestedLayout: 'auto',
+      resolvedLayout: 'dagre',
+      requestedCurve: 'auto',
+      resolvedCurve: 'basis',
+      legend: true,
+      labelWidth: 24,
+    });
     expect(result.graph).to.include('flowchart LR');
     expect(result.graph).to.include('subgraph flowLegend["Legend"]');
   });

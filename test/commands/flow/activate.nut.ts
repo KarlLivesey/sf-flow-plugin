@@ -244,14 +244,16 @@ describe('Flow inspection command NUTs', (): void => {
     expect(flow?.elements.map((element) => element.name)).to.include('Set_Output');
   });
 
-  it('renders a Mermaid graph with requested variable annotations', (): void => {
+  it('renders a Mermaid graph with requested variable resources', (): void => {
     const output = runFlowCommand<FlowGraphResult>(
       'graph',
       '--api-name Plugin_Test_Flow --subflow-version latest --include-variables'
     );
-    expect(output.result.graph).to.include('flowchart TD');
+    const direction = output.result.resolvedDirection === 'left-right' ? 'LR' : 'TD';
+    expect(output.result.graph).to.include(`flowchart ${direction}`);
     expect(output.result.graph).to.include('Assignment: Set Output');
     expect(output.result.graph).to.include('Variable: Result');
+    expect(output.result.graph).to.include('Resources');
   });
 });
 

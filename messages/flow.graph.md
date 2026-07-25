@@ -36,15 +36,23 @@ Maximum subflow depth to expand during recursive traversal.
 
 # flags.include-variables.summary
 
-Include Flow variables as graph annotations.
+Include Flow variables in the Flow's Resources panel.
 
 # flags.include-formulas.summary
 
-Include Flow formulas as graph annotations.
+Include Flow formulas in the Flow's Resources panel.
 
 # flags.direction.summary
 
 Graph layout direction: auto, top-down, or left-right.
+
+# flags.layout.summary
+
+Mermaid layout engine: auto, dagre, or elk. Auto uses ELK for complex graphs.
+
+# flags.curve.summary
+
+Mermaid connector curve: auto, basis, linear, step, step-after, or step-before.
 
 # flags.legend.summary
 
@@ -91,6 +99,10 @@ Salesforce API version to use for the Tooling API requests.
 - Override semantic colours and typography:
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --colour decision=orange --color fault=crimson --direction left-right --legend --label-width 28 --font-family Arial --font-size 16
+
+- Use explicit routing for a dense Flow:
+
+  <%= config.bin %> <%= command.id %> --api-name Order_Processing --layout elk --curve step
 
 - Write DOT source to a file:
 

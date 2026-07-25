@@ -4,12 +4,7 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import type {
-  FlowConnectorSummary,
-  FlowDescription,
-  FlowElementSummary,
-  FlowGraphStyle,
-} from '../types/flow-inspection.js';
+import type { FlowConnectorSummary, FlowDescription, FlowElementSummary } from '../types/flow-inspection.js';
 import {
   calledFlow,
   createRenderFlows,
@@ -73,30 +68,23 @@ function mermaidNode(id: string, element: FlowElementSummary, labelWidth: number
   return `    ${id}${opening}${label}${closing}:::${mermaidClass(category)}`;
 }
 
-function mermaidAnnotations(flow: RenderFlow, options: FlowGraphRenderOptions): string[] {
-  const root = flow.elementIds.get('start');
-  if (root === undefined) {
-    return [];
-  }
+function mermaidResources(flow: RenderFlow, options: FlowGraphRenderOptions): string[] {
   const variables = options.includeVariables
     ? flow.description.variables.flatMap((variable, index) => {
         const id = `f${flow.index}_v${index}`;
-        return [
-          `    ${id}[/"${mermaidLabel(variableLabel(variable), options.labelWidth)}"/]:::flowResource`,
-          `    ${root} -. defines .-> ${id}`,
-        ];
+        return [`      ${id}[/"${mermaidLabel(variableLabel(variable), options.labelWidth)}"/]:::flowResource`];
       })
     : [];
   const formulas = options.includeFormulas
     ? flow.description.formulas.flatMap((formula, index) => {
         const id = `f${flow.index}_x${index}`;
-        return [
-          `    ${id}["${mermaidLabel(formulaLabel(formula), options.labelWidth)}"]:::flowResource`,
-          `    ${root} -. defines .-> ${id}`,
-        ];
+        return [`      ${id}["${mermaidLabel(formulaLabel(formula), options.labelWidth)}"]:::flowResource`];
       })
     : [];
-  return [...variables, ...formulas];
+  const resources = [...variables, ...formulas];
+  return resources.length === 0
+    ? []
+    : [`    subgraph f${flow.index}_resources["Resources"]`, '      direction TB', ...resources, '    end'];
 }
 
 function mermaidConnectors(flow: RenderFlow, labelWidth: number): MermaidConnector[] {
@@ -114,8 +102,8 @@ function mermaidConnectors(flow: RenderFlow, labelWidth: number): MermaidConnect
 function mermaidCalls(flow: RenderFlow, flows: ReadonlyArray<RenderFlow>): string[] {
   return flow.description.subflows.flatMap((subflow) => {
     const source = flow.elementIds.get(subflow.name);
-    const target = calledFlow(flows, subflow)?.elementIds.get('start');
-    return source === undefined || target === undefined ? [] : [`  ${source} -. "calls" .-> ${target}`];
+    const target = calledFlow(flows, subflow);
+    return source === undefined || target === undefined ? [] : [`  ${source} -. "calls" .-> f${target.index}`];
   });
 }
 
@@ -129,10 +117,29 @@ function classDefinition(
   },color:${text},stroke-width:1.5px;`;
 }
 
-function mermaidHeader(style: FlowGraphStyle, theme: ResolvedFlowGraphTheme): string {
+function mermaidCurve(curve: FlowGraphRenderOptions['curve']): string {
+  if (curve === 'step-after') {
+    return 'stepAfter';
+  }
+  if (curve === 'step-before') {
+    return 'stepBefore';
+  }
+  return curve;
+}
+
+function mermaidHeader(options: FlowGraphRenderOptions, theme: ResolvedFlowGraphTheme): string {
   return `%%{init: ${JSON.stringify({
+    layout: options.layout,
+    ...(options.layout === 'elk'
+      ? {
+          elk: {
+            mergeEdges: false,
+            nodePlacementStrategy: 'LINEAR_SEGMENTS',
+          },
+        }
+      : {}),
     flowchart: {
-      curve: 'basis',
+      curve: mermaidCurve(options.curve),
       htmlLabels: true,
       nodeSpacing: 35,
       padding: 15,
@@ -141,8 +148,8 @@ function mermaidHeader(style: FlowGraphStyle, theme: ResolvedFlowGraphTheme): st
     theme: 'base',
     themeVariables: {
       background: theme.background,
-      fontFamily: style.fontFamily,
-      fontSize: `${style.fontSize}px`,
+      fontFamily: options.style.fontFamily,
+      fontSize: `${options.style.fontSize}px`,
       lineColor: theme.connector,
       primaryTextColor: theme.text,
       textColor: theme.text,
@@ -152,7 +159,7 @@ function mermaidHeader(style: FlowGraphStyle, theme: ResolvedFlowGraphTheme): st
 
 function flowBlock(flow: RenderFlow, options: FlowGraphRenderOptions): MermaidFlowBlock {
   const connectors = mermaidConnectors(flow, options.labelWidth);
-  const annotations = mermaidAnnotations(flow, options);
+  const resources = mermaidResources(flow, options);
   const label = mermaidText(
     `${flow.description.qualifiedName} v${flow.description.versionNumber} · ${flow.description.status}`
   );
@@ -161,13 +168,13 @@ function flowBlock(flow: RenderFlow, options: FlowGraphRenderOptions): MermaidFl
   );
   return {
     connectorKinds: connectors.map((connector) => connector.kind),
-    edgeCount: connectors.length + annotations.length / 2,
+    edgeCount: connectors.length,
     lines: [
       `  subgraph f${flow.index}["${label}"]`,
       `    direction ${options.direction === 'left-right' ? 'LR' : 'TB'}`,
       ...elements,
+      ...resources,
       ...connectors.map((connector) => connector.line),
-      ...annotations,
       '  end',
     ],
   };
@@ -248,7 +255,7 @@ export function renderMermaid(flows: ReadonlyArray<FlowDescription>, options: Fl
   const bodyEdgeCount = blocks.reduce((total, block) => total + block.edgeCount, 0);
   const calls = renderFlows.flatMap((flow) => mermaidCalls(flow, renderFlows));
   const lines = [
-    mermaidHeader(options.style, theme),
+    mermaidHeader(options, theme),
     `flowchart ${options.direction === 'left-right' ? 'LR' : 'TD'}`,
     ...blocks.flatMap((block) => block.lines),
     ...calls,

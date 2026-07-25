@@ -14,6 +14,14 @@ export type FlowGraphDirection = 'auto' | 'left-right' | 'top-down';
 
 export type FlowGraphResolvedDirection = Exclude<FlowGraphDirection, 'auto'>;
 
+export type FlowGraphLayout = 'auto' | 'dagre' | 'elk';
+
+export type FlowGraphResolvedLayout = Exclude<FlowGraphLayout, 'auto'>;
+
+export type FlowGraphCurve = 'auto' | 'basis' | 'linear' | 'step' | 'step-after' | 'step-before';
+
+export type FlowGraphResolvedCurve = Exclude<FlowGraphCurve, 'auto'>;
+
 export type FlowGraphColorRole =
   | 'background'
   | 'cluster'
@@ -58,6 +66,8 @@ export interface FlowGraphRequest extends FlowTraversalRequest {
   includeVariables: boolean;
   includeFormulas: boolean;
   direction: FlowGraphDirection;
+  layout: FlowGraphLayout;
+  curve: FlowGraphCurve;
   legend: boolean;
   labelWidth: number;
   style: FlowGraphStyle;
@@ -158,6 +168,10 @@ export interface FlowGraphResult extends FlowDescribeResult {
   includeFormulas: boolean;
   requestedDirection: FlowGraphDirection;
   resolvedDirection: FlowGraphResolvedDirection;
+  requestedLayout: FlowGraphLayout;
+  resolvedLayout: FlowGraphResolvedLayout;
+  requestedCurve: FlowGraphCurve;
+  resolvedCurve: FlowGraphResolvedCurve;
   legend: boolean;
   labelWidth: number;
   style: FlowGraphStyle;

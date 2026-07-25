@@ -254,6 +254,8 @@ sf flow graph \
   [--include-variables] \
   [--include-formulas] \
   [--direction auto|top-down|left-right] \
+  [--layout auto|dagre|elk] \
+  [--curve auto|basis|linear|step|step-after|step-before] \
   [--legend] \
   [--label-width NUMBER] \
   [--color ROLE=COLOUR ...] \
@@ -285,9 +287,11 @@ sf flow graph \
 
 Recursive graphs use the same subflow-version selection, fallback, visited-definition and depth rules as `sf flow describe`.
 
-Both formats place each Flow in a labelled container and use distinct shapes for starts, decisions, subflows, records, screens, loops, waits and actions. Decision outcomes are green, default paths are dashed amber and fault paths are dashed red. Use `--legend` to include these conventions in the diagram.
+Both formats place each Flow in a labelled container and use distinct shapes for starts, decisions, subflows, records, screens, loops, waits and actions. Variables and formulas are grouped in a compact Resources panel inside their owning Flow instead of being represented as execution connectors. Recursive call edges terminate at the called Flow container. Decision outcomes are green, default paths are dashed amber and fault paths are dashed red. Use `--legend` to include these conventions in the diagram.
 
 `--direction` accepts `auto`, `top-down` or `left-right` and defaults to `auto`. Automatic layout uses left-to-right for a short linear Flow and top-down for branched or recursive diagrams. Long labels wrap at approximately 32 characters; override that with `--label-width`.
+
+`--layout` accepts `auto`, `dagre` or `elk` and defaults to `auto`. Automatic selection uses Dagre for a small linear Flow and ELK for recursive, branched, merged, cyclic or larger Flows. `--curve` also defaults to `auto`, using smooth `basis` curves for simple Dagre graphs and `linear` segments that preserve ELK routing for complex graphs. Override either option only when a particular renderer or routing style works better for your diagram.
 
 Mermaid and DOT output use the same semantic theme. Override a role with repeatable `--color` or `--colour` flags; both spellings are equivalent. Values can be a supported named colour, `#RGB` or `#RRGGBB`:
 
@@ -298,6 +302,8 @@ sf flow graph \
   --color subflow=#7c3aed \
   --color fault=crimson \
   --direction left-right \
+  --layout elk \
+  --curve step \
   --legend \
   --label-width 28 \
   --font-family "Fira Code" \

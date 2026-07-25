@@ -11,7 +11,11 @@ import { join } from 'node:path';
 import type { Connection } from '@salesforce/core';
 import { expect } from 'chai';
 
-import FlowGraph, { parseGraphColorOverrides, writeGraphOutput } from '../../../src/commands/flow/graph.js';
+import FlowGraph, {
+  type GraphFlagValues,
+  parseGraphColorOverrides,
+  writeGraphOutput,
+} from '../../../src/commands/flow/graph.js';
 import { FlowGraphService } from '../../../src/services/flow-graph-service.js';
 import type { FlowGraphResult } from '../../../src/types/flow-inspection.js';
 import { createCommandOrg } from '../../helpers/command-org.js';
@@ -33,6 +37,10 @@ const result: FlowGraphResult = {
   includeFormulas: true,
   requestedDirection: 'left-right',
   resolvedDirection: 'left-right',
+  requestedLayout: 'elk',
+  resolvedLayout: 'elk',
+  requestedCurve: 'step-after',
+  resolvedCurve: 'step-after',
   legend: true,
   labelWidth: 36,
   style: {
@@ -43,6 +51,31 @@ const result: FlowGraphResult = {
   graph: 'digraph Flow {}',
 };
 
+function graphFlags(): GraphFlagValues {
+  return {
+    'api-name': 'Order_Processing',
+    'target-org': createCommandOrg({} as Connection),
+    version: 3,
+    'subflow-version': 'latest',
+    format: 'dot',
+    recursive: true,
+    'max-depth': 4,
+    'include-variables': true,
+    'include-formulas': true,
+    direction: 'left-right',
+    layout: 'elk',
+    curve: 'step-after',
+    legend: true,
+    'label-width': 36,
+    color: ['decision=orange'],
+    'font-family': 'Inter',
+    'font-size': 16,
+    'output-file': undefined,
+    namespace: undefined,
+    'api-version': undefined,
+  };
+}
+
 describe('flow graph flags', (): void => {
   it('defaults to Mermaid without resource annotations or recursion', (): void => {
     expect(FlowGraph.flags.format.default).to.equal('mermaid');
@@ -51,6 +84,8 @@ describe('flow graph flags', (): void => {
     expect(FlowGraph.flags['include-variables'].default).to.equal(false);
     expect(FlowGraph.flags['include-formulas'].default).to.equal(false);
     expect(FlowGraph.flags.direction.default).to.equal('auto');
+    expect(FlowGraph.flags.layout.default).to.equal('auto');
+    expect(FlowGraph.flags.curve.default).to.equal('auto');
     expect(FlowGraph.flags.legend.default).to.equal(false);
     expect(FlowGraph.flags['label-width'].default).to.equal(32);
   });
@@ -82,26 +117,7 @@ describe('flow graph flags', (): void => {
 
 describe('flow graph command execution', (): void => {
   it('passes graph and recursive traversal options to the service', async (): Promise<void> => {
-    const flags = {
-      'api-name': 'Order_Processing',
-      'target-org': createCommandOrg({} as Connection),
-      version: 3 as const,
-      'subflow-version': 'latest' as const,
-      format: 'dot' as const,
-      recursive: true,
-      'max-depth': 4,
-      'include-variables': true,
-      'include-formulas': true,
-      direction: 'left-right' as const,
-      legend: true,
-      'label-width': 36,
-      color: ['decision=orange'],
-      'font-family': 'Inter',
-      'font-size': 16,
-      'output-file': undefined,
-      namespace: undefined,
-      'api-version': undefined,
-    };
+    const flags = graphFlags();
     $$.SANDBOX.stub(FlowGraph.prototype, 'parseFlags').resolves(flags);
     const graph = $$.SANDBOX.stub(FlowGraphService.prototype, 'graph').resolves(result);
     const actual = await FlowGraph.run(['--json']);
@@ -116,6 +132,8 @@ describe('flow graph command execution', (): void => {
       includeVariables: true,
       includeFormulas: true,
       direction: 'left-right',
+      layout: 'elk',
+      curve: 'step-after',
       legend: true,
       labelWidth: 36,
       style: {

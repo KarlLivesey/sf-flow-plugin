@@ -17,8 +17,10 @@ import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-defini
 import type { FlowComparisonVersionSelector } from '../../types/flow-analysis.js';
 import type {
   FlowGraphColorOverrides,
+  FlowGraphCurve,
   FlowGraphDirection,
   FlowGraphFormat,
+  FlowGraphLayout,
   FlowGraphRequest,
   FlowGraphResult,
   FlowSubflowVersionSelector,
@@ -41,6 +43,8 @@ export interface GraphFlagValues {
   'include-variables': boolean;
   'include-formulas': boolean;
   direction: FlowGraphDirection;
+  layout: FlowGraphLayout;
+  curve: FlowGraphCurve;
   legend: boolean;
   'label-width': number;
   color: string[];
@@ -93,6 +97,8 @@ function createRequest(flags: GraphFlagValues, context: ReturnType<typeof create
     includeVariables: flags['include-variables'],
     includeFormulas: flags['include-formulas'],
     direction: flags.direction,
+    layout: flags.layout,
+    curve: flags.curve,
     legend: flags.legend,
     labelWidth: flags['label-width'],
     style: {
@@ -163,6 +169,18 @@ export default class FlowGraph extends SfCommand<FlowGraphResult> {
       options: ['auto', 'left-right', 'top-down'],
       summary: messages.getMessage('flags.direction.summary'),
       parse: (input: string): Promise<FlowGraphDirection> => Promise.resolve(input as FlowGraphDirection),
+    })(),
+    layout: Flags.custom<FlowGraphLayout>({
+      default: 'auto',
+      options: ['auto', 'dagre', 'elk'],
+      summary: messages.getMessage('flags.layout.summary'),
+      parse: (input: string): Promise<FlowGraphLayout> => Promise.resolve(input as FlowGraphLayout),
+    })(),
+    curve: Flags.custom<FlowGraphCurve>({
+      default: 'auto',
+      options: ['auto', 'basis', 'linear', 'step', 'step-after', 'step-before'],
+      summary: messages.getMessage('flags.curve.summary'),
+      parse: (input: string): Promise<FlowGraphCurve> => Promise.resolve(input as FlowGraphCurve),
     })(),
     legend: Flags.boolean({
       default: false,
