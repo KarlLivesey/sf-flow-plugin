@@ -2,13 +2,16 @@
 
 ## Supported versions
 
-Security fixes are provided for the latest released version. This repository is currently unreleased.
+Security fixes are provided for the latest version published to [npm](https://www.npmjs.com/package/sf-flow-plugin).
+Users should upgrade to the latest release before reporting an issue that may already have been fixed.
 
 ## Reporting a vulnerability
 
 Do not open a public issue containing vulnerability details, access tokens, session IDs, authorisation headers, org usernames, or unfiltered Salesforce responses.
 
-After the remote repository is created, use its private security-advisory reporting route. Before then, contact the maintainer, `klivesey`, through an agreed private channel. Include a concise reproduction and impact assessment, but redact all Salesforce authentication material.
+Report vulnerabilities through [GitHub private vulnerability reporting](https://github.com/KarlLivesey/sf-flow-plugin/security/advisories/new). Include a concise reproduction and impact assessment, but redact all Salesforce authentication material.
+
+If private vulnerability reporting is unavailable, open a public issue requesting a private contact channel without including any vulnerability or Salesforce org details.
 
 ## Salesforce authentication
 
