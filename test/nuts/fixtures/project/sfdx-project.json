@@ -1,0 +1,14 @@
+{
+  "packageDirectories": [
+    {
+      "path": "v1",
+      "default": true
+    },
+    {
+      "path": "v2",
+      "default": false
+    }
+  ],
+  "namespace": "",
+  "sourceApiVersion": "65.0"
+}
