@@ -238,8 +238,8 @@ export class FlowPruneService {
     }
     await withFlowProgressStage(progress, {
       stage: 'checking-current-state',
-      detail: `${name} (checking active and latest guards)`,
-      operation: async () => this.assertCurrentVersions(request),
+      detail: `${name} (checking deletion eligibility)`,
+      operation: async () => this.assertCurrentVersions(request, plan),
     });
     await deletePrunedVersions(this.gateway, plan, progress);
     await withFlowProgressStage(progress, {
@@ -250,16 +250,17 @@ export class FlowPruneService {
     return plan.plannedDeletions;
   }
 
-  private async assertCurrentVersions(request: FlowPruneRequest): Promise<void> {
-    if (request.expectedActiveVersion === undefined && request.expectedLatestVersion === undefined) {
-      return;
-    }
+  private async assertCurrentVersions(request: FlowPruneRequest, plan: PrunePlan): Promise<void> {
     const definition = selectFlowDefinition(request.apiName, await this.gateway.findDefinitions(createLookup(request)));
     const versions = await this.gateway.findVersions(definition.id);
-    const activeVersion = resolveVersionNumber(definition.apiName, definition.activeVersionId, versions);
-    assertExpectedActiveVersion(request.apiName, request.expectedActiveVersion, activeVersion);
-    const latestVersion = resolveVersionNumber(definition.apiName, definition.latestVersionId, versions);
-    assertExpectedLatestVersion(request.apiName, request.expectedLatestVersion, latestVersion);
+    const currentPlan = createPlan(definition, versions, { request, now: this.now() });
+    const currentDeletionIds = new Set(currentPlan.plannedDeletions.map((version) => version.id));
+    const ineligible = plan.plannedDeletions.find((version) => !currentDeletionIds.has(version.id));
+    if (ineligible !== undefined) {
+      throw flowPruneFailed(
+        `Refusing to delete Flow "${request.apiName}" version ${ineligible.versionNumber} because it is no longer eligible.`
+      );
+    }
   }
 
   private async plan(request: FlowPruneRequest, progress: FlowProgressReporter): Promise<PrunePlan> {
