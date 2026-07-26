@@ -241,7 +241,28 @@ describe('DataCloudFlowMetricsGateway compatibility', (): void => {
     expect(result.averageDurationMilliseconds).to.equal(null);
     expect(connection.sqlQueries[0]).to.contain('FROM ssot__Flow__dlm');
   });
+});
 
+describe('DataCloudFlowMetricsGateway error aliases', (): void => {
+  it('preserves a valid numeric status when an ordinary Error has a generic name', async (): Promise<void> => {
+    const connection = new DataCloudConnectionDouble([
+      Object.assign(new Error('Not found'), { statusCode: 404 }),
+      {},
+      {},
+      {},
+      {},
+      {},
+      page([legacyFlowRecord()]),
+      page([legacyVersionRecord()]),
+      page([{ ['ssot__FlowRunStatus__c']: 'Complete', ['ssot__ErrorReason__c']: null, executions: '1' }]),
+    ]);
+    const result = await new DataCloudFlowMetricsGateway(connection.asConnection()).getMetrics(metricsRequest());
+    expect(result.executions).to.equal(1);
+    expect(connection.sqlQueries[0]).to.contain('FROM ssot__Flow__dlm');
+  });
+});
+
+describe('DataCloudFlowMetricsGateway capability failures', (): void => {
   it('does not treat permission failures as unavailable DMOs', async (): Promise<void> => {
     const connection = new DataCloudConnectionDouble([Object.assign(new Error('Forbidden'), { statusCode: 403 })]);
     await expectError(

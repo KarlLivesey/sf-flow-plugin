@@ -18,6 +18,12 @@ import { analyseFlowMetrics, totalFlowMetrics } from '../utils/flow-metrics-anal
 import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
 import { FlowDescribeService } from './flow-describe-service.js';
 
+interface ResolvedRuntimeFlow {
+  apiName: string;
+  namespace: string | null;
+  version: number;
+}
+
 function describeRequest(request: FlowMetricsRequest): FlowDescribeRequest {
   return {
     ...request,
@@ -43,7 +49,15 @@ export class FlowMetricsService {
           return analyseFlowMetrics(await this.gateway.getVersionMetadata(flow.versionId), flow);
         })
       );
-      const dataCloud = await this.loadDataCloudMetrics(request, described.resolvedVersion, progress);
+      const dataCloud = await this.loadDataCloudMetrics(
+        request,
+        {
+          apiName: described.apiName,
+          namespace: described.namespace,
+          version: described.resolvedVersion,
+        },
+        progress
+      );
       progress('analysing-results', `${described.apiName} (${flows.length} Flow versions)`);
       return {
         apiName: described.apiName,
@@ -70,7 +84,7 @@ export class FlowMetricsService {
 
   private async loadDataCloudMetrics(
     request: FlowMetricsRequest,
-    version: number,
+    resolved: ResolvedRuntimeFlow,
     progress: FlowProgressReporter
   ): Promise<FlowRuntimeMetrics | null> {
     if (!request.dataCloud) {
@@ -79,11 +93,14 @@ export class FlowMetricsService {
     if (this.runtimeGateway === undefined) {
       throw flowMetricsFailed('Data Cloud metrics were requested without a Data Cloud query gateway.');
     }
-    progress('loading-data-cloud-metrics', `${request.apiName} v${version} (last ${request.dataCloudDays} days)`);
+    progress(
+      'loading-data-cloud-metrics',
+      `${resolved.apiName} v${resolved.version} (last ${request.dataCloudDays} days)`
+    );
     return this.runtimeGateway.getMetrics({
-      apiName: request.apiName,
-      namespace: request.namespace ?? null,
-      version,
+      apiName: resolved.apiName,
+      namespace: resolved.namespace,
+      version: resolved.version,
       windowDays: request.dataCloudDays,
     });
   }
