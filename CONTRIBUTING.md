@@ -52,9 +52,11 @@ and are not stored in this repository.
 
 ## Releases
 
-Stable and prerelease npm publications are driven by version tags through `.github/workflows/release.yml`. The workflow
-verifies that the tag is exactly `v<package version>`, runs the full quality gate, publishes through npm trusted
-publishing, and creates the corresponding GitHub release only after npm accepts the package.
+Stable and prerelease npm publications are driven by pull requests merged into the protected `main` branch. The
+`.github/workflows/release.yml` workflow checks whether the version in `package.json` already exists on npm. An
+existing version is skipped. For a new version, the workflow runs the full quality gate, creates the matching
+`v<package version>` tag, publishes through npm trusted publishing, and creates the corresponding GitHub release only
+after npm accepts the package.
 
 Bootstrap trusted publishing after the package's initial publication:
 
@@ -63,15 +65,16 @@ Bootstrap trusted publishing after the package's initial publication:
 2. Require two-factor authentication and disallow traditional publish tokens in the package's npm publishing-access
    settings.
 
-Create a release by updating the package version and pushing its generated tag:
+Prepare a release on a branch by updating the package version without creating a local tag:
 
 ```bash
-npm version patch
-git push --follow-tags
+npm version patch --no-git-tag-version
 ```
 
-Use `minor`, `major`, or an explicit semantic version instead of `patch` when appropriate. Semantic prerelease
-versions publish under their prerelease identifier rather than the `latest` npm dist-tag.
+Update `CHANGELOG.md`, commit the version and release notes, and open a pull request targeting `main`. Merging that
+pull request triggers publication; do not create or push the release tag manually. Use `minor`, `major`, or an explicit
+semantic version instead of `patch` when appropriate. Semantic prerelease versions publish under their prerelease
+identifier rather than the `latest` npm dist-tag.
 
 ## Adding a command
 

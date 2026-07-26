@@ -1,9 +1,15 @@
 name: release
 
 on:
-  push:
-    tags:
-      - 'v*'
+  pull_request_target:
+    branches:
+      - main
+    types:
+      - closed
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -12,10 +18,14 @@ permissions:
 jobs:
   publish:
     name: npm and GitHub
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
-      - name: Check out the release tag
+      - name: Check out the merged commit
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
 
       - name: Use Node.js 24
         uses: actions/setup-node@v6
@@ -24,43 +34,118 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
-      - name: Install pinned release tools
-        run: npm install --global npm@11.17.0 yarn@1.22.22
-
-      - name: Install exact dependencies
-        run: yarn install --frozen-lockfile
-
-      - name: Validate tag and select npm dist-tag
+      - name: Resolve release metadata
         id: release
         shell: bash
         run: |
           node <<'NODE'
           const { appendFileSync } = require('node:fs');
-          const { version } = require('./package.json');
-          const expectedTag = `v${version}`;
-          if (process.env.GITHUB_REF_NAME !== expectedTag) {
-            throw new Error(`Expected release tag ${expectedTag}; received ${process.env.GITHUB_REF_NAME}.`);
-          }
+          const { name, version } = require('./package.json');
+          const releaseTag = `v${version}`;
           const prerelease = version.match(/-([0-9A-Za-z-]+)/u);
           const distTag = prerelease?.[1] ?? 'latest';
+          appendFileSync(process.env.GITHUB_OUTPUT, `package-name=${name}\n`);
+          appendFileSync(process.env.GITHUB_OUTPUT, `package-version=${version}\n`);
+          appendFileSync(process.env.GITHUB_OUTPUT, `release-tag=${releaseTag}\n`);
           appendFileSync(process.env.GITHUB_OUTPUT, `dist-tag=${distTag}\n`);
           appendFileSync(process.env.GITHUB_OUTPUT, `prerelease=${String(prerelease !== null)}\n`);
           NODE
 
+      - name: Check whether the version is already published
+        id: publication
+        shell: bash
+        env:
+          PACKAGE_NAME: ${{ steps.release.outputs.package-name }}
+          PACKAGE_VERSION: ${{ steps.release.outputs.package-version }}
+        run: |
+          set +e
+          npm_view_output="$(
+            npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version --json --registry=https://registry.npmjs.org 2>&1
+          )"
+          npm_view_exit=$?
+          set -e
+
+          if [ "$npm_view_exit" -eq 0 ]; then
+            echo "Version ${PACKAGE_VERSION} is already published; no release is required."
+            echo "publish-needed=false" >> "$GITHUB_OUTPUT"
+          elif printf '%s' "$npm_view_output" | grep -q 'E404'; then
+            echo "Version ${PACKAGE_VERSION} is not published and will be released."
+            echo "publish-needed=true" >> "$GITHUB_OUTPUT"
+          else
+            printf '%s\n' "$npm_view_output" >&2
+            exit "$npm_view_exit"
+          fi
+
+      - name: Inspect the release tag
+        id: tag
+        env:
+          PUBLISH_NEEDED: ${{ steps.publication.outputs.publish-needed }}
+          RELEASE_TAG: ${{ steps.release.outputs.release-tag }}
+        shell: bash
+        run: |
+          if git rev-parse --verify --quiet "refs/tags/${RELEASE_TAG}" >/dev/null; then
+            current_commit="$(git rev-parse HEAD)"
+            tagged_commit="$(git rev-list -n 1 "$RELEASE_TAG")"
+            if [ "$tagged_commit" = "$current_commit" ]; then
+              echo "Release tag ${RELEASE_TAG} already points to this commit."
+              echo "tag-current=true" >> "$GITHUB_OUTPUT"
+            elif [ "$PUBLISH_NEEDED" = "true" ]; then
+              echo "Release tag ${RELEASE_TAG} points to ${tagged_commit}, not ${current_commit}." >&2
+              exit 1
+            else
+              echo "Release tag ${RELEASE_TAG} belongs to an earlier published commit."
+              echo "tag-current=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "Release tag ${RELEASE_TAG} does not exist."
+            echo "tag-current=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install pinned release tools
+        if: steps.publication.outputs.publish-needed == 'true'
+        run: npm install --global npm@11.17.0 yarn@1.22.22
+
+      - name: Install exact dependencies
+        if: steps.publication.outputs.publish-needed == 'true'
+        run: yarn install --frozen-lockfile
+
       - name: Run the full quality gate
+        if: steps.publication.outputs.publish-needed == 'true'
         run: yarn run check
 
+      - name: Create the release tag
+        if: steps.publication.outputs.publish-needed == 'true'
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.release-tag }}
+        shell: bash
+        run: |
+          if [ "${{ steps.tag.outputs.tag-current }}" = "true" ]; then
+            echo "Release tag ${RELEASE_TAG} already points to this commit."
+          else
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git tag --annotate "$RELEASE_TAG" --message "$RELEASE_TAG"
+            git push origin "$RELEASE_TAG"
+          fi
+
       - name: Publish to npm
+        if: steps.publication.outputs.publish-needed == 'true'
         run: npm publish --access public --tag "${{ steps.release.outputs.dist-tag }}"
 
       - name: Create stable GitHub release
-        if: steps.release.outputs.prerelease == 'false'
+        if: (steps.publication.outputs.publish-needed == 'true' || steps.tag.outputs.tag-current == 'true') && steps.release.outputs.prerelease == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --generate-notes --title "$GITHUB_REF_NAME" --verify-tag
+          RELEASE_TAG: ${{ steps.release.outputs.release-tag }}
+        run: |
+          gh release view "$RELEASE_TAG" >/dev/null 2>&1 ||
+            gh release create "$RELEASE_TAG" --generate-notes --title "$RELEASE_TAG" --verify-tag
 
       - name: Create prerelease on GitHub
-        if: steps.release.outputs.prerelease == 'true'
+        if: (steps.publication.outputs.publish-needed == 'true' || steps.tag.outputs.tag-current == 'true') && steps.release.outputs.prerelease == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --generate-notes --prerelease --title "$GITHUB_REF_NAME" --verify-tag
+          RELEASE_TAG: ${{ steps.release.outputs.release-tag }}
+        run: |
+          gh release view "$RELEASE_TAG" >/dev/null 2>&1 ||
+            gh release create "$RELEASE_TAG" --generate-notes --prerelease --title "$RELEASE_TAG" --verify-tag
