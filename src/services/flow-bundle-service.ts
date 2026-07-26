@@ -26,6 +26,13 @@ interface BundleContext {
   progress: FlowProgressReporter;
 }
 
+interface BundleReportContext {
+  request: FlowBundleRequest;
+  described: Pick<FlowDescription, 'apiName' | 'namespace'>;
+  versions: ReadonlyArray<FlowBundleVersion>;
+  dependencies: Awaited<ReturnType<FlowDependenciesService['getDependencies']>>;
+}
+
 function describeRequest(request: FlowBundleRequest): FlowDescribeRequest {
   return {
     ...request,
@@ -89,16 +96,13 @@ async function exportFlows(
   };
 }
 
-function reportFiles(
-  request: FlowBundleRequest,
-  versions: ReadonlyArray<FlowBundleVersion>,
-  dependencies: Awaited<ReturnType<FlowDependenciesService['getDependencies']>>
-): FlowBundleFile[] {
+function reportFiles(context: BundleReportContext): FlowBundleFile[] {
+  const { request, described, versions, dependencies } = context;
   const directory = join(request.outputDir, '.sf-flow-bundle');
   const external = externalDependencies(dependencies.dependencies);
   const manifest = {
     apiName: request.apiName,
-    rootFlow: qualifiedFlowName(request.apiName, request.namespace ?? null),
+    rootFlow: qualifiedFlowName(described.apiName, described.namespace),
     requestedVersion: request.version,
     subflowVersion: request.subflowVersion,
     status: request.status,
@@ -124,7 +128,7 @@ async function createBundle(context: BundleContext): Promise<FlowBundleArtifact>
     throw flowBundleFailed("A dependency query reached Salesforce's 2,000-record cap.");
   }
   const exported = await exportFlows(context, described.flows);
-  const files = [...exported.files, ...reportFiles(request, exported.versions, dependencies)];
+  const files = [...exported.files, ...reportFiles({ request, described, versions: exported.versions, dependencies })];
   return {
     files,
     result: {
