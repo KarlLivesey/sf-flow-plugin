@@ -96,6 +96,22 @@ describe('FlowPruneService planning', (): void => {
   });
 });
 
+describe('FlowPruneService age protection', (): void => {
+  it('protects recent versions without reducing the keep count', async (): Promise<void> => {
+    const items = versions().map((version) => ({
+      ...version,
+      createdDate:
+        version.versionNumber === 3 ? '2026-07-20T00:00:00.000Z' : `2026-0${version.versionNumber}-01T00:00:00.000Z`,
+    }));
+    const result = await new FlowPruneService(gateway(items), () => new Date('2026-07-26T00:00:00.000Z')).prune(
+      request({ keep: 1, olderThanDays: 30 })
+    );
+    expect(result.recentVersions.map((version) => version.versionNumber)).to.deep.equal([3]);
+    expect(result.retainedVersions.map((version) => version.versionNumber)).to.deep.equal([2]);
+    expect(result.plannedDeletions.map((version) => version.versionNumber)).to.deep.equal([1]);
+  });
+});
+
 describe('FlowPruneService deletion', (): void => {
   it('deletes and verifies every planned version', async (): Promise<void> => {
     const fake = gateway();

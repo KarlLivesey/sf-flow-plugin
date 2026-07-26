@@ -34,6 +34,8 @@ describe('flow versions command', (): void => {
     const flags = {
       'api-name': 'Order_Processing',
       'target-org': createCommandOrg({} as Connection),
+      status: ['Draft' as const, 'InvalidDraft' as const],
+      limit: 5,
       namespace: 'example',
       'api-version': '65.0',
     };
@@ -45,6 +47,8 @@ describe('flow versions command', (): void => {
       targetOrg: 'admin@example.com',
       namespace: 'example',
       apiVersion: '65.0',
+      statuses: ['Draft', 'InvalidDraft'],
+      limit: 5,
     });
     expect(actual).to.equal(result);
   });

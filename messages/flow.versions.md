@@ -14,6 +14,14 @@ API name of the Flow definition.
 
 Username or alias of the target Salesforce org. Uses the configured default `target-org` when omitted.
 
+# flags.status.summary
+
+Flow version status to include. Repeat the flag to include multiple statuses.
+
+# flags.limit.summary
+
+Maximum number of the newest matching Flow versions to return.
+
 # flags.namespace.summary
 
 Namespace that identifies a packaged Flow.
@@ -31,6 +39,10 @@ Salesforce API version to use for the Tooling API requests.
 - List every version of a namespaced Flow as JSON:
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --namespace example --json
+
+- List the five newest Draft or InvalidDraft versions:
+
+  <%= config.bin %> <%= command.id %> --api-name Order_Processing --status Draft --status InvalidDraft --limit 5
 
 # info.title
 

@@ -21,7 +21,9 @@ const result: FlowPruneResult = {
   keepVersions: [21],
   ignoreVersions: [20],
   keepBy: 'modified',
+  olderThanDays: 30,
   protectedVersions: [],
+  recentVersions: [],
   ignoredVersions: [],
   retainedVersions: [],
   plannedDeletions: [],
@@ -57,6 +59,7 @@ describe('flow prune command execution', (): void => {
       'keep-version': [21],
       ignore: [20],
       'keep-by': 'modified' as const,
+      'older-than': { days: 30 },
       namespace: undefined,
       'api-version': undefined,
       'dry-run': true,
@@ -71,6 +74,7 @@ describe('flow prune command execution', (): void => {
       keepVersions: [21],
       ignoreVersions: [20],
       keepBy: 'modified',
+      olderThanDays: 30,
       dryRun: true,
     });
     expect(actual).to.equal(result);

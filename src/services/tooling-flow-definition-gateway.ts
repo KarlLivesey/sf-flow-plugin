@@ -18,8 +18,8 @@ import {
   toolingQueryResultSchema,
 } from '../schemas/flow.js';
 import type {
-  FlowDependency,
   FlowDependencyQueryDirection,
+  IndexedFlowDependency,
   JsonObject,
   MetadataComponentDependencyRecord,
 } from '../types/flow-analysis.js';
@@ -97,7 +97,7 @@ function parseMetadata(value: unknown, versionId: string): JsonObject {
 function dependencyFields(
   external: MetadataComponentDependencyRecord,
   direction: FlowDependencyQueryDirection
-): Omit<FlowDependency, 'direction'> {
+): Omit<IndexedFlowDependency, 'direction'> {
   if (direction === 'uses') {
     return {
       componentId: external.RefMetadataComponentId,
@@ -114,7 +114,7 @@ function dependencyFields(
   };
 }
 
-function parseDependency(value: unknown, direction: FlowDependencyQueryDirection): FlowDependency {
+function parseDependency(value: unknown, direction: FlowDependencyQueryDirection): IndexedFlowDependency {
   const external = parseSalesforceValue(metadataComponentDependencyRecordSchema, value, 'metadata dependency record');
   return { direction, ...dependencyFields(external, direction) };
 }
@@ -198,7 +198,7 @@ export class ToolingFlowDefinitionGateway implements FlowDefinitionGateway {
   public async findDependencies(
     definitionId: string,
     direction: FlowDependencyQueryDirection
-  ): Promise<ReadonlyArray<FlowDependency>> {
+  ): Promise<ReadonlyArray<IndexedFlowDependency>> {
     validateSalesforceId(definitionId, 'Flow definition ID');
     const records = await this.queryAll(buildDependencyQuery(definitionId, direction));
     return records.map((record) => parseDependency(record, direction));

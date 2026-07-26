@@ -17,6 +17,8 @@ function request(overrides: Partial<FlowDependenciesRequest> = {}): FlowDependen
     apiName: 'Order_Processing',
     targetOrg: 'admin@example.com',
     direction: 'both',
+    recursive: false,
+    maxDepth: 10,
     ...overrides,
   };
 }
@@ -47,6 +49,10 @@ describe('FlowDependenciesService', (): void => {
     ]);
     expect(result.dependencies).to.deep.equal([
       {
+        sourceDefinitionId: definitionId,
+        sourceApiName: 'Order_Processing',
+        sourceNamespace: null,
+        depth: 0,
         direction: 'used-by',
         componentId: '301000000000001',
         name: 'Parent_Flow',
@@ -54,6 +60,10 @@ describe('FlowDependenciesService', (): void => {
         type: 'Flow',
       },
       {
+        sourceDefinitionId: definitionId,
+        sourceApiName: 'Order_Processing',
+        sourceNamespace: null,
+        depth: 0,
         direction: 'uses',
         componentId: '01I000000000001',
         name: 'Account',
@@ -72,5 +82,44 @@ describe('FlowDependenciesService', (): void => {
   it('rejects invalid directions at the service boundary', async (): Promise<void> => {
     const invalid = { ...request(), direction: 'sideways' as FlowDependenciesRequest['direction'] };
     await expectErrorName(new FlowDependenciesService(gateway()).getDependencies(invalid), 'FlowDependenciesFailed');
+  });
+});
+
+describe('FlowDependenciesService recursion', (): void => {
+  it('follows Flow dependencies up to the requested depth without revisiting definitions', async (): Promise<void> => {
+    const childId = '300000000000002';
+    const root = flowDefinition({
+      id: definitionId,
+      apiName: 'Order_Processing',
+      activeVersionId: null,
+      latestVersionId: null,
+    });
+    const child = flowDefinition({
+      id: childId,
+      apiName: 'Child_Flow',
+      activeVersionId: null,
+      latestVersionId: null,
+    });
+    const fake = new FakeFlowGateway([root, child], []);
+    fake.dependenciesByDefinition.set(definitionId, [
+      { direction: 'uses', componentId: childId, name: 'Child_Flow', namespace: null, type: 'Flow' },
+    ]);
+    fake.dependenciesByDefinition.set(childId, [
+      { direction: 'uses', componentId: '01I000000000001', name: 'Account', namespace: null, type: 'CustomObject' },
+      { direction: 'uses', componentId: definitionId, name: 'Order_Processing', namespace: null, type: 'Flow' },
+    ]);
+    const result = await new FlowDependenciesService(fake).getDependencies(
+      request({ direction: 'uses', recursive: true, maxDepth: 1 })
+    );
+    expect(result).to.include({ definitionsScanned: 2, recursive: true, maxDepth: 1 });
+    expect(fake.dependencyQueries).to.deep.equal([
+      { definitionId, direction: 'uses' },
+      { definitionId: childId, direction: 'uses' },
+    ]);
+    expect(result.dependencies.map((dependency) => [dependency.sourceApiName, dependency.name])).to.deep.equal([
+      ['Order_Processing', 'Child_Flow'],
+      ['Child_Flow', 'Account'],
+      ['Child_Flow', 'Order_Processing'],
+    ]);
   });
 });

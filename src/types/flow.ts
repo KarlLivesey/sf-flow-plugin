@@ -10,6 +10,8 @@ export type FlowVersionSelector = 'latest' | FlowVersionNumber;
 
 export type FlowPruneOrder = 'created' | 'modified';
 
+export type FlowVersionStatusFilter = 'Active' | 'Draft' | 'InvalidDraft' | 'Obsolete';
+
 export type FlowMutationOperation = 'update-definition' | 'delete-version';
 
 export type FlowErrorCode =
@@ -158,6 +160,11 @@ export interface FlowVersionsResult {
   targetOrg: string;
 }
 
+export interface FlowVersionsRequest extends NamedFlowRequest {
+  statuses: FlowVersionStatusFilter[];
+  limit?: number;
+}
+
 export interface FlowDeactivationRequest extends NamedFlowRequest {
   dryRun: boolean;
 }
@@ -197,11 +204,17 @@ export interface FlowAuditResult {
   flows: FlowAuditEntry[];
 }
 
+export interface FlowAuditRequest {
+  targetOrg: string;
+  apiNames: string[];
+}
+
 export interface FlowPruneRequest extends NamedFlowRequest {
   keep: number;
   keepVersions: FlowVersionNumber[];
   ignoreVersions: FlowVersionNumber[];
   keepBy: FlowPruneOrder;
+  olderThanDays?: number;
   dryRun: boolean;
 }
 
@@ -221,7 +234,9 @@ export interface FlowPruneResult {
   keepVersions: FlowVersionNumber[];
   ignoreVersions: FlowVersionNumber[];
   keepBy: FlowPruneOrder;
+  olderThanDays: number | null;
   protectedVersions: FlowPruneVersion[];
+  recentVersions: FlowPruneVersion[];
   ignoredVersions: FlowPruneVersion[];
   retainedVersions: FlowPruneVersion[];
   plannedDeletions: FlowPruneVersion[];

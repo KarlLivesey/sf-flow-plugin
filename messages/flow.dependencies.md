@@ -4,7 +4,7 @@ Show components used by a Salesforce Flow and components that use it.
 
 # description
 
-Resolve a Flow definition and query Salesforce's indexed metadata component dependencies in either or both directions.
+Resolve a Flow definition and query Salesforce's indexed metadata component dependencies in either or both directions. Each direction is queried separately with Salesforce's 2,000-record Tooling API limit.
 
 # flags.api-name.summary
 
@@ -17,6 +17,14 @@ Username or alias of the target org. Uses the configured target org when omitted
 # flags.direction.summary
 
 Dependency direction to return: uses, used-by, or both.
+
+# flags.recursive.summary
+
+Follow indexed Flow-to-Flow dependencies recursively.
+
+# flags.max-depth.summary
+
+Maximum number of Flow dependency levels to follow when `--recursive` is enabled.
 
 # flags.namespace.summary
 
@@ -39,6 +47,10 @@ Salesforce API version to use for the Tooling API requests.
 - Show components that reference a packaged Flow:
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --namespace example --direction used-by
+
+- Follow Flow dependencies recursively for up to five levels:
+
+  <%= config.bin %> <%= command.id %> --api-name Order_Processing --recursive --max-depth 5
 
 # info.title
 

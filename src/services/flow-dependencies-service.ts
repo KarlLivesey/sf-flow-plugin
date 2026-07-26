@@ -5,13 +5,14 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import { flowDependenciesFailed } from '../errors/flow-errors.js';
-import { flowDependencyDirectionSchema } from '../schemas/flow.js';
+import { flowDependencyDirectionSchema, nonnegativeIntegerSchema } from '../schemas/flow.js';
 import type {
   FlowDependenciesRequest,
   FlowDependenciesResult,
   FlowDependency,
   FlowDependencyGateway,
   FlowDependencyQueryDirection,
+  IndexedFlowDependency,
 } from '../types/flow-analysis.js';
 import type { FlowDefinition, FlowDefinitionGateway, FlowDefinitionLookup } from '../types/flow.js';
 import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
@@ -29,6 +30,7 @@ function requestedDirections(request: FlowDependenciesRequest): FlowDependencyQu
 
 function dependencyKey(dependency: FlowDependency): string {
   return [
+    dependency.sourceDefinitionId,
     dependency.direction,
     dependency.type ?? '',
     dependency.namespace ?? '',
@@ -49,14 +51,17 @@ function uniqueDependencies(dependencies: ReadonlyArray<FlowDependency>): FlowDe
 function createResult(
   request: FlowDependenciesRequest,
   definition: FlowDefinition,
-  dependencies: ReadonlyArray<FlowDependency>
+  traversal: DependencyTraversal
 ): FlowDependenciesResult {
   return {
     apiName: definition.apiName,
     namespace: definition.namespace,
     definitionId: definition.id,
     direction: request.direction,
-    dependencies: uniqueDependencies(dependencies),
+    recursive: request.recursive,
+    maxDepth: request.maxDepth,
+    definitionsScanned: traversal.definitionsScanned,
+    dependencies: uniqueDependencies(traversal.dependencies),
     targetOrg: request.targetOrg,
   };
 }
@@ -72,9 +77,124 @@ async function queryDependencies(
   gateway: FlowDefinitionGateway & FlowDependencyGateway,
   definition: FlowDefinition,
   request: FlowDependenciesRequest
-): Promise<FlowDependency[]> {
+): Promise<IndexedFlowDependency[]> {
   const queries = requestedDirections(request).map((direction) => gateway.findDependencies(definition.id, direction));
   return (await Promise.all(queries)).flat();
+}
+
+interface DependencyScope {
+  definition: FlowDefinition;
+  depth: number;
+}
+
+interface DependencyTraversal {
+  dependencies: FlowDependency[];
+  definitionsScanned: number;
+}
+
+interface DependencyTraversalState {
+  dependencies: FlowDependency[];
+  visited: Set<string>;
+}
+
+interface DependencyTraversalContext {
+  gateway: FlowDefinitionGateway & FlowDependencyGateway;
+  request: FlowDependenciesRequest;
+  progress: FlowProgressReporter;
+}
+
+interface DependencyBatch {
+  scope: DependencyScope;
+  indexed: IndexedFlowDependency[];
+}
+
+function scopeDepth(scopes: ReadonlyArray<DependencyScope>): number {
+  return scopes[0]?.depth ?? 0;
+}
+
+function unvisitedScopes(scopes: ReadonlyArray<DependencyScope>, visited: ReadonlySet<string>): DependencyScope[] {
+  return [
+    ...new Map(
+      scopes.filter((scope) => !visited.has(scope.definition.id)).map((scope) => [scope.definition.id, scope] as const)
+    ).values(),
+  ];
+}
+
+function decorateDependency(scope: DependencyScope, dependency: IndexedFlowDependency): FlowDependency {
+  return {
+    ...dependency,
+    sourceDefinitionId: scope.definition.id,
+    sourceApiName: scope.definition.apiName,
+    sourceNamespace: scope.definition.namespace,
+    depth: scope.depth,
+  };
+}
+
+function flowReferenceKey(dependency: IndexedFlowDependency): string | null {
+  return dependency.type === 'Flow' && dependency.name !== null
+    ? `${dependency.namespace ?? ''}\u0000${dependency.name}`
+    : null;
+}
+
+async function resolveReferencedFlows(
+  gateway: FlowDefinitionGateway,
+  dependencies: ReadonlyArray<IndexedFlowDependency>
+): Promise<FlowDefinition[]> {
+  const references = new Map(
+    dependencies
+      .map((dependency) => [flowReferenceKey(dependency), dependency] as const)
+      .filter((entry): entry is readonly [string, IndexedFlowDependency] => entry[0] !== null)
+  );
+  const resolved = await Promise.all(
+    [...references.values()].map(async (dependency) => {
+      const definitions = await gateway.findDefinitions({ apiName: dependency.name ?? '' });
+      return definitions.filter((definition) => definition.namespace === dependency.namespace);
+    })
+  );
+  return resolved.flat();
+}
+
+async function queryScope(context: DependencyTraversalContext, scope: DependencyScope): Promise<DependencyBatch> {
+  const name = qualifiedFlowName(scope.definition.apiName, scope.definition.namespace);
+  context.progress('loading-dependencies', `${name} (${context.request.direction}, depth ${scope.depth})`);
+  const indexed = await queryDependencies(context.gateway, scope.definition, context.request);
+  return { scope, indexed };
+}
+
+async function traverseLevel(
+  context: DependencyTraversalContext,
+  scopes: ReadonlyArray<DependencyScope>,
+  state: DependencyTraversalState
+): Promise<void> {
+  const current = unvisitedScopes(scopes, state.visited);
+  if (current.length === 0) {
+    return;
+  }
+  current.forEach((scope) => state.visited.add(scope.definition.id));
+  const batches = await Promise.all(current.map((scope) => queryScope(context, scope)));
+  state.dependencies.push(
+    ...batches.flatMap(({ scope, indexed }) => indexed.map((dependency) => decorateDependency(scope, dependency)))
+  );
+  if (!context.request.recursive || scopeDepth(current) >= context.request.maxDepth) {
+    return;
+  }
+  const definitions = (
+    await Promise.all(batches.map(({ indexed }) => resolveReferencedFlows(context.gateway, indexed)))
+  ).flat();
+  await traverseLevel(
+    context,
+    definitions.map((definition) => ({ definition, depth: scopeDepth(current) + 1 })),
+    state
+  );
+}
+
+async function traverseDependencies(
+  context: DependencyTraversalContext,
+  root: FlowDefinition
+): Promise<DependencyTraversal> {
+  const state: DependencyTraversalState = { dependencies: [], visited: new Set() };
+  await traverseLevel(context, [{ definition: root, depth: 0 }], state);
+  return { dependencies: state.dependencies, definitionsScanned: state.visited.size };
 }
 
 async function resolveDependencies(
@@ -85,10 +205,9 @@ async function resolveDependencies(
   progress('resolving-flow', request.apiName);
   const definition = selectFlowDefinition(request.apiName, await gateway.findDefinitions(createLookup(request)));
   const name = qualifiedFlowName(definition.apiName, definition.namespace);
-  progress('loading-dependencies', `${name} (${request.direction})`);
-  const dependencies = await queryDependencies(gateway, definition, request);
-  progress('analysing-results', `${name} (${dependencies.length} dependency records)`);
-  return createResult(request, definition, dependencies);
+  const traversal = await traverseDependencies({ gateway, request, progress }, definition);
+  progress('analysing-results', `${name} (${traversal.dependencies.length} dependency records)`);
+  return createResult(request, definition, traversal);
 }
 
 export class FlowDependenciesService {
@@ -98,8 +217,11 @@ export class FlowDependenciesService {
     request: FlowDependenciesRequest,
     progress: FlowProgressReporter = noFlowProgress
   ): Promise<FlowDependenciesResult> {
-    if (!flowDependencyDirectionSchema.safeParse(request.direction).success) {
-      throw flowDependenciesFailed('The Flow dependency direction is invalid.');
+    if (
+      !flowDependencyDirectionSchema.safeParse(request.direction).success ||
+      !nonnegativeIntegerSchema.safeParse(request.maxDepth).success
+    ) {
+      throw flowDependenciesFailed('The Flow dependency traversal options are invalid.');
     }
     try {
       return await resolveDependencies(this.gateway, request, progress);

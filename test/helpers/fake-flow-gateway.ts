@@ -6,7 +6,7 @@
  */
 import { expect } from 'chai';
 
-import type { FlowDependency, FlowDependencyQueryDirection, JsonObject } from '../../src/types/flow-analysis.js';
+import type { FlowDependencyQueryDirection, IndexedFlowDependency, JsonObject } from '../../src/types/flow-analysis.js';
 import type {
   FlowDefinition,
   FlowDefinitionGateway,
@@ -37,7 +37,8 @@ export interface FlowDefinitionFixture {
 export class FakeFlowGateway implements FlowDefinitionGateway {
   public readonly updates: ActiveVersionUpdate[] = [];
   public readonly deletes: string[] = [];
-  public readonly dependencies: FlowDependency[] = [];
+  public readonly dependencies: IndexedFlowDependency[] = [];
+  public readonly dependenciesByDefinition = new Map<string, IndexedFlowDependency[]>();
   public readonly dependencyQueries: DependencyQuery[] = [];
   public readonly metadata = new Map<string, JsonObject>();
   public readonly permissionChecks: FlowMutationOperation[] = [];
@@ -92,10 +93,12 @@ export class FakeFlowGateway implements FlowDefinitionGateway {
   public async findDependencies(
     definitionId: string,
     direction: FlowDependencyQueryDirection
-  ): Promise<ReadonlyArray<FlowDependency>> {
+  ): Promise<ReadonlyArray<IndexedFlowDependency>> {
     this.throwQueryError();
     this.dependencyQueries.push({ definitionId, direction });
-    return this.dependencies.filter((dependency) => dependency.direction === direction);
+    return (this.dependenciesByDefinition.get(definitionId) ?? this.dependencies).filter(
+      (dependency) => dependency.direction === direction
+    );
   }
 
   public async getVersionMetadata(versionId: string): Promise<JsonObject> {

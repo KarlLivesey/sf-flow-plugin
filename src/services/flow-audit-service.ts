@@ -8,6 +8,7 @@ import { flowAuditFailed } from '../errors/flow-errors.js';
 import type {
   FlowAuditEntry,
   FlowAuditIssueCode,
+  FlowAuditRequest,
   FlowAuditResult,
   FlowDefinition,
   FlowDefinitionGateway,
@@ -70,21 +71,47 @@ function groupVersions(versions: ReadonlyArray<FlowVersion>): ReadonlyMap<string
   return grouped;
 }
 
+async function loadDefinitions(
+  gateway: FlowDefinitionGateway,
+  apiNames: ReadonlyArray<string>
+): Promise<ReadonlyArray<FlowDefinition>> {
+  if (apiNames.length === 0) {
+    return gateway.findAllDefinitions();
+  }
+  const uniqueNames = [...new Set(apiNames)];
+  return (await Promise.all(uniqueNames.map((apiName) => gateway.findDefinitions({ apiName })))).flat();
+}
+
+async function loadVersions(
+  gateway: FlowDefinitionGateway,
+  definitions: ReadonlyArray<FlowDefinition>,
+  filtered: boolean
+): Promise<ReadonlyArray<FlowVersion>> {
+  if (!filtered) {
+    return gateway.findAllVersions();
+  }
+  return (await Promise.all(definitions.map((definition) => gateway.findVersions(definition.id)))).flat();
+}
+
 export class FlowAuditService {
   public constructor(private readonly gateway: FlowDefinitionGateway) {}
 
-  public async audit(targetOrg: string, progress: FlowProgressReporter = noFlowProgress): Promise<FlowAuditResult> {
+  public async audit(
+    request: FlowAuditRequest,
+    progress: FlowProgressReporter = noFlowProgress
+  ): Promise<FlowAuditResult> {
     try {
-      progress('loading-flows', 'all Flow definitions');
-      const definitions = await this.gateway.findAllDefinitions();
-      progress('loading-versions', 'all Flow definitions (all versions)');
-      const versions = groupVersions(await this.gateway.findAllVersions());
+      const scope = request.apiNames.length === 0 ? 'all Flow definitions' : request.apiNames.join(', ');
+      progress('loading-flows', scope);
+      const definitions = await loadDefinitions(this.gateway, request.apiNames);
+      progress('loading-versions', `${scope} (all versions)`);
+      const versions = groupVersions(await loadVersions(this.gateway, definitions, request.apiNames.length > 0));
       progress('analysing-results', `${definitions.length} Flow definitions`);
       const flows = definitions
         .map((definition) => createEntry(definition, versions.get(definition.id) ?? []))
         .filter((entry) => entry.issues.length > 0);
       return {
-        targetOrg,
+        targetOrg: request.targetOrg,
         definitionsScanned: definitions.length,
         flowsWithIssues: flows.length,
         flows,

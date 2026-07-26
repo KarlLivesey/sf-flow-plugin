@@ -19,10 +19,12 @@ import { noFlowProgress, type FlowProgressReporter, withFlowProgressStage } from
 import { qualifiedFlowName, selectFlowDefinition } from '../utils/flow-state.js';
 
 const PRUNABLE_STATUSES = new Set(['Draft', 'Obsolete', 'InvalidDraft']);
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 
 interface PrunePlan {
   definition: FlowDefinition;
   protectedVersions: FlowPruneVersion[];
+  recentVersions: FlowPruneVersion[];
   ignoredVersions: FlowPruneVersion[];
   retainedVersions: FlowPruneVersion[];
   plannedDeletions: FlowPruneVersion[];
@@ -33,6 +35,11 @@ interface PruneCandidates {
   protectedVersions: FlowVersion[];
   candidates: FlowVersion[];
   skippedVersions: FlowVersion[];
+}
+
+interface PrunePlanningContext {
+  request: FlowPruneRequest;
+  now: Date;
 }
 
 function createLookup(request: FlowPruneRequest): FlowDefinitionLookup {
@@ -72,6 +79,25 @@ function compareVersions(left: FlowVersion, right: FlowVersion, request: FlowPru
   return rightDate.localeCompare(leftDate) || right.versionNumber - left.versionNumber;
 }
 
+function versionDate(version: FlowVersion, request: FlowPruneRequest): string {
+  return request.keepBy === 'created' ? version.createdDate : version.lastModifiedDate;
+}
+
+function splitCandidatesByAge(
+  candidates: ReadonlyArray<FlowVersion>,
+  request: FlowPruneRequest,
+  now: Date
+): { eligible: FlowVersion[]; recent: FlowVersion[] } {
+  if (request.olderThanDays === undefined) {
+    return { eligible: [...candidates], recent: [] };
+  }
+  const cutoff = now.getTime() - request.olderThanDays * MILLISECONDS_PER_DAY;
+  return {
+    eligible: candidates.filter((version) => Date.parse(versionDate(version, request)) < cutoff),
+    recent: candidates.filter((version) => Date.parse(versionDate(version, request)) >= cutoff),
+  };
+}
+
 function selectRetained(candidates: ReadonlyArray<FlowVersion>, request: FlowPruneRequest): ReadonlyArray<FlowVersion> {
   const requested = new Set(request.keepVersions);
   const pinned = candidates.filter((version) => requested.has(version.versionNumber));
@@ -97,6 +123,7 @@ function validPruneRequest(request: FlowPruneRequest): boolean {
   return (
     nonnegativeIntegerSchema.safeParse(request.keep).success &&
     flowPruneOrderSchema.safeParse(request.keepBy).success &&
+    (request.olderThanDays === undefined || positiveFlowVersionSchema.safeParse(request.olderThanDays).success) &&
     [...request.keepVersions, ...request.ignoreVersions].every(
       (version) => positiveFlowVersionSchema.safeParse(version).success
     )
@@ -106,24 +133,24 @@ function validPruneRequest(request: FlowPruneRequest): boolean {
 function createPlan(
   definition: FlowDefinition,
   versions: ReadonlyArray<FlowVersion>,
-  request: FlowPruneRequest
+  context: PrunePlanningContext
 ): PrunePlan {
+  const { request, now } = context;
   assertRequestedVersionsExist(request, versions);
   const classified = classifyVersions(definition, versions);
+  const age = splitCandidatesByAge(classified.candidates, request, now);
   const ignoredNumbers = new Set(request.ignoreVersions);
-  const ignored = classified.candidates.filter((version) => ignoredNumbers.has(version.versionNumber));
-  const selectable = classified.candidates.filter((version) => !ignoredNumbers.has(version.versionNumber));
+  const ignored = age.eligible.filter((version) => ignoredNumbers.has(version.versionNumber));
+  const selectable = age.eligible.filter((version) => !ignoredNumbers.has(version.versionNumber));
   const retained = selectRetained(selectable, request);
-  const retainedIds = new Set(retained.map((version) => version.id));
-  const ignoredIds = new Set(ignored.map((version) => version.id));
+  const retainedIds = new Set([...retained, ...ignored].map((version) => version.id));
   return {
     definition,
     protectedVersions: classified.protectedVersions.map(toPruneVersion),
+    recentVersions: age.recent.map(toPruneVersion),
     ignoredVersions: ignored.map(toPruneVersion),
     retainedVersions: retained.map(toPruneVersion),
-    plannedDeletions: classified.candidates
-      .filter((version) => !retainedIds.has(version.id) && !ignoredIds.has(version.id))
-      .map(toPruneVersion),
+    plannedDeletions: age.eligible.filter((version) => !retainedIds.has(version.id)).map(toPruneVersion),
     skippedVersions: classified.skippedVersions.map(toPruneVersion),
   };
 }
@@ -142,7 +169,9 @@ function createResult(
     keepVersions: [...new Set(request.keepVersions)].filter((version) => !ignoredNumbers.has(version)),
     ignoreVersions: [...new Set(request.ignoreVersions)],
     keepBy: request.keepBy,
+    olderThanDays: request.olderThanDays ?? null,
     protectedVersions: plan.protectedVersions,
+    recentVersions: plan.recentVersions,
     ignoredVersions: plan.ignoredVersions,
     retainedVersions: plan.retainedVersions,
     plannedDeletions: plan.plannedDeletions,
@@ -155,7 +184,10 @@ function createResult(
 }
 
 export class FlowPruneService {
-  public constructor(private readonly gateway: FlowDefinitionGateway) {}
+  public constructor(
+    private readonly gateway: FlowDefinitionGateway,
+    private readonly now: () => Date = (): Date => new Date()
+  ) {}
 
   public async prune(
     request: FlowPruneRequest,
@@ -201,7 +233,7 @@ export class FlowPruneService {
       const definitions = await this.gateway.findDefinitions(createLookup(request));
       const definition = selectFlowDefinition(request.apiName, definitions);
       progress('loading-versions', `${qualifiedFlowName(definition.apiName, definition.namespace)} (all versions)`);
-      return createPlan(definition, await this.gateway.findVersions(definition.id), request);
+      return createPlan(definition, await this.gateway.findVersions(definition.id), { request, now: this.now() });
     } catch (error: unknown) {
       if (error instanceof Error && ['FlowDefinitionNotFound', 'FlowDefinitionAmbiguous'].includes(error.name)) {
         throw error;

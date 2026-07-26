@@ -17,6 +17,15 @@
         "direction": {
           "$ref": "#/definitions/FlowDependencyDirection"
         },
+        "recursive": {
+          "type": "boolean"
+        },
+        "maxDepth": {
+          "type": "number"
+        },
+        "definitionsScanned": {
+          "type": "number"
+        },
         "dependencies": {
           "type": "array",
           "items": {
@@ -27,7 +36,17 @@
           "type": "string"
         }
       },
-      "required": ["apiName", "namespace", "definitionId", "direction", "dependencies", "targetOrg"],
+      "required": [
+        "apiName",
+        "namespace",
+        "definitionId",
+        "direction",
+        "recursive",
+        "maxDepth",
+        "definitionsScanned",
+        "dependencies",
+        "targetOrg"
+      ],
       "additionalProperties": false
     },
     "FlowDependencyDirection": {
@@ -51,9 +70,31 @@
         },
         "type": {
           "type": ["string", "null"]
+        },
+        "sourceDefinitionId": {
+          "type": "string"
+        },
+        "sourceApiName": {
+          "type": "string"
+        },
+        "sourceNamespace": {
+          "type": ["string", "null"]
+        },
+        "depth": {
+          "type": "number"
         }
       },
-      "required": ["direction", "componentId", "name", "namespace", "type"],
+      "required": [
+        "componentId",
+        "depth",
+        "direction",
+        "name",
+        "namespace",
+        "sourceApiName",
+        "sourceDefinitionId",
+        "sourceNamespace",
+        "type"
+      ],
       "additionalProperties": false
     },
     "FlowDependencyQueryDirection": {

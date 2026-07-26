@@ -22,6 +22,10 @@ Source version: active, latest, or a positive version number.
 
 Target version: active, latest, or a positive version number.
 
+# flags.fail-on-difference.summary
+
+Exit with status 1 when the selected Flow versions differ.
+
 # flags.namespace.summary
 
 Namespace that identifies a packaged Flow.
@@ -42,7 +46,7 @@ Salesforce API version to use for the Tooling API requests.
 
 - Return machine-readable structural changes:
 
-  <%= config.bin %> <%= command.id %> --api-name Order_Processing --from active --to latest --json
+  <%= config.bin %> <%= command.id %> --api-name Order_Processing --from active --to latest --fail-on-difference --json
 
 # info.title
 

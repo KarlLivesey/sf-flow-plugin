@@ -148,6 +148,8 @@ The `result` object is stable and contains only serialisable values. In a dry ru
 sf flow versions \
   --api-name Order_Processing \
   [--target-org ORG] \
+  [--status Active|Draft|InvalidDraft|Obsolete ...] \
+  [--limit NUMBER] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--json]
@@ -159,6 +161,12 @@ The command lists every Flow version with its status, creation date, last-modifi
 sf flow versions --target-org MySandbox --api-name Order_Processing
 ```
 
+Use repeatable `--status` filters and `--limit` to return the newest matching versions:
+
+```bash
+sf flow versions --api-name Order_Processing --status Draft --status InvalidDraft --limit 5
+```
+
 ## `sf flow compare`
 
 ```bash
@@ -167,6 +175,7 @@ sf flow compare \
   [--target-org ORG] \
   [--from active|latest|NUMBER] \
   [--to active|latest|NUMBER] \
+  [--fail-on-difference] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--json]
@@ -183,6 +192,8 @@ sf flow compare \
 
 The command retrieves each version's validated `Flow.Metadata` value and reports `added`, `removed` and `changed` paths. Named Flow elements are matched by name so array reordering does not produce false changes. Top-level lifecycle `status` is excluded because `sf flow versions` already reports version state.
 
+`--fail-on-difference` retains the comparison output but sets process status 1 when changes exist, making the command suitable for CI checks.
+
 ## `sf flow dependencies`
 
 ```bash
@@ -190,6 +201,8 @@ sf flow dependencies \
   --api-name Order_Processing \
   [--target-org ORG] \
   [--direction uses|used-by|both] \
+  [--recursive] \
+  [--max-depth NUMBER] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--json]
@@ -204,6 +217,8 @@ sf flow dependencies \
 ```
 
 This command reports Salesforce's `MetadataComponentDependency` index. Salesforce can omit unsupported dependency types, and the index represents component-level rather than historical version-specific relationships.
+
+Dependency analysis is definition-level. With `--recursive`, indexed Flow dependencies are followed without revisiting definitions, up to `--max-depth` (default `10`). Every direction is a separate query capped at 2,000 records; `both` therefore runs one `uses` query and one `used-by` query per visited Flow definition.
 
 ## `sf flow describe`
 
@@ -367,7 +382,12 @@ sf flow deactivate --api-name Order_Processing --dry-run --json
 ## `sf flow audit`
 
 ```bash
-sf flow audit [--target-org ORG] [--api-version VERSION] [--json]
+sf flow audit \
+  [--target-org ORG] \
+  [--api-name FLOW ...] \
+  [--fail-on-findings] \
+  [--api-version VERSION] \
+  [--json]
 ```
 
 The audit reports definitions that have no active version, whose active version is behind the latest version, or that contain Draft or Obsolete versions:
@@ -375,6 +395,8 @@ The audit reports definitions that have no active version, whose active version 
 ```bash
 sf flow audit --target-org MySandbox
 ```
+
+Repeat `--api-name` to audit a selected set of Flows. `--fail-on-findings` retains the audit output but sets process status 1 when findings exist.
 
 ## `sf flow prune`
 
@@ -386,6 +408,7 @@ sf flow prune \
   [--keep-version NUMBER ...] \
   [--ignore NUMBER ...] \
   [--keep-by created|modified] \
+  [--older-than DAYS] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--no-dry-run] \
@@ -398,9 +421,12 @@ sf flow prune \
 | `--keep-version` | —         | Retain a specific version within the `--keep` total. Repeatable.                           |
 | `--ignore`       | —         | Protect a version for this invocation without reducing the `--keep` total. Repeatable.     |
 | `--keep-by`      | `created` | Select the newest retained versions by creation or last-modified date.                     |
+| `--older-than`   | —         | Protect newer versions by age without reducing the `--keep` total.                         |
 | `--dry-run`      | `true`    | Plan without deletion. Specify `--no-dry-run` to perform and verify the planned deletions. |
 
 Active and latest versions are always protected outside the inactive retention total. `--ignore` wins when the same version is also passed to `--keep-version`.
+
+`--older-than` uses the date selected by `--keep-by`. For example, `--older-than 30` protects every version newer than 30 days, then applies `--keep` only to older eligible versions.
 
 Retain version 21 within a total of five inactive versions:
 

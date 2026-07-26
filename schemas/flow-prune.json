@@ -32,7 +32,16 @@
         "keepBy": {
           "$ref": "#/definitions/FlowPruneOrder"
         },
+        "olderThanDays": {
+          "type": ["number", "null"]
+        },
         "protectedVersions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowPruneVersion"
+          }
+        },
+        "recentVersions": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/FlowPruneVersion"
@@ -86,7 +95,9 @@
         "keepVersions",
         "ignoreVersions",
         "keepBy",
+        "olderThanDays",
         "protectedVersions",
+        "recentVersions",
         "ignoredVersions",
         "retainedVersions",
         "plannedDeletions",

@@ -4,7 +4,7 @@ Prune old inactive Salesforce Flow versions.
 
 # description
 
-Plan or delete old Draft, Obsolete and InvalidDraft Flow versions. The active and latest versions are always protected. Versions named with `--keep-version` count towards the inactive retention total; versions named with `--ignore` do not. If a version is supplied to both flags, `--ignore` wins. Ignore values apply only to the current command invocation. Versions are retained by creation date unless `--keep-by modified` is specified. Dry-run mode is enabled by default; specify `--no-dry-run` to delete the planned versions.
+Plan or delete old Draft, Obsolete and InvalidDraft Flow versions. The active and latest versions are always protected. Versions named with `--keep-version` count towards the inactive retention total; versions named with `--ignore` do not. If a version is supplied to both flags, `--ignore` wins. Ignore values apply only to the current command invocation. Versions are retained by creation date unless `--keep-by modified` is specified. Use `--older-than` to protect recent versions without reducing the keep count. Dry-run mode is enabled by default; specify `--no-dry-run` to delete the planned versions.
 
 # flags.api-name.summary
 
@@ -29,6 +29,10 @@ Specific Flow version to protect for this invocation without reducing the `--kee
 # flags.keep-by.summary
 
 Date used to choose the newest retained versions: `created` (default) or `modified`.
+
+# flags.older-than.summary
+
+Minimum age in days for a version to be eligible for deletion. Recent versions do not reduce the `--keep` total.
 
 # flags.namespace.summary
 
@@ -56,6 +60,10 @@ Plan without deleting versions. Enabled by default; use `--no-dry-run` to delete
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --keep 5 --ignore 21
 
+- Protect versions created within the last 30 days and retain five older inactive versions:
+
+  <%= config.bin %> <%= command.id %> --api-name Order_Processing --keep 5 --older-than 30
+
 - Delete the planned versions:
 
   <%= config.bin %> <%= command.id %> --target-org MySandbox --api-name Order_Processing --keep 5 --no-dry-run
@@ -75,3 +83,7 @@ Deleted and verified %s version(s) of Flow %s; retained %s prunable inactive ver
 # info.unchanged
 
 No versions of Flow %s required pruning; %s prunable inactive version(s) were retained.
+
+# info.age-protected
+
+Protected %s recent version(s) of Flow %s newer than %s days using the %s date.

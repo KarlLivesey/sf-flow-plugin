@@ -26,7 +26,12 @@ import type {
   FlowGraphStyle,
   FlowSubflowVersionSelector,
 } from '../types/flow-inspection.js';
-import type { FlowDefinitionRecord, FlowPruneOrder, FlowVersionRecord } from '../types/flow.js';
+import type {
+  FlowDefinitionRecord,
+  FlowPruneOrder,
+  FlowVersionRecord,
+  FlowVersionStatusFilter,
+} from '../types/flow.js';
 
 const FLOW_API_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
 const NAMESPACE_PATTERN = /^[A-Za-z][A-Za-z0-9]{0,14}$/;
@@ -54,6 +59,13 @@ export const positiveFlowVersionSchema = z.number().int().positive().safe();
 export const nonnegativeIntegerSchema = z.number().int().nonnegative().safe();
 
 export const flowPruneOrderSchema: z.ZodType<FlowPruneOrder> = z.enum(['created', 'modified']);
+
+export const flowVersionStatusFilterSchema: z.ZodType<FlowVersionStatusFilter> = z.enum([
+  'Active',
+  'Draft',
+  'InvalidDraft',
+  'Obsolete',
+]);
 
 export const flowDependencyDirectionSchema: z.ZodType<FlowDependencyDirection> = z.enum(['uses', 'used-by', 'both']);
 

@@ -25,6 +25,7 @@ export interface PruneFlagValues {
   'keep-version': number[];
   ignore: number[];
   'keep-by': FlowPruneOrder;
+  'older-than': { days: number } | undefined;
   namespace: string | undefined;
   'api-version': string | undefined;
   'dry-run': boolean;
@@ -37,6 +38,7 @@ function createRequest(flags: PruneFlagValues, context: ReturnType<typeof create
     keepVersions: flags['keep-version'],
     ignoreVersions: flags.ignore,
     keepBy: flags['keep-by'],
+    ...(flags['older-than'] === undefined ? {} : { olderThanDays: flags['older-than'].days }),
     dryRun: flags['dry-run'],
   };
 }
@@ -80,6 +82,10 @@ export default class FlowPrune extends SfCommand<FlowPruneResult> {
       summary: messages.getMessage('flags.keep-by.summary'),
       parse: (input: string): Promise<FlowPruneOrder> => Promise.resolve(input === 'modified' ? 'modified' : 'created'),
     })(),
+    'older-than': Flags.duration({
+      unit: 'days',
+      summary: messages.getMessage('flags.older-than.summary'),
+    }),
     namespace: Flags.string({
       summary: messages.getMessage('flags.namespace.summary'),
     }),
@@ -124,6 +130,7 @@ export default class FlowPrune extends SfCommand<FlowPruneResult> {
       ],
     });
     if (!this.jsonEnabled()) {
+      this.writeAgeProtection(result, name);
       if (!result.dryRun && !result.changed) {
         this.log(messages.getMessage('info.unchanged', [name, result.keep]));
         return;
@@ -133,6 +140,19 @@ export default class FlowPrune extends SfCommand<FlowPruneResult> {
       } else {
         this.log(messages.getMessage('info.pruned', [result.plannedDeletions.length, name, result.keep]));
       }
+    }
+  }
+
+  private writeAgeProtection(result: FlowPruneResult, name: string): void {
+    if (result.olderThanDays !== null) {
+      this.log(
+        messages.getMessage('info.age-protected', [
+          result.recentVersions.length,
+          name,
+          result.olderThanDays,
+          result.keepBy,
+        ])
+      );
     }
   }
 }

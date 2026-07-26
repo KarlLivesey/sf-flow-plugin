@@ -29,14 +29,36 @@ describe('flow audit command', (): void => {
   it('passes the authenticated username to the audit service', async (): Promise<void> => {
     const flags = {
       'target-org': createCommandOrg({} as Connection),
+      'api-name': ['Order_Processing'],
+      'fail-on-findings': false,
       'api-version': undefined,
     };
     $$.SANDBOX.stub(FlowAudit.prototype, 'parseFlags').resolves(flags);
     const audit = $$.SANDBOX.stub(FlowAuditService.prototype, 'audit').resolves(result);
     const actual = await FlowAudit.run(['--json']);
     expect(audit.calledOnce).to.equal(true);
-    expect(audit.firstCall.args[0]).to.equal('admin@example.com');
+    expect(audit.firstCall.args[0]).to.deep.equal({
+      targetOrg: 'admin@example.com',
+      apiNames: ['Order_Processing'],
+    });
     expect(audit.firstCall.args[1]).to.be.a('function');
     expect(actual).to.equal(result);
+  });
+
+  it('sets a failing process status when requested and findings are present', async (): Promise<void> => {
+    const flags = {
+      'target-org': createCommandOrg({} as Connection),
+      'api-name': undefined,
+      'fail-on-findings': true,
+      'api-version': undefined,
+    };
+    $$.SANDBOX.stub(FlowAudit.prototype, 'parseFlags').resolves(flags);
+    $$.SANDBOX.stub(FlowAuditService.prototype, 'audit').resolves({ ...result, flowsWithIssues: 1 });
+    try {
+      await FlowAudit.run(['--json']);
+      expect(process.exitCode).to.equal(1);
+    } finally {
+      process.exitCode = undefined;
+    }
   });
 });

@@ -18,6 +18,9 @@ const result: FlowDependenciesResult = {
   namespace: null,
   definitionId: '300000000000001',
   direction: 'both',
+  recursive: false,
+  maxDepth: 10,
+  definitionsScanned: 1,
   dependencies: [],
   targetOrg: 'admin@example.com',
 };
@@ -25,6 +28,8 @@ const result: FlowDependenciesResult = {
 describe('flow dependencies flags', (): void => {
   it('defaults to querying both directions', (): void => {
     expect(FlowDependencies.flags.direction.default).to.equal('both');
+    expect(FlowDependencies.flags.recursive.default).to.equal(false);
+    expect(FlowDependencies.flags['max-depth'].default).to.equal(10);
     expect(FlowDependencies.flags['api-name'].required).to.equal(true);
   });
 });
@@ -35,6 +40,8 @@ describe('flow dependencies command execution', (): void => {
       'api-name': 'Order_Processing',
       'target-org': createCommandOrg({} as Connection),
       direction: 'used-by' as const,
+      recursive: true,
+      'max-depth': 4,
       namespace: undefined,
       'api-version': undefined,
     };
@@ -45,6 +52,8 @@ describe('flow dependencies command execution', (): void => {
       apiName: 'Order_Processing',
       targetOrg: 'admin@example.com',
       direction: 'used-by',
+      recursive: true,
+      maxDepth: 4,
     });
     expect(actual).to.equal(result);
   });

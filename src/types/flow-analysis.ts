@@ -42,7 +42,7 @@ export interface FlowDependencyGateway {
   findDependencies(
     definitionId: string,
     direction: FlowDependencyQueryDirection
-  ): Promise<ReadonlyArray<FlowDependency>>;
+  ): Promise<ReadonlyArray<IndexedFlowDependency>>;
 }
 
 export interface FlowMetadataGateway {
@@ -51,9 +51,11 @@ export interface FlowMetadataGateway {
 
 export interface FlowDependenciesRequest extends NamedFlowRequest {
   direction: FlowDependencyDirection;
+  recursive: boolean;
+  maxDepth: number;
 }
 
-export interface FlowDependency {
+export interface IndexedFlowDependency {
   direction: FlowDependencyQueryDirection;
   componentId: string | null;
   name: string | null;
@@ -61,11 +63,21 @@ export interface FlowDependency {
   type: string | null;
 }
 
+export interface FlowDependency extends IndexedFlowDependency {
+  sourceDefinitionId: string;
+  sourceApiName: string;
+  sourceNamespace: string | null;
+  depth: number;
+}
+
 export interface FlowDependenciesResult {
   apiName: string;
   namespace: string | null;
   definitionId: string;
   direction: FlowDependencyDirection;
+  recursive: boolean;
+  maxDepth: number;
+  definitionsScanned: number;
   dependencies: FlowDependency[];
   targetOrg: string;
 }

@@ -78,7 +78,7 @@
     "lint": "wireit",
     "lint:fix": "eslint src test --fix --max-warnings 0",
     "postpack": "sf-clean --ignore-signing-artifacts",
-    "prepack": "sf-clean && sf-prepack",
+    "prepack": "sf-clean && WIREIT_CACHE=none sf-prepack",
     "prepare": "husky install",
     "test": "wireit",
     "test:command-reference": "wireit",

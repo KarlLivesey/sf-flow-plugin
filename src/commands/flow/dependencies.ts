@@ -26,6 +26,8 @@ export interface DependenciesFlagValues {
   'api-name': string;
   'target-org': Org | undefined;
   direction: FlowDependencyDirection;
+  recursive: boolean;
+  'max-depth': number;
   namespace: string | undefined;
   'api-version': string | undefined;
 }
@@ -34,7 +36,12 @@ function createRequest(
   flags: DependenciesFlagValues,
   context: ReturnType<typeof createFlowCommandContext>
 ): FlowDependenciesRequest {
-  return { ...createNamedFlowRequest(flags, context), direction: flags.direction };
+  return {
+    ...createNamedFlowRequest(flags, context),
+    direction: flags.direction,
+    recursive: flags.recursive,
+    maxDepth: flags['max-depth'],
+  };
 }
 
 export default class FlowDependencies extends SfCommand<FlowDependenciesResult> {
@@ -61,6 +68,16 @@ export default class FlowDependencies extends SfCommand<FlowDependenciesResult> 
       parse: (input: string): Promise<FlowDependencyDirection> =>
         Promise.resolve(input === 'uses' || input === 'used-by' ? input : 'both'),
     })(),
+    recursive: Flags.boolean({
+      char: 'r',
+      default: false,
+      summary: messages.getMessage('flags.recursive.summary'),
+    }),
+    'max-depth': Flags.integer({
+      default: 10,
+      min: 0,
+      summary: messages.getMessage('flags.max-depth.summary'),
+    }),
     namespace: Flags.string({
       summary: messages.getMessage('flags.namespace.summary'),
     }),
@@ -91,6 +108,8 @@ export default class FlowDependencies extends SfCommand<FlowDependenciesResult> 
       title: messages.getMessage('info.title', [qualifiedFlowName(result.apiName, result.namespace)]),
       data: result.dependencies.map((dependency) => ({ ...dependency })),
       columns: [
+        { key: 'sourceApiName', name: 'Source Flow' },
+        { key: 'depth', name: 'Depth' },
         { key: 'direction', name: 'Direction' },
         { key: 'type', name: 'Type' },
         { key: 'namespace', name: 'Namespace' },

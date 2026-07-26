@@ -29,6 +29,7 @@ export interface CompareFlagValues {
   'target-org': Org | undefined;
   from: FlowComparisonVersionSelector;
   to: FlowComparisonVersionSelector;
+  'fail-on-difference': boolean;
   namespace: string | undefined;
   'api-version': string | undefined;
 }
@@ -87,6 +88,10 @@ export default class FlowCompare extends SfCommand<FlowCompareResult> {
       parse: (input: string): Promise<FlowComparisonVersionSelector> =>
         Promise.resolve(parseComparisonVersionSelector(input)),
     })(),
+    'fail-on-difference': Flags.boolean({
+      default: false,
+      summary: messages.getMessage('flags.fail-on-difference.summary'),
+    }),
     namespace: Flags.string({
       summary: messages.getMessage('flags.namespace.summary'),
     }),
@@ -104,6 +109,9 @@ export default class FlowCompare extends SfCommand<FlowCompareResult> {
       service.compare(createRequest(flags, context), progress)
     );
     this.writeHumanOutput(result);
+    if (flags['fail-on-difference'] && result.different) {
+      process.exitCode = 1;
+    }
     return result;
   }
 

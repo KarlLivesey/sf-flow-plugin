@@ -55,6 +55,7 @@ describe('flow compare command execution', (): void => {
       'target-org': createCommandOrg({} as Connection),
       from: 1 as const,
       to: 'latest' as const,
+      'fail-on-difference': false,
       namespace: 'example',
       'api-version': undefined,
     };
@@ -69,5 +70,25 @@ describe('flow compare command execution', (): void => {
       to: 'latest',
     });
     expect(actual).to.equal(result);
+  });
+
+  it('sets a failing process status when requested and versions differ', async (): Promise<void> => {
+    const flags = {
+      'api-name': 'Order_Processing',
+      'target-org': createCommandOrg({} as Connection),
+      from: 'active' as const,
+      to: 'latest' as const,
+      'fail-on-difference': true,
+      namespace: undefined,
+      'api-version': undefined,
+    };
+    $$.SANDBOX.stub(FlowCompare.prototype, 'parseFlags').resolves(flags);
+    $$.SANDBOX.stub(FlowComparisonService.prototype, 'compare').resolves(result);
+    try {
+      await FlowCompare.run(['--json']);
+      expect(process.exitCode).to.equal(1);
+    } finally {
+      process.exitCode = undefined;
+    }
   });
 });

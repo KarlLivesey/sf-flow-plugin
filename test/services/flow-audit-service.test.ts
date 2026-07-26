@@ -31,7 +31,7 @@ describe('FlowAuditService', (): void => {
     ];
     const result = await new FlowAuditService(
       new FakeFlowGateway(definitions, [...firstVersions, ...secondVersions])
-    ).audit('admin@example.com');
+    ).audit({ targetOrg: 'admin@example.com', apiNames: [] });
     expect(result).to.include({ definitionsScanned: 2, flowsWithIssues: 2 });
     expect(result.flows[0]?.issues).to.deep.equal(['ActiveVersionBehindLatest', 'DraftVersionsPresent']);
     expect(result.flows[1]?.issues).to.deep.equal(['NoActiveVersion', 'ObsoleteVersionsPresent']);
@@ -48,7 +48,10 @@ describe('FlowAuditService clean and failure states', (): void => {
       activeVersionId: version.id,
       latestVersionId: version.id,
     });
-    const result = await new FlowAuditService(new FakeFlowGateway([definition], [version])).audit('admin@example.com');
+    const result = await new FlowAuditService(new FakeFlowGateway([definition], [version])).audit({
+      targetOrg: 'admin@example.com',
+      apiNames: [],
+    });
     expect(result).to.include({ definitionsScanned: 1, flowsWithIssues: 0 });
     expect(result.flows).to.deep.equal([]);
   });
@@ -56,7 +59,36 @@ describe('FlowAuditService clean and failure states', (): void => {
   it('wraps query failures', async (): Promise<void> => {
     const gateway = new FakeFlowGateway([], []);
     gateway.queryError = new Error('request failed');
-    const promise = new FlowAuditService(gateway).audit('admin@example.com');
+    const promise = new FlowAuditService(gateway).audit({ targetOrg: 'admin@example.com', apiNames: [] });
     await expectErrorName(promise, 'FlowAuditFailed');
+  });
+});
+
+describe('FlowAuditService filtering', (): void => {
+  it('audits only the requested API names', async (): Promise<void> => {
+    const firstId = '300000000000001';
+    const secondId = '300000000000002';
+    const firstVersion = flowVersion(firstId, 1, 'Draft');
+    const secondVersion = flowVersion(secondId, 1, 'Draft');
+    const definitions = [
+      flowDefinition({
+        id: firstId,
+        apiName: 'Selected_Flow',
+        activeVersionId: null,
+        latestVersionId: firstVersion.id,
+      }),
+      flowDefinition({
+        id: secondId,
+        apiName: 'Other_Flow',
+        activeVersionId: null,
+        latestVersionId: secondVersion.id,
+      }),
+    ];
+    const result = await new FlowAuditService(new FakeFlowGateway(definitions, [firstVersion, secondVersion])).audit({
+      targetOrg: 'admin@example.com',
+      apiNames: ['Selected_Flow', 'Selected_Flow'],
+    });
+    expect(result).to.include({ definitionsScanned: 1, flowsWithIssues: 1 });
+    expect(result.flows[0]?.apiName).to.equal('Selected_Flow');
   });
 });

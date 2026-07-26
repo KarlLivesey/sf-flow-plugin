@@ -10,8 +10,9 @@ import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
 import { FlowAuditService } from '../../services/flow-audit-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
-import type { FlowAuditResult } from '../../types/flow.js';
+import type { FlowAuditRequest, FlowAuditResult } from '../../types/flow.js';
 import { createFlowCommandContext } from '../../utils/flow-command.js';
+import { validateFlowApiName } from '../../utils/flow-name-validation.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
 
@@ -20,7 +21,15 @@ const messages = Messages.loadMessages('sf-flow-plugin', 'flow.audit');
 
 export interface AuditFlagValues {
   'target-org': Org | undefined;
+  'api-name': string[] | undefined;
+  'fail-on-findings': boolean;
   'api-version': string | undefined;
+}
+
+function createRequest(flags: AuditFlagValues, targetOrg: string): FlowAuditRequest {
+  const apiNames = flags['api-name'] ?? [];
+  apiNames.forEach(validateFlowApiName);
+  return { targetOrg, apiNames };
 }
 
 export default class FlowAudit extends SfCommand<FlowAuditResult> {
@@ -34,6 +43,15 @@ export default class FlowAudit extends SfCommand<FlowAuditResult> {
       required: false,
       summary: messages.getMessage('flags.target-org.summary'),
     }),
+    'api-name': Flags.string({
+      char: 'n',
+      multiple: true,
+      summary: messages.getMessage('flags.api-name.summary'),
+    }),
+    'fail-on-findings': Flags.boolean({
+      default: false,
+      summary: messages.getMessage('flags.fail-on-findings.summary'),
+    }),
     'api-version': Flags.orgApiVersion({
       summary: messages.getMessage('flags.api-version.summary'),
     }),
@@ -44,9 +62,12 @@ export default class FlowAudit extends SfCommand<FlowAuditResult> {
     const context = createFlowCommandContext(flags);
     const service = new FlowAuditService(new ToolingFlowDefinitionGateway(context.connection));
     const result = await withFlowProgress(this.spinner, 'audit', async (progress) =>
-      service.audit(context.targetOrg, progress)
+      service.audit(createRequest(flags, context.targetOrg), progress)
     );
     this.writeHumanOutput(result);
+    if (flags['fail-on-findings'] && result.flowsWithIssues > 0) {
+      process.exitCode = 1;
+    }
     return result;
   }
 
