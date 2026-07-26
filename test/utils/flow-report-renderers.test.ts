@@ -102,3 +102,31 @@ describe('Flow report renderers', (): void => {
     }
   });
 });
+
+describe('Flow dependency renderer structure', (): void => {
+  it('identifies the source Flow on every tree edge', (): void => {
+    const tree = renderFlowDependencies(dependencies, 'tree');
+    expect(tree).to.contain('[depth 0] Order_Processing uses -> CustomObject:Account');
+    expect(tree).to.contain('[depth 1] example__Order_Processing <- used by Unknown:example__unknown');
+  });
+
+  it('allocates distinct Mermaid IDs for labels with the same legacy hash', (): void => {
+    const base = dependencies.dependencies[0];
+    if (base === undefined) {
+      throw new Error('Expected a dependency fixture.');
+    }
+    const colliding: FlowDependenciesResult = {
+      ...dependencies,
+      dependencies: [
+        { ...base, name: 'Aa' },
+        { ...base, componentId: 'second', name: 'BB' },
+      ],
+    };
+    const mermaid = renderFlowDependencies(colliding, 'mermaid');
+    const first = /(\w+)\["CustomObject:Aa"\]/u.exec(mermaid);
+    const second = /(\w+)\["CustomObject:BB"\]/u.exec(mermaid);
+    expect(first?.[1]).to.match(/^n\d+$/u);
+    expect(second?.[1]).to.match(/^n\d+$/u);
+    expect(first?.[1]).not.to.equal(second?.[1]);
+  });
+});

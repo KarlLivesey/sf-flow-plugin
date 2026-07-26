@@ -41,27 +41,31 @@ function renderTable(result: FlowDependenciesResult): string {
 function renderTree(result: FlowDependenciesResult): string {
   return [
     result.apiName,
-    ...result.dependencies.map(
-      (dependency) => `${'  '.repeat(dependency.depth + 1)}${dependency.direction} ${target(dependency)}`
-    ),
+    ...result.dependencies.map((dependency) => {
+      const edge = dependency.direction === 'uses' ? 'uses ->' : '<- used by';
+      return `  [depth ${dependency.depth}] ${source(dependency)} ${edge} ${target(dependency)}`;
+    }),
   ].join('\n');
 }
 
-function nodeId(value: string): string {
-  let hash = 0;
-  for (const character of value) {
-    hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+function nodeId(ids: Map<string, string>, label: string): string {
+  const existing = ids.get(label);
+  if (existing !== undefined) {
+    return existing;
   }
-  return `n${hash.toString(16)}`;
+  const identifier = `n${ids.size}`;
+  ids.set(label, identifier);
+  return identifier;
 }
 
 function renderMermaid(result: FlowDependenciesResult): string {
   const lines = ['flowchart LR'];
+  const ids = new Map<string, string>();
   for (const dependency of result.dependencies) {
     const from = source(dependency);
     const to = target(dependency);
     const edge = dependency.direction === 'uses' ? '-->' : '<--';
-    lines.push(`  ${nodeId(from)}["${escapeLabel(from)}"] ${edge} ${nodeId(to)}["${escapeLabel(to)}"]`);
+    lines.push(`  ${nodeId(ids, from)}["${escapeLabel(from)}"] ${edge} ${nodeId(ids, to)}["${escapeLabel(to)}"]`);
   }
   return lines.join('\n');
 }
