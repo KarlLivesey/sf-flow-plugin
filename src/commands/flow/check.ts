@@ -25,6 +25,7 @@ import { createFlowCommandContext } from '../../utils/flow-command.js';
 import { validateFlowApiName, validateNamespace } from '../../utils/flow-name-validation.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
 import { writeFlowReportFile } from '../../utils/flow-report-file.js';
+import { qualifiedFlowName } from '../../utils/flow-state.js';
 import { parseInspectionVersionSelector } from './describe.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -185,6 +186,7 @@ export default class FlowCheck extends SfCommand<FlowCheckResult> {
       title: messages.getMessage('info.title', [result.errors, result.warnings]),
       data: result.findings.map((finding) => ({
         ...finding,
+        apiName: qualifiedFlowName(finding.apiName, finding.namespace),
         version: finding.version ?? '-',
         path: finding.path ?? '-',
       })),
