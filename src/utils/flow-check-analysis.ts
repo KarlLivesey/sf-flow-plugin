@@ -9,6 +9,7 @@ import type { FlowCheckFinding, FlowCheckKind, FlowCheckResult, FlowInputOutputC
 import type { FlowVersionsResult } from '../types/flow.js';
 import type { FlowDescription, FlowTraversalWarning } from '../types/flow-inspection.js';
 import type { FlowLintResult } from '../types/flow-lint.js';
+import { qualifiedFlowName } from './flow-state.js';
 
 export const FLOW_CHECK_KINDS: FlowCheckKind[] = ['lint', 'dependencies', 'subflows', 'versions', 'metrics'];
 
@@ -159,11 +160,33 @@ export function flowContracts(descriptions: ReadonlyArray<FlowDescription>): Flo
 export function formatFlowCheckHuman(result: FlowCheckResult): string {
   const lines = result.findings.map(
     (item) =>
-      `${item.severity.toUpperCase()}\t${item.apiName}\t${item.check}\t${item.code}\t${item.path ?? '-'}\t${
-        item.message
-      }`
+      `${item.severity.toUpperCase()}\t${qualifiedFlowName(item.apiName, item.namespace)}\t${item.check}\t${
+        item.code
+      }\t${item.path ?? '-'}\t${item.message}`
   );
   return [`Flow check (${result.errors} errors, ${result.warnings} warnings)`, ...lines].join('\n');
+}
+
+function sarifLocation(item: FlowCheckFinding): object {
+  const flowName = qualifiedFlowName(item.apiName, item.namespace);
+  return {
+    logicalLocations: [
+      { name: flowName, fullyQualifiedName: flowName, kind: 'flow' },
+      ...(item.path === null
+        ? []
+        : [
+            {
+              name: item.path,
+              fullyQualifiedName: `${flowName}:${item.path}`,
+              kind: 'flowElementOrMetadataPath',
+            },
+          ]),
+    ],
+    properties: {
+      flowApiName: flowName,
+      ...(item.path === null ? {} : { metadataPath: item.path }),
+    },
+  };
 }
 
 export function formatFlowCheckSarif(result: FlowCheckResult): string {
@@ -178,22 +201,7 @@ export function formatFlowCheckSarif(result: FlowCheckResult): string {
             ruleId: `${item.check}/${item.code}`,
             level: item.severity,
             message: { text: item.message },
-            ...(item.path === null
-              ? {}
-              : {
-                  locations: [
-                    {
-                      logicalLocations: [
-                        {
-                          name: item.path,
-                          fullyQualifiedName: `${item.apiName}:${item.path}`,
-                          kind: 'flowElementOrMetadataPath',
-                        },
-                      ],
-                      properties: { flowApiName: item.apiName, metadataPath: item.path },
-                    },
-                  ],
-                }),
+            locations: [sarifLocation(item)],
           })),
         },
       ],
