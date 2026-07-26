@@ -145,7 +145,8 @@ but are not exported; they must already exist in the destination org or be deplo
 
 Existing files are refused unless `--overwrite` is supplied. Overwrite mode stages the complete bundle before
 replacing files, removes stale Flow files recorded by the previous validated manifest and restores the prior output
-if writing the replacement fails.
+if writing the replacement fails. The previous manifest must belong to the same root Flow; an unrelated bundle is
+never treated as stale. Non-regular targets and symlinked output ancestors are refused.
 
 ## `sf flow lint`
 
@@ -601,9 +602,9 @@ sf flow metrics \
 
 Runtime output includes execution, successful and failed counts; average, minimum and maximum duration; first and
 last execution times; and status/error breakdowns. `--data-cloud` first verifies that the selected Flow and version
-are available through the standard or legacy Flow Data Model Objects. It fails with a specific availability error
-when Data Cloud is not provisioned, Flow metrics collection has not produced those records, or the authenticated
-user cannot query them. An enabled Flow with no runs in the selected window returns zero executions.
+are available through the standard or legacy Flow Data Model Objects. Missing Flow DMOs or no matching Flow/version
+records produce `FlowDataCloudMetricsUnavailable`. Permission failures, query failures and malformed responses
+produce `FlowDataCloudMetricsFailed`. An enabled Flow with no runs in the selected window returns zero executions.
 
 The plugin queries the Data Cloud Data Model Objects through the Data 360 Connect REST SQL Query API using the
 Salesforce CLI-authenticated target-org connection. It does not use ordinary SOQL or exchange the Salesforce access
@@ -671,11 +672,13 @@ executing the Flow; it does not predict runtime success. The active version is c
 request, but activation can still change concurrently. The version reported by Salesforce in the invocation response
 is authoritative.
 
-Results include outputs, duration and success for each invocation. Salesforce error message text is deliberately
-withheld and replaced by a stable plugin error code. Input and output properties whose names look sensitive are
-redacted on a best-effort basis; arbitrary values under other property names can still appear in terminal, JSON and
-output-file results. A transport failure can leave execution outcome unknown, so the command does not automatically
-retry a potentially non-idempotent Flow.
+Results include one top-level duration for the complete REST action request, plus outputs, errors and success for each
+invocation. Per-invocation Salesforce error text is replaced by a fixed redacted message while a validated Salesforce
+status code is retained when available. Raw transport exceptions are not retained as causes; only a validated
+transport status is exposed when available. Input and output properties whose names look sensitive are redacted on a
+best-effort basis; arbitrary values under other property names can still appear in terminal, JSON and output-file
+results. A transport failure can leave execution outcome unknown, so the command does not automatically retry a
+potentially non-idempotent Flow.
 
 `sf flow debug` is intentionally not included because Salesforce does not expose a verified supported interface for
 the requested arbitrary-version tracing, rollback, run-as and record-trigger simulation contract. Flow tests are not

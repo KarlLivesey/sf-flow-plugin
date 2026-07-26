@@ -9,7 +9,7 @@ All notable user-visible changes to this project will be documented in this file
 - Added `sf flow run` for supported invocation of active autolaunched Flows, with Zod-validated inputs, input files,
   up to 200 invocations in one REST action request, response count and version guards, output files, dry-run
   validation, production confirmation, deliberately withheld Salesforce error messages, best-effort key-based value
-  redaction and CI failure control.
+  redaction, one request-level duration and CI failure control.
 - Added `sf flow delete-version` with dry-run-by-default plans, active/latest protection, permission preflight,
   concurrency guards and post-deletion verification.
 - Added `sf flow check` to aggregate lint, dependency, subflow, version-state and metrics findings for CI, with
@@ -19,7 +19,8 @@ All notable user-visible changes to this project will be documented in this file
   360 Connect REST SQL Query API with an availability preflight and configurable reporting window.
 - Added `sf flow bundle` to export a Flow and its complete recursively resolved subflow source set with deployable
   metadata, `package.xml`, selected-version manifest, dependency report and external dependency list. Incomplete
-  traversal is refused, while overwrite uses staged writes, stale-file reconciliation and rollback.
+  traversal is refused, while overwrite uses per-root ownership checks, confined regular-file targets, staged writes,
+  stale-file reconciliation and rollback.
 - Added lint rule selection, exclusions, severity-based CI failures, SARIF output, report files and baselines that
   separate existing findings from new findings.
 - Added repeatable Flow list filters, configurable sorting and result limits.
@@ -36,6 +37,8 @@ All notable user-visible changes to this project will be documented in this file
 - `sf flow run --dry-run` validates eligibility, inputs, types and action access without claiming to predict runtime
   success. The active version is rechecked immediately before invocation, while Salesforce's returned version remains
   authoritative.
+- Data Cloud capability checks distinguish unavailable Flow DMOs and records from permission, query and response
+  failures, and runtime records are scoped to the authenticated source organisation.
 - `sf flow debug` is not included because the requested trace, rollback, run-as and record-trigger behaviour does not
   have a verified supported Salesforce interface.
 - Salesforce CLI's existing `sf flow run test` and `sf flow get test` commands remain the supported Flow test runner;
