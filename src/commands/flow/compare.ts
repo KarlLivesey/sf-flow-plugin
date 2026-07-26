@@ -4,8 +4,7 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { Messages } from '@salesforce/core';
-import type { Org } from '@salesforce/core';
+import { Messages, Org } from '@salesforce/core';
 import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
 import { flowComparisonFailed } from '../../errors/flow-errors.js';
@@ -28,6 +27,8 @@ const messages = Messages.loadMessages('sf-flow-plugin', 'flow.compare');
 export interface CompareFlagValues {
   'api-name': string;
   'target-org': Org | undefined;
+  'from-org': Org | undefined;
+  'to-org': Org | undefined;
   from: FlowComparisonVersionSelector;
   to: FlowComparisonVersionSelector;
   'fail-on-difference': boolean;
@@ -35,6 +36,11 @@ export interface CompareFlagValues {
   'ignore-order': boolean;
   namespace: string | undefined;
   'api-version': string | undefined;
+}
+
+interface ComparisonContexts {
+  from: ReturnType<typeof createFlowCommandContext>;
+  to: ReturnType<typeof createFlowCommandContext>;
 }
 
 export function parseComparisonVersionSelector(input: string): FlowComparisonVersionSelector {
@@ -47,17 +53,27 @@ export function parseComparisonVersionSelector(input: string): FlowComparisonVer
   return Number(input);
 }
 
-function createRequest(
-  flags: CompareFlagValues,
-  context: ReturnType<typeof createFlowCommandContext>
-): FlowCompareRequest {
+function createRequest(flags: CompareFlagValues, contexts: ComparisonContexts): FlowCompareRequest {
   return {
-    ...createNamedFlowRequest(flags, context),
+    ...createNamedFlowRequest(flags, contexts.from),
     from: flags.from,
     to: flags.to,
+    fromOrg: contexts.from.targetOrg,
+    toOrg: contexts.to.targetOrg,
     scopes: flags.only ?? [],
     ignoreOrder: flags['ignore-order'],
   };
+}
+
+function createComparisonContexts(flags: CompareFlagValues): ComparisonContexts {
+  if (flags['from-org'] !== undefined && flags['to-org'] !== undefined) {
+    return {
+      from: createFlowCommandContext({ 'target-org': flags['from-org'], 'api-version': flags['api-version'] }),
+      to: createFlowCommandContext({ 'target-org': flags['to-org'], 'api-version': flags['api-version'] }),
+    };
+  }
+  const context = createFlowCommandContext(flags);
+  return { from: context, to: context };
 }
 
 function displayValue(value: JsonValue | undefined): string {
@@ -81,8 +97,23 @@ export default class FlowCompare extends SfCommand<FlowCompareResult> {
     'target-org': Flags.requiredOrg({
       char: 'o',
       required: false,
+      exclusive: ['from-org', 'to-org'],
       summary: messages.getMessage('flags.target-org.summary'),
     }),
+    'from-org': Flags.custom<Org>({
+      required: false,
+      dependsOn: ['to-org'],
+      exclusive: ['target-org'],
+      summary: messages.getMessage('flags.from-org.summary'),
+      parse: async (input: string): Promise<Org> => Org.create({ aliasOrUsername: input }),
+    })(),
+    'to-org': Flags.custom<Org>({
+      required: false,
+      dependsOn: ['from-org'],
+      exclusive: ['target-org'],
+      summary: messages.getMessage('flags.to-org.summary'),
+      parse: async (input: string): Promise<Org> => Org.create({ aliasOrUsername: input }),
+    })(),
     from: Flags.custom<FlowComparisonVersionSelector>({
       char: 'f',
       default: 'active',
@@ -121,10 +152,14 @@ export default class FlowCompare extends SfCommand<FlowCompareResult> {
   public async run(): Promise<FlowCompareResult> {
     const flags = await this.parseFlags();
     validateNamedFlowFlags(flags);
-    const context = createFlowCommandContext(flags);
-    const service = new FlowComparisonService(new ToolingFlowDefinitionGateway(context.connection));
+    const contexts = createComparisonContexts(flags);
+    const fromGateway = new ToolingFlowDefinitionGateway(contexts.from.connection);
+    const service =
+      contexts.from === contexts.to
+        ? new FlowComparisonService(fromGateway)
+        : new FlowComparisonService(fromGateway, new ToolingFlowDefinitionGateway(contexts.to.connection));
     const result = await withFlowProgress(this.spinner, 'compare', async (progress) =>
-      service.compare(createRequest(flags, context), progress)
+      service.compare(createRequest(flags, contexts), progress)
     );
     this.writeHumanOutput(result);
     if (flags['fail-on-difference'] && result.different) {
@@ -141,7 +176,13 @@ export default class FlowCompare extends SfCommand<FlowCompareResult> {
   private writeHumanOutput(result: FlowCompareResult): void {
     const name = qualifiedFlowName(result.apiName, result.namespace);
     this.table({
-      title: messages.getMessage('info.title', [name, result.fromVersion, result.toVersion]),
+      title: messages.getMessage('info.title', [
+        name,
+        result.fromVersion,
+        result.fromOrg,
+        result.toVersion,
+        result.toOrg,
+      ]),
       data: result.changes.map((change) => ({
         ...change,
         before: displayValue(change.before),
