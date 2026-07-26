@@ -26,6 +26,12 @@
         "maxDepth": {
           "type": "number"
         },
+        "sections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowDescribeSection"
+          }
+        },
         "flows": {
           "type": "array",
           "items": {
@@ -152,6 +158,7 @@
         "resolvedElk",
         "resolvedLayout",
         "resolvedVersion",
+        "sections",
         "style",
         "subflowVersion",
         "targetOrg",
@@ -180,6 +187,10 @@
     "FlowSubflowVersionSelector": {
       "type": "string",
       "enum": ["active", "latest"]
+    },
+    "FlowDescribeSection": {
+      "type": "string",
+      "enum": ["elements", "inputs", "outputs", "references", "resources"]
     },
     "FlowDescription": {
       "type": "object",
