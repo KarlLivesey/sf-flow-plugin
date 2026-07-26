@@ -74,3 +74,18 @@ describe('FlowDescribeService subflow version selection', (): void => {
     ]);
   });
 });
+
+describe('FlowDescribeService section filtering', (): void => {
+  it('returns only the requested description sections', async (): Promise<void> => {
+    const result = await new FlowDescribeService(nestedFlowGateway()).describe(
+      inspectionRequest({ recursive: false, sections: ['inputs', 'references'] })
+    );
+    const flow = result.flows[0];
+    expect(result.sections).to.deep.equal(['inputs', 'references']);
+    expect(flow?.variables.map((variable) => variable.name)).to.deep.equal(['InputValue']);
+    expect(flow?.subflows.map((subflow) => subflow.flowName)).to.deep.equal(['Flow_B']);
+    expect(flow?.formulas).to.deep.equal([]);
+    expect(flow?.elements).to.deep.equal([]);
+    expect(flow?.connectors).to.deep.equal([]);
+  });
+});

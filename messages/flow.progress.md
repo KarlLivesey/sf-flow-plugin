@@ -26,6 +26,10 @@ Describing Flow
 
 Generating Flow graph
 
+# actions.list
+
+Listing Flows
+
 # actions.prune
 
 Pruning Flow versions

@@ -15,6 +15,7 @@ import type { FlowComparisonVersionSelector } from '../../types/flow-analysis.js
 import type {
   FlowDescribeRequest,
   FlowDescribeResult,
+  FlowDescribeSection,
   FlowDescription,
   FlowSubflowVersionSelector,
   FlowTraversalWarningKind,
@@ -40,6 +41,7 @@ export interface DescribeFlagValues {
   'subflow-version': FlowSubflowVersionSelector;
   recursive: boolean;
   'max-depth': number;
+  only: FlowDescribeSection[] | undefined;
   namespace: string | undefined;
   'api-version': string | undefined;
 }
@@ -64,6 +66,7 @@ function createRequest(
     subflowVersion: flags['subflow-version'],
     recursive: flags.recursive,
     maxDepth: flags['max-depth'],
+    sections: flags.only ?? [],
   };
 }
 
@@ -91,6 +94,32 @@ function describeRow(flow: FlowDescription): Record<string, number | string> {
     subflows: flow.subflows.map((subflow) => subflow.flowName).join(', '),
     objects: flow.referencedObjects.join(', '),
   };
+}
+
+function describeColumns(sections: ReadonlyArray<FlowDescribeSection>): Array<{ key: string; name: string }> {
+  const all = sections.length === 0;
+  const selected = new Set(sections);
+  return [
+    { key: 'name', name: 'Flow' },
+    { key: 'version', name: 'Version' },
+    { key: 'status', name: 'Status' },
+    ...(all || selected.has('elements') ? [{ key: 'elements', name: 'Elements' }] : []),
+    ...(all || selected.has('inputs') ? [{ key: 'inputs', name: 'Inputs' }] : []),
+    ...(all || selected.has('outputs') ? [{ key: 'outputs', name: 'Outputs' }] : []),
+    ...(all || selected.has('resources')
+      ? [
+          { key: 'variables', name: 'Variables' },
+          { key: 'formulas', name: 'Formulas' },
+        ]
+      : []),
+    ...(all || selected.has('references')
+      ? [
+          { key: 'apexActions', name: 'Apex' },
+          { key: 'subflows', name: 'Subflows' },
+          { key: 'objects', name: 'Objects' },
+        ]
+      : []),
+  ];
 }
 
 export default class FlowDescribe extends SfCommand<FlowDescribeResult> {
@@ -132,6 +161,11 @@ export default class FlowDescribe extends SfCommand<FlowDescribeResult> {
       min: 0,
       summary: messages.getMessage('flags.max-depth.summary'),
     }),
+    only: Flags.custom<FlowDescribeSection>({
+      multiple: true,
+      options: ['elements', 'resources', 'references', 'inputs', 'outputs'],
+      summary: messages.getMessage('flags.only.summary'),
+    })(),
     namespace: Flags.string({
       summary: messages.getMessage('flags.namespace.summary'),
     }),
@@ -161,19 +195,7 @@ export default class FlowDescribe extends SfCommand<FlowDescribeResult> {
     this.table({
       title: messages.getMessage('info.title'),
       data: result.flows.map(describeRow),
-      columns: [
-        { key: 'name', name: 'Flow' },
-        { key: 'version', name: 'Version' },
-        { key: 'status', name: 'Status' },
-        { key: 'elements', name: 'Elements' },
-        { key: 'inputs', name: 'Inputs' },
-        { key: 'outputs', name: 'Outputs' },
-        { key: 'variables', name: 'Variables' },
-        { key: 'formulas', name: 'Formulas' },
-        { key: 'apexActions', name: 'Apex' },
-        { key: 'subflows', name: 'Subflows' },
-        { key: 'objects', name: 'Objects' },
-      ],
+      columns: describeColumns(result.sections),
     });
     if (!this.jsonEnabled()) {
       for (const warning of result.warnings) {
