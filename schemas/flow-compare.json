@@ -14,6 +14,12 @@
         "definitionId": {
           "type": "string"
         },
+        "fromDefinitionId": {
+          "type": "string"
+        },
+        "toDefinitionId": {
+          "type": "string"
+        },
         "requestedFrom": {
           "$ref": "#/definitions/FlowComparisonVersionSelector"
         },
@@ -55,12 +61,23 @@
         },
         "targetOrg": {
           "type": "string"
+        },
+        "fromOrg": {
+          "type": "string"
+        },
+        "toOrg": {
+          "type": "string"
+        },
+        "crossOrg": {
+          "type": "boolean"
         }
       },
       "required": [
         "apiName",
         "namespace",
         "definitionId",
+        "fromDefinitionId",
+        "toDefinitionId",
         "requestedFrom",
         "requestedTo",
         "scopes",
@@ -72,7 +89,10 @@
         "removed",
         "changed",
         "different",
-        "targetOrg"
+        "targetOrg",
+        "fromOrg",
+        "toOrg",
+        "crossOrg"
       ],
       "additionalProperties": false
     },
