@@ -124,7 +124,7 @@ function dryRunInvocation(flow: ResolvedRunnableFlow, input: JsonObject): FlowIn
   return {
     interviewId: null,
     version: flow.version.versionNumber,
-    success: true,
+    success: null,
     inputs: redactFlowObject(input),
     outputs: {},
     errors: [],
@@ -191,6 +191,7 @@ async function executeInputs(context: ExecuteInputsContext): Promise<ExecutedInp
 
 function createResult(context: RunResultContext): FlowRunResult {
   const { request, flow, version, production, durationMilliseconds, invocations } = context;
+  const executed = invocations.every((invocation) => invocation.executed);
   return {
     apiName: flow.definition.apiName,
     namespace: flow.definition.namespace,
@@ -200,7 +201,7 @@ function createResult(context: RunResultContext): FlowRunResult {
     production,
     dryRun: request.dryRun,
     durationMilliseconds,
-    successful: invocations.every((invocation) => invocation.success),
+    successful: executed ? invocations.every((invocation) => invocation.success === true) : null,
     invocations,
     targetOrg: request.targetOrg,
   };

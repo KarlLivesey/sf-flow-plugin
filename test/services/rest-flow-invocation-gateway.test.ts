@@ -140,6 +140,15 @@ describe('RestFlowInvocationGateway errors', (): void => {
 });
 
 describe('RestFlowInvocationGateway transport aliases', (): void => {
+  it('reports recognised invocation authorisation failures as permission failures', async (): Promise<void> => {
+    const fake = connection({});
+    fake.request.rejects(httpApiError('INSUFFICIENT_ACCESS', 'forbidden'));
+    await expectErrorName(
+      new RestFlowInvocationGateway(fake.connection).invokeFlow('Calculate_Discount', [{}]),
+      'FlowInvocationPermissionDenied'
+    );
+  });
+
   it('preserves a numeric permission status from an ordinary Error', async (): Promise<void> => {
     const fake = connection({});
     fake.request.rejects(Object.assign(new Error('forbidden'), { statusCode: 403 }));

@@ -180,9 +180,9 @@ describe('FlowRunService safety', (): void => {
     const result = await new FlowRunService(fake).run(request({ dryRun: true }));
     expect(fake.invocation.availabilityChecks).to.deep.equal(['Calculate_Discount']);
     expect(fake.invocation.invoked).to.deep.equal([]);
-    expect(result).to.include({ production: true, dryRun: true, successful: true });
+    expect(result).to.include({ production: true, dryRun: true, successful: null });
     expect(result).to.include({ durationMilliseconds: 0 });
-    expect(result.invocations[0]).to.include({ executed: false });
+    expect(result.invocations[0]).to.include({ executed: false, success: null });
   });
 
   it('requires explicit confirmation before production execution', async (): Promise<void> => {

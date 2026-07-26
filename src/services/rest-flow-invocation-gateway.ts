@@ -125,6 +125,9 @@ export class RestFlowInvocationGateway implements FlowInvocationGateway {
       });
       return actionResultsSchema.parse(response);
     } catch (error: unknown) {
+      if (isPermissionFailure(error)) {
+        throw flowInvocationPermissionDenied(apiName);
+      }
       throw flowInvocationFailed(invocationFailureMessage(apiName, error));
     }
   }

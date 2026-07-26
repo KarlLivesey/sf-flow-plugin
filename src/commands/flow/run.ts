@@ -134,7 +134,7 @@ export default class FlowRun extends SfCommand<FlowRunResult> {
       await writeResult(flags['output-file'], result);
     }
     this.writeHumanOutput(result);
-    if (flags['fail-on-flow-error'] && !result.successful) {
+    if (flags['fail-on-flow-error'] && result.successful === false) {
       process.exitCode = 1;
     }
     return result;
@@ -152,7 +152,7 @@ export default class FlowRun extends SfCommand<FlowRunResult> {
       data: result.invocations.map((invocation, index) => ({
         invocation: index + 1,
         interviewId: invocation.interviewId ?? '',
-        success: invocation.success,
+        outcome: invocation.success === null ? 'Not executed' : invocation.success ? 'Succeeded' : 'Failed',
         executed: invocation.executed,
         outputs: JSON.stringify(invocation.outputs),
         errors: invocation.errors.map((error) => error.message).join('; '),
@@ -160,7 +160,7 @@ export default class FlowRun extends SfCommand<FlowRunResult> {
       columns: [
         { key: 'invocation', name: 'Invocation' },
         { key: 'interviewId', name: 'Interview ID' },
-        { key: 'success', name: 'Success' },
+        { key: 'outcome', name: 'Outcome' },
         { key: 'executed', name: 'Executed' },
         { key: 'outputs', name: 'Outputs' },
         { key: 'errors', name: 'Errors' },
