@@ -14,6 +14,10 @@ function markdownValue(input: JsonValue | undefined): string {
   return value(input).replaceAll('|', '\\|').replaceAll('\n', '<br>');
 }
 
+function unifiedValue(input: JsonValue | undefined): string {
+  return input === undefined ? '' : JSON.stringify(input);
+}
+
 function renderSummary(result: FlowCompareResult): string {
   return [
     `Flow: ${result.apiName}`,
@@ -24,7 +28,7 @@ function renderSummary(result: FlowCompareResult): string {
 }
 
 function renderUnifiedChange(change: FlowComparisonChange): string[] {
-  return [`@@ ${change.path} @@`, `- ${value(change.before)}`, `+ ${value(change.after)}`];
+  return [`@@ ${change.path} @@`, `- ${unifiedValue(change.before)}`, `+ ${unifiedValue(change.after)}`];
 }
 
 function renderUnified(result: FlowCompareResult): string {
