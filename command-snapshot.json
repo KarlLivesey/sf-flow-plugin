@@ -77,6 +77,25 @@
   },
   {
     "alias": [],
+    "command": "flow:delete-version",
+    "flagAliases": [],
+    "flagChars": ["n", "o"],
+    "flags": [
+      "api-name",
+      "api-version",
+      "dry-run",
+      "flags-dir",
+      "flow-version",
+      "if-active-version",
+      "if-latest-version",
+      "json",
+      "namespace",
+      "target-org"
+    ],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
     "command": "flow:dependencies",
     "flagAliases": [],
     "flagChars": ["d", "n", "o", "r"],

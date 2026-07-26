@@ -15,6 +15,7 @@ export type FlowProgressAction =
   | 'audit'
   | 'compare'
   | 'deactivate'
+  | 'delete-version'
   | 'dependencies'
   | 'describe'
   | 'export'
@@ -48,6 +49,7 @@ const actionMessages: Record<FlowProgressAction, string> = {
   audit: messages.getMessage('actions.audit'),
   compare: messages.getMessage('actions.compare'),
   deactivate: messages.getMessage('actions.deactivate'),
+  'delete-version': messages.getMessage('actions.delete-version'),
   dependencies: messages.getMessage('actions.dependencies'),
   describe: messages.getMessage('actions.describe'),
   export: messages.getMessage('actions.export'),

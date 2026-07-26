@@ -14,6 +14,10 @@ Comparing Flow versions
 
 Deactivating Flow
 
+# actions.delete-version
+
+Deleting Flow version
+
 # actions.dependencies
 
 Resolving Flow dependencies
