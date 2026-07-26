@@ -49,6 +49,9 @@ describe('FlowBundleService', (): void => {
     expect(artifact.files.find((file) => file.path.endsWith('package.xml'))?.content).to.include(
       '<members>Flow_B</members>'
     );
+    expect(artifact.files.find((file) => file.path.endsWith('manifest.json'))?.content).to.include(
+      '"rootFlow": "Flow_A"'
+    );
   });
 
   it('refuses an incomplete dependency report', async (): Promise<void> => {
