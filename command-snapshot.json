@@ -29,8 +29,10 @@
       "flags-dir",
       "json",
       "max-inactive-versions",
+      "namespace",
       "older-than",
-      "target-org"
+      "target-org",
+      "type"
     ],
     "plugin": "sf-flow-plugin"
   },
@@ -45,12 +47,14 @@
       "fail-on-difference",
       "flags-dir",
       "from",
+      "from-org",
       "ignore-order",
       "json",
       "namespace",
       "only",
       "target-org",
-      "to"
+      "to",
+      "to-org"
     ],
     "plugin": "sf-flow-plugin"
   },
@@ -77,6 +81,7 @@
     "flagAliases": [],
     "flagChars": ["d", "n", "o", "r"],
     "flags": [
+      "allow-truncated",
       "api-name",
       "api-version",
       "direction",
@@ -104,6 +109,7 @@
       "json",
       "max-depth",
       "namespace",
+      "only",
       "recursive",
       "subflow-version",
       "target-org"
@@ -154,6 +160,14 @@
     "flagAliases": [],
     "flagChars": ["n", "o"],
     "flags": ["api-name", "api-version", "flags-dir", "flow-version", "json", "namespace", "target-org"],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
+    "command": "flow:list",
+    "flagAliases": [],
+    "flagChars": ["o"],
+    "flags": ["api-version", "flags-dir", "json", "target-org"],
     "plugin": "sf-flow-plugin"
   },
   {

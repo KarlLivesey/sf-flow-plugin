@@ -20,6 +20,15 @@
         "olderThanDays": {
           "type": ["number", "null"]
         },
+        "types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
         "flows": {
           "type": "array",
           "items": {
@@ -33,6 +42,8 @@
         "flowsWithIssues",
         "maxInactiveVersions",
         "olderThanDays",
+        "types",
+        "namespace",
         "flows"
       ],
       "additionalProperties": false

@@ -141,6 +141,15 @@ export function flowAuditFailed(message: string, cause?: unknown): SfError {
   });
 }
 
+export function flowListFailed(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowListFailed',
+    message,
+    action: 'Confirm the org supports Tooling API Flow queries and that your user has sufficient permissions.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
 export function flowDependenciesFailed(message: string, cause?: unknown): SfError {
   return createFlowError({
     code: 'FlowDependenciesFailed',

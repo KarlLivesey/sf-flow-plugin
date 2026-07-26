@@ -30,6 +30,10 @@ Subflow version to follow: active (falling back to latest) or latest.
 
 Maximum subflow depth to expand during recursive traversal.
 
+# flags.only.summary
+
+Description section to include: elements, resources, references, inputs, or outputs. Repeat to combine sections.
+
 # flags.namespace.summary
 
 Namespace that identifies a packaged Flow.
@@ -47,6 +51,10 @@ Salesforce API version to use for the Tooling API requests.
 - Recursively describe called subflows:
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --flow-version active --recursive --subflow-version latest
+
+- Show only inputs, outputs and referenced components:
+
+  <%= config.bin %> <%= command.id %> --api-name Order_Processing --only inputs --only outputs --only references
 
 # info.title
 

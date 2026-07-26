@@ -45,7 +45,7 @@ export interface FlowDependencyGateway {
     definitionId: string,
     direction: FlowDependencyQueryDirection,
     types: ReadonlyArray<string>
-  ): Promise<ReadonlyArray<IndexedFlowDependency>>;
+  ): Promise<FlowDependencyQueryResult>;
 }
 
 export interface FlowMetadataGateway {
@@ -67,6 +67,21 @@ export interface IndexedFlowDependency {
   type: string | null;
 }
 
+export interface FlowDependencyQueryResult {
+  dependencies: IndexedFlowDependency[];
+  reachedLimit: boolean;
+  limit: number;
+}
+
+export interface FlowDependencyTruncation {
+  definitionId: string;
+  apiName: string;
+  namespace: string | null;
+  direction: FlowDependencyQueryDirection;
+  depth: number;
+  limit: number;
+}
+
 export interface FlowDependency extends IndexedFlowDependency {
   sourceDefinitionId: string;
   sourceApiName: string;
@@ -84,12 +99,16 @@ export interface FlowDependenciesResult {
   types: string[];
   definitionsScanned: number;
   dependencies: FlowDependency[];
+  truncated: boolean;
+  truncations: FlowDependencyTruncation[];
   targetOrg: string;
 }
 
 export interface FlowCompareRequest extends NamedFlowRequest {
   from: FlowComparisonVersionSelector;
   to: FlowComparisonVersionSelector;
+  fromOrg: string;
+  toOrg: string;
   scopes: FlowComparisonScope[];
   ignoreOrder: boolean;
 }
@@ -107,6 +126,8 @@ export interface FlowCompareResult {
   apiName: string;
   namespace: string | null;
   definitionId: string;
+  fromDefinitionId: string;
+  toDefinitionId: string;
   requestedFrom: FlowComparisonVersionSelector;
   requestedTo: FlowComparisonVersionSelector;
   scopes: FlowComparisonScope[];
@@ -119,4 +140,7 @@ export interface FlowCompareResult {
   changed: number;
   different: boolean;
   targetOrg: string;
+  fromOrg: string;
+  toOrg: string;
+  crossOrg: boolean;
 }

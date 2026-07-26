@@ -30,6 +30,10 @@ Generating Flow graph
 
 Linting Flow
 
+# actions.list
+
+Listing Flows
+
 # actions.prune
 
 Pruning Flow versions

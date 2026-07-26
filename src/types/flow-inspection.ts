@@ -88,6 +88,8 @@ export interface FlowGraphStyle {
 
 export type FlowSubflowVersionSelector = 'active' | 'latest';
 
+export type FlowDescribeSection = 'elements' | 'inputs' | 'outputs' | 'references' | 'resources';
+
 export interface FlowTraversalRequest extends NamedFlowRequest {
   version: FlowComparisonVersionSelector;
   subflowVersion: FlowSubflowVersionSelector;
@@ -95,7 +97,9 @@ export interface FlowTraversalRequest extends NamedFlowRequest {
   maxDepth: number;
 }
 
-export type FlowDescribeRequest = FlowTraversalRequest;
+export interface FlowDescribeRequest extends FlowTraversalRequest {
+  sections?: FlowDescribeSection[];
+}
 
 export type FlowLintRule =
   | 'dml-inside-loop'
@@ -224,7 +228,7 @@ export interface FlowTraversalWarning {
   path: string[];
 }
 
-export interface FlowDescribeResult {
+export interface FlowTraversalResult {
   apiName: string;
   namespace: string | null;
   requestedVersion: FlowComparisonVersionSelector;
@@ -237,7 +241,11 @@ export interface FlowDescribeResult {
   targetOrg: string;
 }
 
-export interface FlowGraphResult extends FlowDescribeResult {
+export interface FlowDescribeResult extends FlowTraversalResult {
+  sections: FlowDescribeSection[];
+}
+
+export interface FlowGraphResult extends FlowTraversalResult {
   format: FlowGraphFormat;
   includeVariables: boolean;
   includeFormulas: boolean;

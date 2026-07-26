@@ -8,10 +8,11 @@ import type { Connection } from '@salesforce/core';
 import { expect } from 'chai';
 
 import FlowDependencies from '../../../src/commands/flow/dependencies.js';
+import type { DependenciesFlagValues } from '../../../src/commands/flow/dependencies.js';
 import { FlowDependenciesService } from '../../../src/services/flow-dependencies-service.js';
 import type { FlowDependenciesResult } from '../../../src/types/flow-analysis.js';
 import { createCommandOrg } from '../../helpers/command-org.js';
-import { commandTestContext as $$ } from '../../helpers/command-test-context.js';
+import { commandTestContext as $$, commandUx } from '../../helpers/command-test-context.js';
 
 const result: FlowDependenciesResult = {
   apiName: 'Order_Processing',
@@ -23,8 +24,42 @@ const result: FlowDependenciesResult = {
   types: [],
   definitionsScanned: 1,
   dependencies: [],
+  truncated: false,
+  truncations: [],
   targetOrg: 'admin@example.com',
 };
+
+function truncationFlags(allowTruncated: boolean): DependenciesFlagValues {
+  return {
+    'api-name': 'Order_Processing',
+    'target-org': createCommandOrg({} as Connection),
+    direction: 'uses',
+    recursive: false,
+    'max-depth': 10,
+    type: undefined,
+    'fail-on-dependencies': false,
+    'allow-truncated': allowTruncated,
+    namespace: undefined,
+    'api-version': undefined,
+  };
+}
+
+function truncatedResult(): FlowDependenciesResult {
+  return {
+    ...result,
+    truncated: true,
+    truncations: [
+      {
+        definitionId: result.definitionId,
+        apiName: result.apiName,
+        namespace: null,
+        direction: 'uses',
+        depth: 3,
+        limit: 2000,
+      },
+    ],
+  };
+}
 
 describe('flow dependencies flags', (): void => {
   it('defaults to querying both directions', (): void => {
@@ -45,6 +80,7 @@ describe('flow dependencies command execution', (): void => {
       'max-depth': 4,
       type: ['ApexClass', 'CustomObject'],
       'fail-on-dependencies': false,
+      'allow-truncated': false,
       namespace: undefined,
       'api-version': undefined,
     };
@@ -73,6 +109,7 @@ describe('flow dependencies CI execution', (): void => {
       'max-depth': 10,
       type: undefined,
       'fail-on-dependencies': true,
+      'allow-truncated': false,
       namespace: undefined,
       'api-version': undefined,
     };
@@ -99,5 +136,32 @@ describe('flow dependencies CI execution', (): void => {
     } finally {
       process.exitCode = undefined;
     }
+  });
+});
+
+describe('flow dependencies truncation execution', (): void => {
+  it('fails by default when a dependency query reaches its limit', async (): Promise<void> => {
+    $$.SANDBOX.stub(FlowDependencies.prototype, 'parseFlags').resolves(truncationFlags(false));
+    $$.SANDBOX.stub(FlowDependenciesService.prototype, 'getDependencies').resolves(truncatedResult());
+    try {
+      await FlowDependencies.run(['--json']);
+      expect(process.exitCode).to.equal(1);
+    } finally {
+      process.exitCode = undefined;
+    }
+  });
+
+  it('allows an explicit truncation opt-out to succeed', async (): Promise<void> => {
+    $$.SANDBOX.stub(FlowDependencies.prototype, 'parseFlags').resolves(truncationFlags(true));
+    $$.SANDBOX.stub(FlowDependenciesService.prototype, 'getDependencies').resolves(truncatedResult());
+    await FlowDependencies.run(['--json']);
+    expect(process.exitCode).to.equal(undefined);
+  });
+
+  it('includes traversal depth in the human truncation warning', async (): Promise<void> => {
+    $$.SANDBOX.stub(FlowDependencies.prototype, 'parseFlags').resolves(truncationFlags(true));
+    $$.SANDBOX.stub(FlowDependenciesService.prototype, 'getDependencies').resolves(truncatedResult());
+    await FlowDependencies.run([]);
+    expect(commandUx.warn.firstCall.args[0]).to.include('(uses, depth 3)');
   });
 });

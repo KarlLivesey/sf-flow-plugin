@@ -7,6 +7,7 @@
 import { flowDefinitionAmbiguous, flowInspectionFailed, flowVersionNotFound } from '../errors/flow-errors.js';
 import {
   flowApiNameSchema,
+  flowDescribeSectionSchema,
   flowSubflowVersionSelectorSchema,
   namespaceSchema,
   nonnegativeIntegerSchema,
@@ -20,6 +21,7 @@ import type {
   FlowSubflowVersionSelector,
   FlowTraversalWarning,
 } from '../types/flow-inspection.js';
+import { filterFlowDescriptionSections } from '../utils/flow-description-sections.js';
 import { noFlowProgress, type FlowProgressReporter, withFlowProgressStage } from '../utils/flow-progress.js';
 import { analyseFlowMetadata } from '../utils/flow-metadata-analysis.js';
 import { qualifiedFlowName, selectFlowDefinition } from '../utils/flow-state.js';
@@ -236,6 +238,7 @@ class FlowMetadataTraversal {
 }
 
 function createResult(request: FlowDescribeRequest, traversal: TraversalResult): FlowDescribeResult {
+  const sections = request.sections ?? [];
   return {
     apiName: traversal.root.apiName,
     namespace: traversal.root.namespace,
@@ -244,7 +247,8 @@ function createResult(request: FlowDescribeRequest, traversal: TraversalResult):
     subflowVersion: request.subflowVersion,
     recursive: request.recursive,
     maxDepth: request.maxDepth,
-    flows: traversal.flows,
+    sections,
+    flows: traversal.flows.map((flow) => filterFlowDescriptionSections(flow, sections)),
     warnings: traversal.warnings,
     targetOrg: request.targetOrg,
   };
@@ -259,6 +263,18 @@ function shouldRethrow(error: unknown): boolean {
   );
 }
 
+function validateDescribeRequest(request: FlowDescribeRequest): void {
+  if (!nonnegativeIntegerSchema.safeParse(request.maxDepth).success) {
+    throw flowInspectionFailed('The recursive Flow traversal depth must be a non-negative whole number.');
+  }
+  if (!flowSubflowVersionSelectorSchema.safeParse(request.subflowVersion).success) {
+    throw flowInspectionFailed('The recursive subflow version selector must be active or latest.');
+  }
+  if (!(request.sections ?? []).every((section) => flowDescribeSectionSchema.safeParse(section).success)) {
+    throw flowInspectionFailed('The requested Flow description section is invalid.');
+  }
+}
+
 export class FlowDescribeService {
   public constructor(private readonly gateway: FlowDefinitionGateway & FlowMetadataGateway) {}
 
@@ -266,12 +282,7 @@ export class FlowDescribeService {
     request: FlowDescribeRequest,
     progress: FlowProgressReporter = noFlowProgress
   ): Promise<FlowDescribeResult> {
-    if (!nonnegativeIntegerSchema.safeParse(request.maxDepth).success) {
-      throw flowInspectionFailed('The recursive Flow traversal depth must be a non-negative whole number.');
-    }
-    if (!flowSubflowVersionSelectorSchema.safeParse(request.subflowVersion).success) {
-      throw flowInspectionFailed('The recursive subflow version selector must be active or latest.');
-    }
+    validateDescribeRequest(request);
     try {
       return createResult(request, await new FlowMetadataTraversal(this.gateway, request, progress).traverse());
     } catch (error: unknown) {
