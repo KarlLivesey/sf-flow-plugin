@@ -67,7 +67,7 @@ If `--target-org` is omitted, the command uses the Salesforce CLI `target-org` c
 | `sf flow graph`          | Render Flow connectors and recursive subflow calls.                    |
 | `sf flow lint`           | Run configurable static checks against a Flow version.                 |
 | `sf flow check`          | Aggregate read-only Flow checks for CI.                                |
-| `sf flow metrics`        | Report factual Flow complexity measurements.                           |
+| `sf flow metrics`        | Report structural and optional Data Cloud runtime metrics.             |
 | `sf flow run`            | Invoke the active version of an autolaunched Flow.                     |
 | `sf flow deactivate`     | Deactivate a Flow and verify the resulting state.                      |
 | `sf flow delete-version` | Safely plan or delete one explicitly numbered inactive version.        |
@@ -568,6 +568,8 @@ sf flow metrics \
   [--recursive] \
   [--subflow-version active|latest] \
   [--max-depth NUMBER] \
+  [--data-cloud] \
+  [--data-cloud-days NUMBER] \
   [--output-file FILE] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
@@ -578,6 +580,27 @@ Metrics include executable elements, decisions and outcomes, loops and maximum l
 Apex actions, subflows, maximum connector-path depth, fault-path coverage, variables, formulas, unused resources,
 referenced objects, fan-in, fan-out and unreachable elements. Recursive analysis defaults to active subflows with
 latest fallback. The command reports facts only; policy thresholds belong in `sf flow check`.
+
+Static analysis is the default and does not query Data Cloud. Add `--data-cloud` to query runtime telemetry for the
+selected root Flow version, using the authenticated target org and a 30-day window by default:
+
+```bash
+sf flow metrics \
+  --api-name Order_Flow \
+  --flow-version active \
+  --data-cloud \
+  --data-cloud-days 7
+```
+
+Runtime output includes execution, successful and failed counts; average, minimum and maximum duration; first and
+last execution times; and status/error breakdowns. `--data-cloud` first verifies that the selected Flow and version
+are available through the standard or legacy Flow Data Model Objects. It fails with a specific availability error
+when Data Cloud is not provisioned, Flow metrics collection has not produced those records, or the authenticated
+user cannot query them. An enabled Flow with no runs in the selected window returns zero executions.
+
+The plugin does not enable Flow metrics collection or exchange the Salesforce access token for a separate Data Cloud
+token. Collection must already be enabled for the Flow in Salesforce, and ingested records can be delayed. Data Cloud
+collection and query usage remains subject to the org's Salesforce entitlements.
 
 ## `sf flow check`
 
@@ -843,6 +866,8 @@ These checks are point-in-time preflights, not an atomic guarantee. Permissions 
 | `FlowInvocationPermissionDenied`      | The authenticated user cannot invoke the Flow action.                       |
 | `FlowProductionConfirmationRequired`  | Production Flow execution requires explicit confirmation.                   |
 | `FlowMetricsFailed`                   | Flow complexity metrics could not be calculated.                            |
+| `FlowDataCloudMetricsUnavailable`     | Data Cloud Flow metrics are not enabled, available or queryable.            |
+| `FlowDataCloudMetricsFailed`          | Data Cloud Flow runtime metrics could not be queried or validated.          |
 | `FlowCheckFailed`                     | The requested read-only Flow checks could not be completed.                 |
 | `FlowBundleFailed`                    | The deployable Flow bundle could not be created.                            |
 

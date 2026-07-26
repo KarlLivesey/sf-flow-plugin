@@ -13,7 +13,8 @@ All notable user-visible changes to this project will be documented in this file
 - Added `sf flow check` to aggregate lint, dependency, subflow, version-state and metrics findings for CI, with
   selectable checks, recursive traversal, severity thresholds, human and SARIF output.
 - Added `sf flow metrics` for factual complexity measurements including elements, paths, loops, DML, fault coverage,
-  resources, references, fan-in, fan-out and reachability.
+  resources, references, fan-in, fan-out and reachability, plus optional Data Cloud runtime telemetry with an
+  availability preflight and configurable reporting window.
 - Added `sf flow bundle` to export a Flow and recursively referenced subflows with deployable metadata, `package.xml`,
   selected-version manifest, dependency report and external dependency list.
 - Added lint rule selection, exclusions, severity-based CI failures, SARIF output, report files and baselines that
