@@ -83,6 +83,7 @@ describe('ToolingFlowDefinitionGateway dependency queries', (): void => {
     const gateway = new ToolingFlowDefinitionGateway(connection.asConnection());
     const dependencies = await gateway.findDependencies('300000000000001', 'uses');
     expect(connection.queries[0]).to.contain("WHERE MetadataComponentId = '300000000000001'");
+    expect(connection.queries[0]).to.match(/LIMIT 2000$/);
     expect(dependencies[0]).to.deep.equal({
       direction: 'uses',
       componentId: '01I000000000001',
@@ -97,6 +98,7 @@ describe('ToolingFlowDefinitionGateway dependency queries', (): void => {
     const gateway = new ToolingFlowDefinitionGateway(connection.asConnection());
     const dependencies = await gateway.findDependencies('300000000000001', 'used-by');
     expect(connection.queries[0]).to.contain("WHERE RefMetadataComponentId = '300000000000001'");
+    expect(connection.queries[0]).to.match(/LIMIT 2000$/);
     expect(dependencies[0]).to.include({ direction: 'used-by', name: 'Order_Processing', type: 'Flow' });
   });
 });

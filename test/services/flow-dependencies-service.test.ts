@@ -39,7 +39,12 @@ function gateway(): FakeFlowGateway {
 
 describe('FlowDependenciesService', (): void => {
   it('combines directions, removes duplicates and sorts the result', async (): Promise<void> => {
-    const result = await new FlowDependenciesService(gateway()).getDependencies(request());
+    const fake = gateway();
+    const result = await new FlowDependenciesService(fake).getDependencies(request());
+    expect(fake.dependencyQueries).to.deep.equal([
+      { definitionId, direction: 'uses' },
+      { definitionId, direction: 'used-by' },
+    ]);
     expect(result.dependencies).to.deep.equal([
       {
         direction: 'used-by',

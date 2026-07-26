@@ -22,6 +22,11 @@ export interface ActiveVersionUpdate {
   versionNumber: FlowVersionNumber | null;
 }
 
+export interface DependencyQuery {
+  definitionId: string;
+  direction: FlowDependencyQueryDirection;
+}
+
 export interface FlowDefinitionFixture {
   id: string;
   apiName: string;
@@ -33,6 +38,7 @@ export class FakeFlowGateway implements FlowDefinitionGateway {
   public readonly updates: ActiveVersionUpdate[] = [];
   public readonly deletes: string[] = [];
   public readonly dependencies: FlowDependency[] = [];
+  public readonly dependencyQueries: DependencyQuery[] = [];
   public readonly metadata = new Map<string, JsonObject>();
   public readonly permissionChecks: FlowMutationOperation[] = [];
   public allowDefinitionUpdates = true;
@@ -84,10 +90,11 @@ export class FakeFlowGateway implements FlowDefinitionGateway {
   }
 
   public async findDependencies(
-    _definitionId: string,
+    definitionId: string,
     direction: FlowDependencyQueryDirection
   ): Promise<ReadonlyArray<FlowDependency>> {
     this.throwQueryError();
+    this.dependencyQueries.push({ definitionId, direction });
     return this.dependencies.filter((dependency) => dependency.direction === direction);
   }
 

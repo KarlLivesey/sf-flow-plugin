@@ -141,10 +141,14 @@ function buildAllVersionsQuery(): string {
 const DEPENDENCY_FIELDS =
   'MetadataComponentId, MetadataComponentName, MetadataComponentNamespace, MetadataComponentType, ' +
   'RefMetadataComponentId, RefMetadataComponentName, RefMetadataComponentNamespace, RefMetadataComponentType';
+const DEPENDENCY_QUERY_LIMIT = 2000;
 
 function buildDependencyQuery(definitionId: string, direction: FlowDependencyQueryDirection): string {
   const idField = direction === 'uses' ? 'MetadataComponentId' : 'RefMetadataComponentId';
-  return `SELECT ${DEPENDENCY_FIELDS} FROM MetadataComponentDependency WHERE ${idField} = '${definitionId}'`;
+  return (
+    `SELECT ${DEPENDENCY_FIELDS} FROM MetadataComponentDependency ` +
+    `WHERE ${idField} = '${definitionId}' LIMIT ${DEPENDENCY_QUERY_LIMIT}`
+  );
 }
 
 function buildMetadataQuery(versionId: string): string {
