@@ -19,6 +19,8 @@ const result: FlowAuditResult = {
   flowsWithIssues: 0,
   maxInactiveVersions: 0,
   olderThanDays: null,
+  types: [],
+  namespace: null,
   flows: [],
 };
 
@@ -27,11 +29,15 @@ describe('flow audit command', (): void => {
     expect(FlowAudit.flags['target-org'].required).to.equal(false);
     expect(FlowAudit.summary).to.contain('Audit');
   });
+});
 
+describe('flow audit command execution', (): void => {
   it('passes the authenticated username to the audit service', async (): Promise<void> => {
     const flags = {
       'target-org': createCommandOrg({} as Connection),
       'api-name': ['Order_Processing'],
+      type: ['AutoLaunchedFlow'],
+      namespace: 'example',
       'fail-on-findings': false,
       'max-inactive-versions': 3,
       'older-than': { days: 30 },
@@ -44,6 +50,8 @@ describe('flow audit command', (): void => {
     expect(audit.firstCall.args[0]).to.deep.equal({
       targetOrg: 'admin@example.com',
       apiNames: ['Order_Processing'],
+      types: ['AutoLaunchedFlow'],
+      namespace: 'example',
       maxInactiveVersions: 3,
       olderThanDays: 30,
     });
@@ -55,6 +63,8 @@ describe('flow audit command', (): void => {
     const flags = {
       'target-org': createCommandOrg({} as Connection),
       'api-name': undefined,
+      type: undefined,
+      namespace: undefined,
       'fail-on-findings': true,
       'max-inactive-versions': 0,
       'older-than': undefined,

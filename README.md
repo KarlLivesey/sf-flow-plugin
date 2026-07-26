@@ -437,6 +437,8 @@ sf flow deactivate --api-name Order_Processing --dry-run --json
 sf flow audit \
   [--target-org ORG] \
   [--api-name FLOW ...] \
+  [--type TYPE ...] \
+  [--namespace NAMESPACE] \
   [--fail-on-findings] \
   [--max-inactive-versions NUMBER] \
   [--older-than DAYS] \
@@ -451,6 +453,13 @@ sf flow audit --target-org MySandbox
 ```
 
 Repeat `--api-name` to audit a selected set of Flows. `--fail-on-findings` retains the audit output but sets process status 1 when findings exist.
+
+Use repeatable `--type` values and `--namespace` to narrow large-org audits. Process type is taken from each
+definition's latest version:
+
+```bash
+sf flow audit --type AutoLaunchedFlow --namespace example
+```
 
 `--max-inactive-versions` defaults to `0` and applies to the combined Draft and Obsolete count. `--older-than` counts only inactive versions last modified before the age cutoff. These thresholds affect inactive-version findings; missing or behind active-version findings remain independent.
 
