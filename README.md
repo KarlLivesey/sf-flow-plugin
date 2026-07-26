@@ -60,11 +60,35 @@ If `--target-org` is omitted, the command uses the Salesforce CLI `target-org` c
 | `sf flow dependencies` | Show indexed incoming and outgoing dependencies.                |
 | `sf flow describe`     | Summarise Flow resources, elements and referenced components.   |
 | `sf flow graph`        | Render Flow connectors and recursive subflow calls.             |
+| `sf flow lint`         | Run static checks against a Flow version.                       |
 | `sf flow deactivate`   | Deactivate a Flow and verify the resulting state.               |
 | `sf flow audit`        | Report Flow definitions with version-state issues.              |
 | `sf flow prune`        | Safely plan or delete old inactive Flow versions.               |
 
 Commands show an automatic Salesforce-style progress spinner while they query or mutate the org. Each stage identifies the Flow and relevant version or version scope. Progress output is suppressed automatically when `--json` is used.
+
+## `sf flow lint`
+
+```bash
+sf flow lint \
+  --api-name Order_Processing \
+  [--target-org ORG] \
+  [--flow-version active|latest|NUMBER] \
+  [--namespace NAMESPACE] \
+  [--api-version VERSION] \
+  [--json]
+```
+
+The command checks the selected Flow version for unconnected elements, missing fault paths, DML inside loops,
+hard-coded Salesforce IDs, inactive or missing subflows, and unused private variables or formulas. Input and output
+variables are not reported as unused because callers can reference them externally.
+
+```bash
+sf flow lint --api-name Order_Processing --flow-version active
+```
+
+The result reports stable rule names, severities, affected elements and metadata paths for scripting. Lint findings
+do not change the command exit code.
 
 ## `sf flow list`
 
