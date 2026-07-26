@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$ref": "#/definitions/FlowMetricsResult",
+  "$ref": "#/definitions/FlowMetricsCommandResult",
   "definitions": {
-    "FlowMetricsResult": {
+    "FlowMetricsCommandResult": {
       "type": "object",
       "properties": {
         "apiName": {
@@ -49,21 +49,32 @@
         },
         "targetOrg": {
           "type": "string"
+        },
+        "dataCloud": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowRuntimeMetrics"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
         "apiName",
+        "dataCloud",
+        "flows",
+        "maxDepth",
         "namespace",
+        "recursive",
+        "referencedObjects",
         "requestedVersion",
         "resolvedVersion",
         "subflowVersion",
-        "recursive",
-        "maxDepth",
+        "targetOrg",
         "totals",
-        "referencedObjects",
-        "flows",
-        "warnings",
-        "targetOrg"
+        "warnings"
       ],
       "additionalProperties": false
     },
@@ -312,6 +323,123 @@
     "FlowTraversalWarningKind": {
       "type": "string",
       "enum": ["depth-limit", "missing-subflow", "subflow-version-fallback", "missing-subflow-version"]
+    },
+    "FlowRuntimeMetrics": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "const": "data-cloud"
+        },
+        "enabled": {
+          "type": "boolean",
+          "const": true
+        },
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "version": {
+          "type": "number"
+        },
+        "windowDays": {
+          "type": "number"
+        },
+        "from": {
+          "type": "string"
+        },
+        "executions": {
+          "type": "number"
+        },
+        "successfulExecutions": {
+          "type": "number"
+        },
+        "failedExecutions": {
+          "type": "number"
+        },
+        "averageDurationMilliseconds": {
+          "type": ["number", "null"]
+        },
+        "minimumDurationMilliseconds": {
+          "type": ["number", "null"]
+        },
+        "maximumDurationMilliseconds": {
+          "type": ["number", "null"]
+        },
+        "firstExecution": {
+          "type": ["string", "null"]
+        },
+        "lastExecution": {
+          "type": ["string", "null"]
+        },
+        "breakdowns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowRuntimeMetricBreakdown"
+          }
+        }
+      },
+      "required": [
+        "source",
+        "enabled",
+        "apiName",
+        "namespace",
+        "version",
+        "windowDays",
+        "from",
+        "executions",
+        "successfulExecutions",
+        "failedExecutions",
+        "averageDurationMilliseconds",
+        "minimumDurationMilliseconds",
+        "maximumDurationMilliseconds",
+        "firstExecution",
+        "lastExecution",
+        "breakdowns"
+      ],
+      "additionalProperties": false
+    },
+    "FlowRuntimeMetricBreakdown": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "errorReason": {
+          "type": ["string", "null"]
+        },
+        "executions": {
+          "type": "number"
+        },
+        "averageDurationMilliseconds": {
+          "type": ["number", "null"]
+        },
+        "minimumDurationMilliseconds": {
+          "type": ["number", "null"]
+        },
+        "maximumDurationMilliseconds": {
+          "type": ["number", "null"]
+        },
+        "firstExecution": {
+          "type": ["string", "null"]
+        },
+        "lastExecution": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": [
+        "status",
+        "errorReason",
+        "executions",
+        "averageDurationMilliseconds",
+        "minimumDurationMilliseconds",
+        "maximumDurationMilliseconds",
+        "firstExecution",
+        "lastExecution"
+      ],
+      "additionalProperties": false
     }
   }
 }

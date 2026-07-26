@@ -263,6 +263,25 @@ export function flowDeleteVersionVerificationFailed(apiName: string, version: nu
   });
 }
 
+export function flowDataCloudMetricsUnavailable(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowDataCloudMetricsUnavailable',
+    message,
+    action:
+      'Confirm that Data Cloud is provisioned, Flow metrics collection is enabled for this Flow, and the authenticated user can query its Flow DMOs.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
+export function flowDataCloudMetricsFailed(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowDataCloudMetricsFailed',
+    message,
+    action: 'Confirm Data Cloud access and retry the Flow metrics query.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
 export function flowCheckFailed(message: string, cause?: unknown): SfError {
   return createFlowError({
     code: 'FlowCheckFailed',

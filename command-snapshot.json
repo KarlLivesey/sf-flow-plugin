@@ -267,6 +267,8 @@
     "flags": [
       "api-name",
       "api-version",
+      "data-cloud",
+      "data-cloud-days",
       "flags-dir",
       "flow-version",
       "json",

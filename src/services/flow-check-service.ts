@@ -250,8 +250,15 @@ export class FlowCheckService {
 
   private async calculateMetrics(context: FlowCheckContext): Promise<FlowMetricsResult | null> {
     const { request, apiName, checks, progress } = context;
-    return hasCheck(checks, 'metrics')
-      ? new FlowMetricsService(this.gateway).calculate({ ...describeRequest(request, apiName) }, progress)
-      : null;
+    if (!hasCheck(checks, 'metrics')) {
+      return null;
+    }
+    const metrics = await new FlowMetricsService(this.gateway).calculate(
+      { ...describeRequest(request, apiName), dataCloud: false, dataCloudDays: 30 },
+      progress
+    );
+    const { dataCloud: _dataCloud, ...staticMetrics } = metrics;
+    void _dataCloud;
+    return staticMetrics;
   }
 }

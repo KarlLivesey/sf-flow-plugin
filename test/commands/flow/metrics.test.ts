@@ -9,7 +9,7 @@ import { expect } from 'chai';
 
 import FlowMetrics from '../../../src/commands/flow/metrics.js';
 import { FlowMetricsService } from '../../../src/services/flow-metrics-service.js';
-import type { FlowMetricsResult } from '../../../src/types/flow-metrics.js';
+import type { FlowMetricsCommandResult } from '../../../src/types/flow-metrics.js';
 import { createCommandOrg } from '../../helpers/command-org.js';
 import { commandTestContext as $$ } from '../../helpers/command-test-context.js';
 
@@ -34,7 +34,7 @@ const zeroCounts = {
   unreachableElements: 0,
 };
 
-const result: FlowMetricsResult = {
+const result: FlowMetricsCommandResult = {
   apiName: 'Flow_A',
   namespace: null,
   requestedVersion: 'latest',
@@ -45,6 +45,7 @@ const result: FlowMetricsResult = {
   totals: zeroCounts,
   referencedObjects: [],
   flows: [],
+  dataCloud: null,
   warnings: [],
   targetOrg: 'admin@example.com',
 };
@@ -54,6 +55,8 @@ describe('flow metrics command', (): void => {
     expect(FlowMetrics.flags['flow-version'].default).to.equal('latest');
     expect(FlowMetrics.flags['subflow-version'].default).to.equal('active');
     expect(FlowMetrics.flags.recursive.default).to.equal(false);
+    expect(FlowMetrics.flags['data-cloud'].default).to.equal(false);
+    expect(FlowMetrics.flags['data-cloud-days'].default).to.equal(30);
   });
 
   it('passes the traversal selection to the metrics service', async (): Promise<void> => {
@@ -64,6 +67,8 @@ describe('flow metrics command', (): void => {
       recursive: true,
       'subflow-version': 'active' as const,
       'max-depth': 4,
+      'data-cloud': true,
+      'data-cloud-days': 7,
       'output-file': undefined,
       namespace: undefined,
       'api-version': undefined,
@@ -78,6 +83,8 @@ describe('flow metrics command', (): void => {
       recursive: true,
       subflowVersion: 'active',
       maxDepth: 4,
+      dataCloud: true,
+      dataCloudDays: 7,
     });
     expect(actual).to.equal(result);
   });

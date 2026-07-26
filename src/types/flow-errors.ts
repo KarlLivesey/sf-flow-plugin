@@ -30,4 +30,6 @@ export type FlowErrorCode =
   | 'FlowDeleteVersionFailed'
   | 'FlowDeleteVersionVerificationFailed'
   | 'FlowMetricsFailed'
+  | 'FlowDataCloudMetricsUnavailable'
+  | 'FlowDataCloudMetricsFailed'
   | 'FlowCheckFailed';
