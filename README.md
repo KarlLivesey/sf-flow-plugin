@@ -53,17 +53,100 @@ If `--target-org` is omitted, the command uses the Salesforce CLI `target-org` c
 
 | Command                | Purpose                                                         |
 | ---------------------- | --------------------------------------------------------------- |
+| `sf flow list`         | Inventory Flow definitions and their current version state.     |
 | `sf flow activate`     | Activate and verify a selected Flow version.                    |
 | `sf flow versions`     | List every version and identify the active and latest versions. |
 | `sf flow compare`      | Compare the structure of two Flow versions.                     |
 | `sf flow dependencies` | Show indexed incoming and outgoing dependencies.                |
 | `sf flow describe`     | Summarise Flow resources, elements and referenced components.   |
+| `sf flow export`       | Export a Flow version as deployable source metadata.            |
 | `sf flow graph`        | Render Flow connectors and recursive subflow calls.             |
+| `sf flow lint`         | Run static checks against a Flow version.                       |
 | `sf flow deactivate`   | Deactivate a Flow and verify the resulting state.               |
 | `sf flow audit`        | Report Flow definitions with version-state issues.              |
 | `sf flow prune`        | Safely plan or delete old inactive Flow versions.               |
 
 Commands show an automatic Salesforce-style progress spinner while they query or mutate the org. Each stage identifies the Flow and relevant version or version scope. Progress output is suppressed automatically when `--json` is used.
+
+## `sf flow export`
+
+```bash
+sf flow export \
+  --api-name My_Flow \
+  [--target-org ORG] \
+  [--flow-version active|latest|NUMBER] \
+  [--format xml] \
+  [--status draft|active] \
+  --output-file force-app/main/default/flows/My_Flow.flow-meta.xml \
+  [--namespace NAMESPACE] \
+  [--api-version VERSION] \
+  [--json]
+```
+
+Export a particular Flow version as deployable Salesforce source metadata:
+
+```bash
+sf flow export \
+  --api-name My_Flow \
+  --flow-version 7 \
+  --format xml \
+  --output-file force-app/main/default/flows/My_Flow.flow-meta.xml
+```
+
+The selected source version defaults to `active`, and the status written into the file defaults to `Draft`. Use
+`--status active` only when the destination should activate the Flow during deployment. Existing output files are
+replaced and missing parent directories are created.
+
+The resulting file can be deployed directly:
+
+```bash
+sf project deploy start \
+  --source-dir force-app/main/default/flows/My_Flow.flow-meta.xml
+```
+
+Dependencies such as Apex classes, objects and subflows are not bundled.
+
+## `sf flow lint`
+
+```bash
+sf flow lint \
+  --api-name Order_Processing \
+  [--target-org ORG] \
+  [--flow-version active|latest|NUMBER] \
+  [--namespace NAMESPACE] \
+  [--api-version VERSION] \
+  [--json]
+```
+
+The command checks the selected Flow version for unconnected elements, missing fault paths, DML inside loops,
+hard-coded Salesforce IDs, inactive or missing subflows, and unused private variables or formulas. Input and output
+variables are not reported as unused because callers can reference them externally.
+
+```bash
+sf flow lint --api-name Order_Processing --flow-version active
+```
+
+The result reports stable rule names, severities, affected elements and metadata paths for scripting. Lint findings
+do not change the command exit code.
+
+## `sf flow list`
+
+```text
+sf flow list \
+  [--target-org ORG] \
+  [--api-version VERSION] \
+  [--json]
+```
+
+List every Flow definition with its qualified API name, latest label and process type, active and latest version
+numbers, latest status, and last-modified date:
+
+```bash
+sf flow list --target-org MySandbox
+```
+
+The label, type, status and last-modified date describe the latest version. Definitions without a latest version
+report those values as empty. Use `--json` for a stable structured inventory.
 
 ## `sf flow activate`
 
@@ -181,6 +264,7 @@ Creation filters accept ISO 8601 dates or date-times and use strict before/after
 sf flow compare \
   --api-name Order_Processing \
   [--target-org ORG] \
+  [--from-org ORG --to-org ORG] \
   [--from active|latest|NUMBER] \
   [--to active|latest|NUMBER] \
   [--fail-on-difference] \
@@ -200,6 +284,20 @@ sf flow compare \
   --to 7
 ```
 
+Compare the same Flow across two authenticated orgs:
+
+```bash
+sf flow compare \
+  --api-name Order_Processing \
+  --from-org Development \
+  --to-org Preprod \
+  --from latest \
+  --to active
+```
+
+`--from-org` and `--to-org` must be supplied together. Without them, both sides use `--target-org` or the configured
+default target org. The Flow definition and selected version are resolved independently in each org.
+
 The command retrieves each version's validated `Flow.Metadata` value and reports `added`, `removed` and `changed` paths. Named Flow elements are matched by name so array reordering does not produce false changes. Top-level lifecycle `status` is excluded because `sf flow versions` already reports version state.
 
 `--fail-on-difference` retains the comparison output but sets process status 1 when changes exist, making the command suitable for CI checks.
@@ -217,6 +315,7 @@ sf flow dependencies \
   [--max-depth NUMBER] \
   [--type COMPONENT_TYPE ...] \
   [--fail-on-dependencies] \
+  [--allow-truncated] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--json]
@@ -234,6 +333,10 @@ This command reports Salesforce's `MetadataComponentDependency` index. Salesforc
 
 Dependency analysis is definition-level. With `--recursive`, indexed Flow dependencies are followed without revisiting definitions, up to `--max-depth` (default `10`). Every direction is a separate query capped at 2,000 records; `both` therefore runs one `uses` query and one `used-by` query per visited Flow definition.
 
+When any query returns exactly 2,000 records, the result explicitly reports that direction as potentially truncated
+and the command exits with status 1 by default. Use `--allow-truncated` only when incomplete dependency output is
+acceptable; the structured result still sets `truncated: true` and lists every capped query.
+
 `--type` is repeatable and filters each capped query by metadata component type. Recursive filtered traversal includes `Flow` internally so it can reach nested definitions, but only requested types appear in the result. `--fail-on-dependencies` retains the result and sets process status 1 when matching records exist.
 
 ## `sf flow describe`
@@ -246,6 +349,7 @@ sf flow describe \
   [--recursive] \
   [--subflow-version active|latest] \
   [--max-depth NUMBER] \
+  [--only elements|resources|references|inputs|outputs ...] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--json]
@@ -255,6 +359,16 @@ The command summarises inputs, outputs, variables, formulas, executable elements
 
 ```bash
 sf flow describe --api-name Order_Processing
+```
+
+Repeat `--only` to return selected sections and remove unrelated columns and structured arrays:
+
+```bash
+sf flow describe \
+  --api-name Order_Processing \
+  --only inputs \
+  --only outputs \
+  --only references
 ```
 
 Use `--recursive` to follow referenced subflows. `--subflow-version` defaults to `active`: it follows the active version when one exists and otherwise falls back to latest with a warning. Specify `latest` to always follow each subflow's latest version. `--max-depth` defaults to `10`; a value of `0` describes only the requested Flow:
@@ -402,6 +516,8 @@ sf flow deactivate --api-name Order_Processing --dry-run --json
 sf flow audit \
   [--target-org ORG] \
   [--api-name FLOW ...] \
+  [--type TYPE ...] \
+  [--namespace NAMESPACE] \
   [--fail-on-findings] \
   [--max-inactive-versions NUMBER] \
   [--older-than DAYS] \
@@ -416,6 +532,13 @@ sf flow audit --target-org MySandbox
 ```
 
 Repeat `--api-name` to audit a selected set of Flows. `--fail-on-findings` retains the audit output but sets process status 1 when findings exist.
+
+Use repeatable `--type` values and `--namespace` to narrow large-org audits. Process type is taken from each
+definition's latest version:
+
+```bash
+sf flow audit --type AutoLaunchedFlow --namespace example
+```
 
 `--max-inactive-versions` defaults to `0` and applies to the combined Draft and Obsolete count. `--older-than` counts only inactive versions last modified before the age cutoff. These thresholds affect inactive-version findings; missing or behind active-version findings remain independent.
 

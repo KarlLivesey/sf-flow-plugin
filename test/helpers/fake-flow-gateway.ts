@@ -6,7 +6,12 @@
  */
 import { expect } from 'chai';
 
-import type { FlowDependencyQueryDirection, IndexedFlowDependency, JsonObject } from '../../src/types/flow-analysis.js';
+import type {
+  FlowDependencyQueryDirection,
+  FlowDependencyQueryResult,
+  IndexedFlowDependency,
+  JsonObject,
+} from '../../src/types/flow-analysis.js';
 import type {
   FlowDefinition,
   FlowDefinitionGateway,
@@ -41,8 +46,11 @@ export class FakeFlowGateway implements FlowDefinitionGateway {
   public readonly dependencies: IndexedFlowDependency[] = [];
   public readonly dependenciesByDefinition = new Map<string, IndexedFlowDependency[]>();
   public readonly dependencyQueries: DependencyQuery[] = [];
+  public readonly truncatedDependencyQueries = new Set<string>();
   public readonly metadata = new Map<string, JsonObject>();
   public readonly permissionChecks: FlowMutationOperation[] = [];
+  public readonly versionQueries: string[] = [];
+  public allVersionQueries = 0;
   public allowDefinitionUpdates = true;
   public allowVersionDeletes = true;
   public persistUpdates = true;
@@ -83,11 +91,13 @@ export class FakeFlowGateway implements FlowDefinitionGateway {
 
   public async findVersions(definitionId: string): Promise<ReadonlyArray<FlowVersion>> {
     this.throwQueryError();
+    this.versionQueries.push(definitionId);
     return this.versions.filter((version) => version.definitionId === definitionId);
   }
 
   public async findAllVersions(): Promise<ReadonlyArray<FlowVersion>> {
     this.throwQueryError();
+    this.allVersionQueries += 1;
     return this.versions;
   }
 
@@ -95,14 +105,19 @@ export class FakeFlowGateway implements FlowDefinitionGateway {
     definitionId: string,
     direction: FlowDependencyQueryDirection,
     types: ReadonlyArray<string>
-  ): Promise<ReadonlyArray<IndexedFlowDependency>> {
+  ): Promise<FlowDependencyQueryResult> {
     this.throwQueryError();
     this.dependencyQueries.push({ definitionId, direction, types });
-    return (this.dependenciesByDefinition.get(definitionId) ?? this.dependencies).filter(
+    const dependencies = (this.dependenciesByDefinition.get(definitionId) ?? this.dependencies).filter(
       (dependency) =>
         dependency.direction === direction &&
         (types.length === 0 || (dependency.type !== null && types.includes(dependency.type)))
     );
+    return {
+      dependencies,
+      reachedLimit: this.truncatedDependencyQueries.has(`${definitionId}:${direction}`),
+      limit: 2000,
+    };
   }
 
   public async getVersionMetadata(versionId: string): Promise<JsonObject> {

@@ -88,6 +88,8 @@ export interface FlowGraphStyle {
 
 export type FlowSubflowVersionSelector = 'active' | 'latest';
 
+export type FlowDescribeSection = 'elements' | 'inputs' | 'outputs' | 'references' | 'resources';
+
 export interface FlowTraversalRequest extends NamedFlowRequest {
   version: FlowComparisonVersionSelector;
   subflowVersion: FlowSubflowVersionSelector;
@@ -95,7 +97,75 @@ export interface FlowTraversalRequest extends NamedFlowRequest {
   maxDepth: number;
 }
 
-export type FlowDescribeRequest = FlowTraversalRequest;
+export interface FlowDescribeRequest extends FlowTraversalRequest {
+  sections?: FlowDescribeSection[];
+}
+
+export type FlowLintRule =
+  | 'dml-inside-loop'
+  | 'hard-coded-id'
+  | 'inactive-subflow'
+  | 'missing-fault-path'
+  | 'missing-subflow'
+  | 'unconnected-element'
+  | 'unused-resource';
+
+export type FlowLintSeverity = 'error' | 'warning';
+
+export interface FlowLintRequest extends NamedFlowRequest {
+  version: FlowComparisonVersionSelector;
+}
+
+export interface FlowLintFinding {
+  rule: FlowLintRule;
+  severity: FlowLintSeverity;
+  message: string;
+  element: string | null;
+  path: string | null;
+}
+
+export interface FlowLintResult {
+  apiName: string;
+  namespace: string | null;
+  definitionId: string;
+  requestedVersion: FlowComparisonVersionSelector;
+  resolvedVersion: FlowVersionNumber;
+  status: string;
+  findings: FlowLintFinding[];
+  errors: number;
+  warnings: number;
+  targetOrg: string;
+}
+
+export type FlowExportFormat = 'xml';
+
+export type FlowExportStatus = 'active' | 'draft';
+
+export interface FlowExportRequest extends NamedFlowRequest {
+  version: FlowComparisonVersionSelector;
+  format: FlowExportFormat;
+  status: FlowExportStatus;
+  outputFile: string;
+}
+
+export interface FlowExportArtifact {
+  result: FlowExportResult;
+  content: string;
+}
+
+export interface FlowExportResult {
+  apiName: string;
+  namespace: string | null;
+  definitionId: string;
+  requestedVersion: FlowComparisonVersionSelector;
+  resolvedVersion: FlowVersionNumber;
+  sourceStatus: string;
+  exportedStatus: 'Active' | 'Draft';
+  format: FlowExportFormat;
+  outputFile: string;
+  bytes: number;
+  targetOrg: string;
+}
 
 export interface FlowGraphRequest extends FlowTraversalRequest {
   format: FlowGraphFormat;
@@ -188,7 +258,7 @@ export interface FlowTraversalWarning {
   path: string[];
 }
 
-export interface FlowDescribeResult {
+export interface FlowTraversalResult {
   apiName: string;
   namespace: string | null;
   requestedVersion: FlowComparisonVersionSelector;
@@ -201,7 +271,11 @@ export interface FlowDescribeResult {
   targetOrg: string;
 }
 
-export interface FlowGraphResult extends FlowDescribeResult {
+export interface FlowDescribeResult extends FlowTraversalResult {
+  sections: FlowDescribeSection[];
+}
+
+export interface FlowGraphResult extends FlowTraversalResult {
   format: FlowGraphFormat;
   includeVariables: boolean;
   includeFormulas: boolean;

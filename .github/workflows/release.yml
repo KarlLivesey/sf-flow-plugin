@@ -34,6 +34,12 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
+      - name: Validate the release branch and package version
+        env:
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: node .github/scripts/validate-release-version.mjs "$BASE_BRANCH" "$HEAD_BRANCH"
+
       - name: Resolve release metadata
         id: release
         shell: bash

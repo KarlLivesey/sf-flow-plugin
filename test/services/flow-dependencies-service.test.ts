@@ -86,6 +86,18 @@ describe('FlowDependenciesService', (): void => {
   });
 });
 
+describe('FlowDependenciesService truncation', (): void => {
+  it('reports each direction that reaches the query limit', async (): Promise<void> => {
+    const fake = gateway();
+    fake.truncatedDependencyQueries.add(`${definitionId}:uses`);
+    fake.truncatedDependencyQueries.add(`${definitionId}:used-by`);
+    const result = await new FlowDependenciesService(fake).getDependencies(request());
+    expect(result.truncated).to.equal(true);
+    expect(result.truncations.map((item) => item.direction)).to.deep.equal(['uses', 'used-by']);
+    expect(result.truncations.every((item) => item.limit === 2000)).to.equal(true);
+  });
+});
+
 describe('FlowDependenciesService recursion', (): void => {
   it('follows Flow dependencies up to the requested depth without revisiting definitions', async (): Promise<void> => {
     const childId = '300000000000002';

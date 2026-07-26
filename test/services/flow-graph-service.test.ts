@@ -68,6 +68,7 @@ describe('FlowGraphService', (): void => {
       legend: true,
       labelWidth: 24,
     });
+    expect(result).to.not.have.property('sections');
     expect(result.graph).to.include('flowchart LR');
     expect(result.graph).to.include('subgraph flowLegend["Legend"]');
   });

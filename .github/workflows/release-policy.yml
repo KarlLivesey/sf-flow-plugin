@@ -1,0 +1,30 @@
+name: release policy
+
+on:
+  pull_request:
+    branches:
+      - main
+      - 'release/**'
+
+permissions:
+  contents: read
+
+jobs:
+  release-version:
+    name: release version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the proposed merge
+        uses: actions/checkout@v6
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Validate the release branch and package version
+        env:
+          BASE_BRANCH: ${{ github.base_ref }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: node .github/scripts/validate-release-version.mjs "$BASE_BRANCH" "$HEAD_BRANCH"

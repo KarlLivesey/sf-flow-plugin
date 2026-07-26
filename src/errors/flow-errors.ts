@@ -141,6 +141,15 @@ export function flowAuditFailed(message: string, cause?: unknown): SfError {
   });
 }
 
+export function flowListFailed(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowListFailed',
+    message,
+    action: 'Confirm the org supports Tooling API Flow queries and that your user has sufficient permissions.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
 export function flowDependenciesFailed(message: string, cause?: unknown): SfError {
   return createFlowError({
     code: 'FlowDependenciesFailed',
@@ -159,11 +168,29 @@ export function flowComparisonFailed(message: string, cause?: unknown): SfError 
   });
 }
 
+export function flowExportFailed(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowExportFailed',
+    message,
+    action: 'Check the Flow version, output path and metadata read permissions, then run the command again.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
 export function flowInspectionFailed(message: string, cause?: unknown): SfError {
   return createFlowError({
     code: 'FlowInspectionFailed',
     message,
     action: 'Check the requested Flow version and confirm that your user can read Flow metadata.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
+export function flowLintFailed(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowLintFailed',
+    message,
+    action: 'Confirm the Flow metadata is accessible and valid, then run the command again.',
     ...(cause === undefined ? {} : { cause }),
   });
 }
