@@ -139,12 +139,14 @@ async function backupTargets(transaction: BundleTransaction, targets: ReadonlyAr
   }, Promise.resolve());
 }
 
-async function installFile(file: StagedFile, overwrite: boolean): Promise<void> {
+async function installFile(transaction: BundleTransaction, file: StagedFile, overwrite: boolean): Promise<void> {
   if (overwrite) {
     await rename(file.stagedPath, file.targetPath);
+    transaction.installed.push(file.targetPath);
     return;
   }
   await link(file.stagedPath, file.targetPath);
+  transaction.installed.push(file.targetPath);
   await rm(file.stagedPath, { force: true });
 }
 
@@ -152,8 +154,7 @@ async function installStaged(transaction: BundleTransaction, overwrite: boolean)
   await transaction.staged.reduce(async (previous, file) => {
     await previous;
     await mkdir(dirname(file.targetPath), { recursive: true });
-    await installFile(file, overwrite);
-    transaction.installed.push(file.targetPath);
+    await installFile(transaction, file, overwrite);
   }, Promise.resolve());
 }
 
