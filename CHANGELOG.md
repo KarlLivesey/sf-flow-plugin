@@ -41,8 +41,8 @@ All notable user-visible changes to this project will be documented in this file
 - Data Cloud preflight checks every required Flow, Flow Version and Flow Run DMO. An absent selected Flow/version
   record after successful DMO access is reported as unavailable; DMO capability/access, permission, query and
   response failures are reported as failed. Runtime records are scoped to the authenticated source organisation.
-- The production dependency tree resolves the patched `brace-expansion` release through an in-range oclif
-  transitive-dependency override.
+- The production dependency tree resolves the patched `brace-expansion` release through an in-range direct pin of
+  oclif's existing transitive dependency.
 - `sf flow debug` is not included because the requested trace, rollback, run-as and record-trigger behaviour does not
   have a verified supported Salesforce interface.
 - Salesforce CLI's existing `sf flow run test` and `sf flow get test` commands remain the supported Flow test runner;
