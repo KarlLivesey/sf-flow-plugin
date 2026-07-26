@@ -13,6 +13,7 @@ import type { FlowDefinitionGateway } from '../types/flow.js';
 import type { FlowDescribeRequest, FlowDescription, FlowTraversalWarning } from '../types/flow-inspection.js';
 import { externalDependencies, renderPackageXml } from '../utils/flow-bundle-manifest.js';
 import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
+import { qualifiedFlowName } from '../utils/flow-state.js';
 import { FlowDependenciesService } from './flow-dependencies-service.js';
 import { FlowDescribeService } from './flow-describe-service.js';
 import { FlowExportService } from './flow-export-service.js';
@@ -97,6 +98,7 @@ function reportFiles(
   const external = externalDependencies(dependencies.dependencies);
   const manifest = {
     apiName: request.apiName,
+    rootFlow: qualifiedFlowName(request.apiName, request.namespace ?? null),
     requestedVersion: request.version,
     subflowVersion: request.subflowVersion,
     status: request.status,

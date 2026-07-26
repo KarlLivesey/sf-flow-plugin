@@ -5,12 +5,13 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import { access, link, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 import { z } from 'zod';
 
 import { flowBundleFailed } from '../errors/flow-errors.js';
 import type { FlowBundleFile } from '../types/flow-bundle.js';
+import { assertBundleTargetsSafe, safeBundleTarget, validatedBundleFiles } from './flow-bundle-path-safety.js';
 
 interface StagedFile {
   stagedPath: string;
@@ -35,6 +36,7 @@ interface PreparedTransaction {
 }
 
 const previousManifestSchema = z.object({
+  rootFlow: z.string().regex(/^[A-Za-z][A-Za-z0-9_]*$/u),
   flows: z.array(z.object({ qualifiedName: z.string().regex(/^[A-Za-z][A-Za-z0-9_]*$/u) })),
 });
 
@@ -47,36 +49,46 @@ async function exists(file: string): Promise<boolean> {
   }
 }
 
-function safeTarget(outputDir: string, file: string): string {
-  const root = resolve(outputDir);
-  const target = resolve(file);
-  const location = relative(root, target);
-  if (location === '' || location.startsWith('..') || isAbsolute(location)) {
-    throw flowBundleFailed(`Bundle file "${file}" is outside the output directory.`);
+function parseManifest(content: string, description: string): z.infer<typeof previousManifestSchema> {
+  try {
+    return previousManifestSchema.parse(JSON.parse(content) as unknown);
+  } catch (error: unknown) {
+    throw flowBundleFailed(`${description} Flow bundle manifest is invalid.`, error);
   }
-  return target;
 }
 
-function validatedFiles(files: ReadonlyArray<FlowBundleFile>, outputDir: string): FlowBundleFile[] {
-  const validated = files.map((file) => ({ ...file, path: safeTarget(outputDir, file.path) }));
-  if (new Set(validated.map((file) => file.path)).size !== validated.length) {
-    throw flowBundleFailed('The Flow bundle contains duplicate output paths.');
+function replacementManifest(
+  files: ReadonlyArray<FlowBundleFile>,
+  manifestPath: string
+): z.infer<typeof previousManifestSchema> {
+  const currentFile = files.find((file) => file.path === manifestPath);
+  if (currentFile === undefined) {
+    throw flowBundleFailed('The replacement Flow bundle does not contain an ownership manifest.');
   }
-  return validated;
+  return parseManifest(currentFile.content, 'The replacement');
 }
 
-async function previousFlowFiles(outputDir: string): Promise<string[]> {
+function assertSameBundleOwner(
+  previous: z.infer<typeof previousManifestSchema>,
+  current: z.infer<typeof previousManifestSchema>
+): void {
+  if (previous.rootFlow !== current.rootFlow) {
+    throw flowBundleFailed(
+      `Refusing to overwrite bundle "${previous.rootFlow}" with unrelated root Flow "${current.rootFlow}".`
+    );
+  }
+}
+
+async function previousFlowFiles(files: ReadonlyArray<FlowBundleFile>, outputDir: string): Promise<string[]> {
   const manifestPath = join(resolve(outputDir), '.sf-flow-bundle', 'manifest.json');
   if (!(await exists(manifestPath))) {
     return [];
   }
-  try {
-    const content = await readFile(manifestPath, 'utf8');
-    const manifest = previousManifestSchema.parse(JSON.parse(content) as unknown);
-    return manifest.flows.map((flow) => join(resolve(outputDir), 'flows', `${flow.qualifiedName}.flow-meta.xml`));
-  } catch (error: unknown) {
-    throw flowBundleFailed('The existing Flow bundle manifest is invalid; stale files cannot be reconciled.', error);
-  }
+  const previous = parseManifest(await readFile(manifestPath, 'utf8'), 'The existing');
+  assertSameBundleOwner(previous, replacementManifest(files, manifestPath));
+  return previous.flows.map((flow) =>
+    safeBundleTarget(outputDir, join(resolve(outputDir), 'flows', `${flow.qualifiedName}.flow-meta.xml`))
+  );
 }
 
 async function staleFiles(
@@ -88,7 +100,7 @@ async function staleFiles(
     return [];
   }
   const current = new Set(files.map((file) => file.path));
-  return (await previousFlowFiles(outputDir)).filter((file) => !current.has(file));
+  return (await previousFlowFiles(files, outputDir)).filter((file) => !current.has(file));
 }
 
 async function assertTargetsAvailable(files: ReadonlyArray<FlowBundleFile>, overwrite: boolean): Promise<void> {
@@ -174,18 +186,34 @@ async function prepareTransaction(
   overwrite: boolean,
   outputDir: string
 ): Promise<PreparedTransaction> {
-  const validated = validatedFiles(files, outputDir);
-  await assertTargetsAvailable(validated, overwrite);
-  await mkdir(resolve(outputDir), { recursive: true });
+  const { validated, stale } = await prepareTargets(files, overwrite, outputDir);
   const stageDir = await mkdtemp(join(resolve(outputDir), '.sf-flow-bundle-stage-'));
   const transaction: BundleTransaction = { stageDir, staged: [], backups: [], installed: [] };
   try {
     transaction.staged = await stageFiles(validated, stageDir);
-    return { transaction, stale: await staleFiles(validated, outputDir, overwrite) };
+    return { transaction, stale };
   } catch (error: unknown) {
     await rm(stageDir, { recursive: true, force: true }).catch(() => undefined);
     throw error;
   }
+}
+
+async function prepareTargets(
+  files: ReadonlyArray<FlowBundleFile>,
+  overwrite: boolean,
+  outputDir: string
+): Promise<{ stale: string[]; validated: FlowBundleFile[] }> {
+  const validated = validatedBundleFiles(files, outputDir);
+  await mkdir(resolve(outputDir), { recursive: true });
+  await assertBundleTargetsSafe(
+    outputDir,
+    validated.map((file) => file.path),
+    overwrite
+  );
+  await assertTargetsAvailable(validated, overwrite);
+  const stale = await staleFiles(validated, outputDir, overwrite);
+  await assertBundleTargetsSafe(outputDir, stale, true);
+  return { stale, validated };
 }
 
 async function handleFailure(transaction: BundleTransaction, error: unknown): Promise<never> {
