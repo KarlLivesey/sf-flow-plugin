@@ -6,6 +6,13 @@ Run an active autolaunched Salesforce Flow.
 
 Validate declared Flow inputs and invoke an active, directly invocable autolaunched Flow through Salesforce's supported REST API. Flow execution can perform DML, callouts, email and other side effects.
 
+Up to 200 input objects are sent together in one Flow action request. The command rechecks the active version immediately before
+the request and reports the version returned by Salesforce. Another activation can still occur between that check and execution.
+
+Input and output properties with names that look sensitive are redacted on a best-effort basis. Salesforce error message text is
+always withheld, while its stable status code is retained when available. Arbitrary values under other property names remain visible
+in terminal, JSON and output-file results.
+
 # flags.api-name.summary
 
 API name of the Flow definition.
@@ -20,7 +27,7 @@ Flow input using `NAME=VALUE` syntax. Repeat to provide multiple inputs.
 
 # flags.input-file.summary
 
-JSON file containing one input object or an array of input objects for multiple invocations.
+JSON file containing one input object or an array of up to 200 input objects for one action request.
 
 # flags.output-file.summary
 
@@ -62,7 +69,9 @@ Salesforce API version to use for Tooling and REST API requests.
 
 # warnings.side-effects
 
-This Flow can perform DML, callouts, email and other side effects. Salesforce controls the execution transaction.
+This Flow can perform DML, callouts, email and other side effects. All inputs are submitted in one REST action request, but the
+plugin does not promise all-or-none rollback across Flow interviews. A transport failure can leave execution outcome unknown; do not
+automatically retry a non-idempotent Flow.
 
 # info.title
 
