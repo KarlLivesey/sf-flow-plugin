@@ -240,7 +240,7 @@ describe('Flow lifecycle command NUTs', (): void => {
 describe('Flow inspection command NUTs', (): void => {
   it('validates active Flow invocation access without executing', (): void => {
     const output = runFlowCommand<FlowRunResult>('run', '--api-name Plugin_Test_Flow --dry-run');
-    expect(output.result).to.include({ apiName: 'Plugin_Test_Flow', dryRun: true, successful: true });
+    expect(output.result).to.include({ apiName: 'Plugin_Test_Flow', dryRun: true, successful: null });
     expect(output.result.invocations[0]).to.include({ executed: false });
   });
 

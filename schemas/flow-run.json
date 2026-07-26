@@ -30,7 +30,7 @@
           "type": "number"
         },
         "successful": {
-          "type": "boolean"
+          "type": ["boolean", "null"]
         },
         "invocations": {
           "type": "array",
@@ -70,7 +70,7 @@
           "$ref": "#/definitions/FlowVersionNumber"
         },
         "success": {
-          "type": "boolean"
+          "type": ["boolean", "null"]
         },
         "inputs": {
           "$ref": "#/definitions/JsonObject"
