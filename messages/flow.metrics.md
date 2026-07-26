@@ -4,7 +4,8 @@ Calculate factual Salesforce Flow complexity metrics.
 
 # description
 
-Report structural counts for one Flow version, optionally including recursively referenced subflows. Metrics describe
+Report structural counts for one Flow version, optionally including recursively referenced subflows. Use `--data-cloud`
+to include historical runtime telemetry when Flow metrics collection is enabled in Data Cloud. Static metrics describe
 the selected metadata; policy thresholds belong in `sf flow check`.
 
 # flags.api-name.summary
@@ -31,6 +32,14 @@ Version used for referenced subflows: `active` with latest fallback, or `latest`
 
 Maximum recursive subflow depth.
 
+# flags.data-cloud.summary
+
+Include runtime telemetry from the selected Flow version's Data Cloud Flow metrics.
+
+# flags.data-cloud-days.summary
+
+Number of preceding days of Data Cloud runtime telemetry to analyse. Used only with `--data-cloud`.
+
 # flags.output-file.summary
 
 Write the structured metrics result to this file.
@@ -53,9 +62,17 @@ Salesforce API version to use for Tooling API requests.
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --recursive --output-file flow-metrics.json
 
+- Include the last 30 days of Data Cloud runtime telemetry:
+
+  <%= config.bin %> <%= command.id %> --api-name Order_Processing --data-cloud
+
 # info.title
 
 Flow metrics for %s v%s
+
+# info.data-cloud-title
+
+Data Cloud runtime metrics for the last %s days
 
 # info.wrote-output
 

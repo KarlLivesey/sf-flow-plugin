@@ -37,6 +37,7 @@ export type FlowProgressStage =
   | 'deleting-versions'
   | 'verifying-change'
   | 'loading-dependencies'
+  | 'loading-data-cloud-metrics'
   | 'analysing-results'
   | 'comparing-metadata'
   | 'rendering-graph';
@@ -70,6 +71,7 @@ const stageMessages: Record<FlowProgressStage, string> = {
   'comparing-metadata': messages.getMessage('stages.comparing-metadata'),
   'deleting-versions': messages.getMessage('stages.deleting-versions'),
   'loading-dependencies': messages.getMessage('stages.loading-dependencies'),
+  'loading-data-cloud-metrics': messages.getMessage('stages.loading-data-cloud-metrics'),
   'loading-flows': messages.getMessage('stages.loading-flows'),
   'loading-metadata': messages.getMessage('stages.loading-metadata'),
   'loading-versions': messages.getMessage('stages.loading-versions'),

@@ -94,6 +94,10 @@ Verifying result
 
 Loading dependencies
 
+# stages.loading-data-cloud-metrics
+
+Loading Data Cloud Flow metrics
+
 # stages.analysing-results
 
 Analysing results

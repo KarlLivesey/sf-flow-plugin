@@ -28,4 +28,6 @@ export type FlowErrorCode =
   | 'FlowPruneFailed'
   | 'FlowPruneVerificationFailed'
   | 'FlowMetricsFailed'
+  | 'FlowDataCloudMetricsUnavailable'
+  | 'FlowDataCloudMetricsFailed'
   | 'FlowCheckFailed';

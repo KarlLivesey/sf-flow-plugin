@@ -13,6 +13,8 @@ export interface FlowMetricsRequest extends NamedFlowRequest {
   subflowVersion: FlowSubflowVersionSelector;
   recursive: boolean;
   maxDepth: number;
+  dataCloud: boolean;
+  dataCloudDays: number;
 }
 
 export interface FlowMetricCounts {
@@ -47,6 +49,47 @@ export interface FlowMetricEntry extends FlowMetricCounts {
   unreachableElementNames: string[];
 }
 
+export interface FlowRuntimeMetricBreakdown {
+  status: string;
+  errorReason: string | null;
+  executions: number;
+  averageDurationMilliseconds: number | null;
+  minimumDurationMilliseconds: number | null;
+  maximumDurationMilliseconds: number | null;
+  firstExecution: string | null;
+  lastExecution: string | null;
+}
+
+export interface FlowRuntimeMetrics {
+  source: 'data-cloud';
+  enabled: true;
+  apiName: string;
+  namespace: string | null;
+  version: number;
+  windowDays: number;
+  from: string;
+  executions: number;
+  successfulExecutions: number;
+  failedExecutions: number;
+  averageDurationMilliseconds: number | null;
+  minimumDurationMilliseconds: number | null;
+  maximumDurationMilliseconds: number | null;
+  firstExecution: string | null;
+  lastExecution: string | null;
+  breakdowns: FlowRuntimeMetricBreakdown[];
+}
+
+export interface FlowRuntimeMetricsRequest {
+  apiName: string;
+  namespace: string | null;
+  version: number;
+  windowDays: number;
+}
+
+export interface FlowRuntimeMetricsGateway {
+  getMetrics(request: FlowRuntimeMetricsRequest): Promise<FlowRuntimeMetrics>;
+}
+
 export interface FlowMetricsResult {
   apiName: string;
   namespace: string | null;
@@ -60,4 +103,8 @@ export interface FlowMetricsResult {
   flows: FlowMetricEntry[];
   warnings: FlowTraversalWarning[];
   targetOrg: string;
+}
+
+export interface FlowMetricsCommandResult extends FlowMetricsResult {
+  dataCloud: FlowRuntimeMetrics | null;
 }
