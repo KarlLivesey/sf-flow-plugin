@@ -23,23 +23,143 @@ interface PathMetrics {
 }
 
 interface PathContext {
-  graph: ReadonlyMap<string, ReadonlyArray<string>>;
+  components: ReadonlyArray<ReadonlyArray<string>>;
+  graph: ReadonlyMap<number, ReadonlySet<number>>;
   loopNames: ReadonlySet<string>;
-  path: ReadonlySet<string>;
+  memo: Map<number, PathMetrics>;
 }
 
-function pathMetrics(node: string, context: PathContext): PathMetrics {
-  if (context.path.has(node)) {
-    return { depth: 0, loopNesting: 0 };
+interface ComponentState {
+  index: number;
+  lowLink: number;
+  onStack: boolean;
+}
+
+interface ComponentContext {
+  components: string[][];
+  graph: ReadonlyMap<string, ReadonlyArray<string>>;
+  stack: string[];
+  states: Map<string, ComponentState>;
+}
+
+interface CondenseContext {
+  componentByNode: ReadonlyMap<string, number>;
+  graph: Map<number, Set<number>>;
+}
+
+function graphNodes(graph: ReadonlyMap<string, ReadonlyArray<string>>): string[] {
+  return [...new Set(['start', ...graph.keys(), ...[...graph.values()].flatMap((targets) => targets)])];
+}
+
+function targetLowLink(target: string, lowLink: number, context: ComponentContext): number {
+  const targetState = context.states.get(target);
+  if (targetState === undefined) {
+    visitComponent(target, context);
+    const visitedTarget = context.states.get(target);
+    return visitedTarget === undefined ? lowLink : Math.min(lowLink, visitedTarget.lowLink);
   }
-  const visited = new Set(context.path).add(node);
-  const children = (context.graph.get(node) ?? []).map((target) => pathMetrics(target, { ...context, path: visited }));
-  const maximumDepth = Math.max(0, ...children.map((child) => child.depth));
-  const maximumNesting = Math.max(0, ...children.map((child) => child.loopNesting));
-  return {
-    depth: (node === 'start' ? 0 : 1) + maximumDepth,
-    loopNesting: (context.loopNames.has(node) ? 1 : 0) + maximumNesting,
+  return targetState.onStack ? Math.min(lowLink, targetState.index) : lowLink;
+}
+
+function popComponentMember(context: ComponentContext): string | undefined {
+  const member = context.stack.pop();
+  const memberState = member === undefined ? undefined : context.states.get(member);
+  if (memberState !== undefined) {
+    memberState.onStack = false;
+  }
+  return member;
+}
+
+function extractComponent(root: string, context: ComponentContext): void {
+  const component: string[] = [];
+  while (context.stack.length > 0) {
+    const member = popComponentMember(context);
+    if (member === undefined) {
+      break;
+    }
+    component.push(member);
+    if (member === root) {
+      break;
+    }
+  }
+  context.components.push(component);
+}
+
+function visitComponent(node: string, context: ComponentContext): void {
+  const nodeState = { index: context.states.size, lowLink: context.states.size, onStack: true };
+  context.states.set(node, nodeState);
+  context.stack.push(node);
+  for (const target of context.graph.get(node) ?? []) {
+    nodeState.lowLink = targetLowLink(target, nodeState.lowLink, context);
+  }
+  if (nodeState.lowLink === nodeState.index) {
+    extractComponent(node, context);
+  }
+}
+
+function stronglyConnectedComponents(
+  graph: ReadonlyMap<string, ReadonlyArray<string>>
+): ReadonlyArray<ReadonlyArray<string>> {
+  const context: ComponentContext = { components: [], graph, stack: [], states: new Map() };
+  for (const node of graphNodes(graph)) {
+    if (!context.states.has(node)) {
+      visitComponent(node, context);
+    }
+  }
+  return context.components;
+}
+
+function addCondensedTargets(source: string, targets: ReadonlyArray<string>, context: CondenseContext): void {
+  const sourceComponent = context.componentByNode.get(source);
+  if (sourceComponent === undefined) {
+    return;
+  }
+  const targetComponents = targets
+    .map((target) => context.componentByNode.get(target))
+    .filter((target): target is number => target !== undefined && target !== sourceComponent);
+  context.graph.set(sourceComponent, new Set([...(context.graph.get(sourceComponent) ?? []), ...targetComponents]));
+}
+
+function condensedGraph(
+  graph: ReadonlyMap<string, ReadonlyArray<string>>,
+  components: ReadonlyArray<ReadonlyArray<string>>
+): { graph: ReadonlyMap<number, ReadonlySet<number>>; start: number } {
+  const componentByNode = new Map(
+    components.flatMap((component, index) => component.map((node) => [node, index] as const))
+  );
+  const context: CondenseContext = { componentByNode, graph: new Map() };
+  for (const [source, targets] of graph.entries()) {
+    addCondensedTargets(source, targets, context);
+  }
+  return { graph: context.graph, start: componentByNode.get('start') ?? 0 };
+}
+
+function componentPathMetrics(component: number, context: PathContext): PathMetrics {
+  const cached = context.memo.get(component);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const children = [...(context.graph.get(component) ?? [])].map((target) => componentPathMetrics(target, context));
+  const nodes = context.components[component] ?? [];
+  const result = {
+    depth: nodes.filter((node) => node !== 'start').length + Math.max(0, ...children.map((child) => child.depth)),
+    loopNesting:
+      nodes.filter((node) => context.loopNames.has(node)).length +
+      Math.max(0, ...children.map((child) => child.loopNesting)),
   };
+  context.memo.set(component, result);
+  return result;
+}
+
+function pathMetrics(graph: ReadonlyMap<string, ReadonlyArray<string>>, loopNames: ReadonlySet<string>): PathMetrics {
+  const components = stronglyConnectedComponents(graph);
+  const condensed = condensedGraph(graph, components);
+  return componentPathMetrics(condensed.start, {
+    components,
+    graph: condensed.graph,
+    loopNames,
+    memo: new Map(),
+  });
 }
 
 function fanCounts(description: FlowDescription): { maximumFanIn: number; maximumFanOut: number } {
@@ -66,7 +186,7 @@ export function analyseFlowMetrics(metadata: JsonObject, description: FlowDescri
   const loops = new Set(
     description.elements.filter((element) => element.type === 'Loop').map((element) => element.name)
   );
-  const paths = pathMetrics('start', { graph: adjacency(description), loopNames: loops, path: new Set() });
+  const paths = pathMetrics(adjacency(description), loops);
   const fan = fanCounts(description);
   const decisions = description.elements.filter((element) => element.type === 'Decision');
   return {

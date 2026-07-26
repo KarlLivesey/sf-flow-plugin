@@ -31,20 +31,28 @@ class QueryConnectionDouble {
 
 function queryResponse(
   completionStatus: string,
-  rowCount: number
+  rowCount: number,
+  progress?: number
 ): {
-  status: { completionStatus: string; queryId: string; rowCount: number };
+  status: { completionStatus: string; progress?: number; queryId: string; rowCount: number };
 } {
-  return { status: { completionStatus, queryId: 'query-1', rowCount } };
+  return {
+    status: {
+      completionStatus,
+      queryId: 'query-1',
+      rowCount,
+      ...(progress === undefined ? {} : { progress }),
+    },
+  };
 }
 
 describe('DataCloudSqlQueryClient', (): void => {
   it('waits for completion and loads result rows', async (): Promise<void> => {
     const connection = new QueryConnectionDouble([
       queryResponse('Running', 0),
-      queryResponse('ResultsProduced', 2),
+      queryResponse('Finished', 2),
       {
-        ...queryResponse('ResultsProduced', 2),
+        ...queryResponse('Finished', 2),
         data: [['flow-1'], ['flow-2']],
         metadata: [{ name: 'flowId' }],
         returnedRows: 2,
@@ -55,5 +63,20 @@ describe('DataCloudSqlQueryClient', (): void => {
     expect(connection.requests).to.have.length(3);
     expect(connection.requests[1]).to.equal('/services/data/v65.0/ssot/query-sql/query-1?waitTimeMs=10000');
     expect(connection.requests[2]).to.equal('/services/data/v65.0/ssot/query-sql/query-1/rows?offset=0&rowLimit=2000');
+  });
+
+  it('waits after intermediate results and accepts documented full progress', async (): Promise<void> => {
+    const connection = new QueryConnectionDouble([
+      queryResponse('ResultsProduced', 1),
+      {
+        ...queryResponse('Running', 1, 1),
+        data: [['flow-1']],
+        metadata: [{ name: 'flowId' }],
+        returnedRows: 1,
+      },
+    ]);
+    const records = await new DataCloudSqlQueryClient(connection.asConnection()).query('SELECT flowId FROM Flow');
+    expect(records).to.deep.equal([{ flowId: 'flow-1' }]);
+    expect(connection.requests).to.have.length(2);
   });
 });

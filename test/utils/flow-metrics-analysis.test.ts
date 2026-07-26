@@ -68,3 +68,39 @@ describe('Flow metrics analysis', (): void => {
     expect(totalFlowMetrics([metrics])).to.include({ executableElements: 4, maximumLoopNesting: 1 });
   });
 });
+
+describe('Flow metrics path analysis', (): void => {
+  it('calculates merged decision paths without enumerating every simple path', (): void => {
+    const decisionCount = 25;
+    const metadata = {
+      start: { connector: { targetReference: 'Decision_0' } },
+      decisions: Array.from({ length: decisionCount }, (_unused, index) => ({
+        name: `Decision_${index}`,
+        rules: [
+          {
+            name: 'Left',
+            connector: { targetReference: `Left_${index}` },
+          },
+        ],
+        defaultConnector: { targetReference: `Right_${index}` },
+      })),
+      assignments: [
+        ...Array.from({ length: decisionCount }, (_unused, index) => ({
+          name: `Left_${index}`,
+          connector: {
+            targetReference: index === decisionCount - 1 ? 'Finish' : `Decision_${index + 1}`,
+          },
+        })),
+        ...Array.from({ length: decisionCount }, (_unused, index) => ({
+          name: `Right_${index}`,
+          connector: {
+            targetReference: index === decisionCount - 1 ? 'Finish' : `Decision_${index + 1}`,
+          },
+        })),
+        { name: 'Finish' },
+      ],
+    };
+    const description = analyseFlowMetadata({ definition, version, metadata, depth: 0 });
+    expect(analyseFlowMetrics(metadata, description).maximumPathDepth).to.equal(51);
+  });
+});
