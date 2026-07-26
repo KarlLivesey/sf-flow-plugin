@@ -147,22 +147,22 @@ async function inspectSelectedSubflows(context: SubflowInspectionContext): Promi
 }
 
 async function runLint(
-  gateway: FlowDefinitionGateway & FlowMetadataGateway,
+  gateways: { definitions: FlowDefinitionGateway; metadata: FlowMetadataGateway },
   request: FlowLintRequest,
   progress: FlowProgressReporter
 ): Promise<FlowLintResult> {
   progress('resolving-flow', request.apiName);
-  const definition = selectFlowDefinition(request.apiName, await gateway.findDefinitions(lookup(request)));
+  const definition = selectFlowDefinition(request.apiName, await gateways.definitions.findDefinitions(lookup(request)));
   progress('loading-versions', `${request.apiName} (${String(request.version)})`);
-  const version = selectVersion(definition, await gateway.findVersions(definition.id), request.version);
+  const version = selectVersion(definition, await gateways.definitions.findVersions(definition.id), request.version);
   progress('loading-metadata', `${request.apiName} v${version.versionNumber}`);
-  const metadata = await gateway.getVersionMetadata(version.id);
+  const metadata = await gateways.metadata.getVersionMetadata(version.id);
   const description = analyseFlowMetadata({ definition, version, metadata, depth: 0 });
   progress('analysing-results', `${request.apiName} v${version.versionNumber}`);
   const findings = filterFindings(request, [
     ...analyseFlowLintMetadata(metadata, description),
     ...(await inspectSelectedSubflows({
-      gateway,
+      gateway: gateways.definitions,
       request,
       flowNames: description.subflows.map((subflow) => subflow.flowName),
       progress,
@@ -172,14 +172,17 @@ async function runLint(
 }
 
 export class FlowLintService {
-  public constructor(private readonly gateway: FlowDefinitionGateway & FlowMetadataGateway) {}
+  public constructor(
+    private readonly gateway: FlowDefinitionGateway & FlowMetadataGateway,
+    private readonly metadataGateway: FlowMetadataGateway = gateway
+  ) {}
 
   public async lint(
     request: FlowLintRequest,
     progress: FlowProgressReporter = noFlowProgress
   ): Promise<FlowLintResult> {
     try {
-      return await runLint(this.gateway, request, progress);
+      return await runLint({ definitions: this.gateway, metadata: this.metadataGateway }, request, progress);
     } catch (error: unknown) {
       if (error instanceof Error && error.name.startsWith('Flow')) {
         throw error;

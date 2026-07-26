@@ -52,7 +52,8 @@ function managedFlowGateway(): FakeFlowGateway {
 
 describe('FlowMetricsService', (): void => {
   it('aggregates recursively selected Flow versions', async (): Promise<void> => {
-    const result = await new FlowMetricsService(nestedFlowGateway()).calculate({
+    const gateway = nestedFlowGateway();
+    const result = await new FlowMetricsService(gateway).calculate({
       apiName: 'Flow_A',
       targetOrg: 'admin@example.com',
       version: 'latest',
@@ -66,6 +67,7 @@ describe('FlowMetricsService', (): void => {
     expect(result.totals.subflows).to.equal(1);
     expect(result.recursive).to.equal(true);
     expect(result.dataCloud).to.equal(null);
+    expect(gateway.metadataQueries).to.deep.equal(['301000000000000001', '301000000000100002']);
   });
 });
 

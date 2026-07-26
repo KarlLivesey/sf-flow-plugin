@@ -16,6 +16,7 @@ import type {
 } from '../types/flow-metrics.js';
 import { analyseFlowMetrics, totalFlowMetrics } from '../utils/flow-metrics-analysis.js';
 import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
+import { CachingFlowMetadataGateway } from './caching-flow-metadata-gateway.js';
 import { FlowDescribeService } from './flow-describe-service.js';
 
 interface ResolvedRuntimeFlow {
@@ -34,7 +35,8 @@ function describeRequest(request: FlowMetricsRequest): FlowDescribeRequest {
 export class FlowMetricsService {
   public constructor(
     private readonly gateway: FlowDefinitionGateway & FlowMetadataGateway,
-    private readonly runtimeGateway?: FlowRuntimeMetricsGateway
+    private readonly runtimeGateway?: FlowRuntimeMetricsGateway,
+    private readonly sharedMetadataGateway?: FlowMetadataGateway
   ) {}
 
   public async calculate(
@@ -42,11 +44,15 @@ export class FlowMetricsService {
     progress: FlowProgressReporter = noFlowProgress
   ): Promise<FlowMetricsCommandResult> {
     try {
-      const described = await new FlowDescribeService(this.gateway).describe(describeRequest(request), progress);
+      const metadataGateway = this.sharedMetadataGateway ?? new CachingFlowMetadataGateway(this.gateway);
+      const described = await new FlowDescribeService(this.gateway, metadataGateway).describe(
+        describeRequest(request),
+        progress
+      );
       const flows = await Promise.all(
         described.flows.map(async (flow) => {
           progress('loading-metadata', `${flow.qualifiedName} v${flow.versionNumber} (metrics)`);
-          return analyseFlowMetrics(await this.gateway.getVersionMetadata(flow.versionId), flow);
+          return analyseFlowMetrics(await metadataGateway.getVersionMetadata(flow.versionId), flow);
         })
       );
       const dataCloud = await this.loadDataCloudMetrics(

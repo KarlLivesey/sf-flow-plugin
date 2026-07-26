@@ -34,11 +34,11 @@ describe('FlowCheckService', (): void => {
   });
 
   it('runs metrics only when selected', async (): Promise<void> => {
-    const result = await new FlowCheckService(nestedFlowGateway()).check(
-      request({ checks: ['metrics'], recursive: true })
-    );
+    const gateway = nestedFlowGateway();
+    const result = await new FlowCheckService(gateway).check(request({ checks: ['metrics'], recursive: true }));
     expect(result.checks).to.deep.equal(['metrics']);
     expect(result.flows[0]?.metrics?.flows.map((flow) => flow.apiName)).to.deep.equal(['Flow_A', 'Flow_B']);
+    expect(gateway.metadataQueries).to.deep.equal(['301000000000000001', '301000000000100002']);
   });
 
   it('reports dependency truncation as an error unless explicitly allowed', async (): Promise<void> => {
