@@ -104,10 +104,17 @@ function hasCheck(checks: ReadonlyArray<FlowCheckKind>, check: FlowCheckKind): b
 }
 
 function entryFindings(checks: ReadonlyArray<FlowCheckKind>, data: CheckData): FlowCheckFinding[] {
+  const lintSubflowFindings = data.lintResults.flatMap((result) => lintCheckFindings(result, 'subflows'));
+  const traversalOwnsMissingSubflows = data.traversalFindings.some((finding) => finding.code === 'missing-subflow');
   return [
     ...(hasCheck(checks, 'lint') ? data.lintResults.flatMap((result) => lintCheckFindings(result, 'lint')) : []),
     ...(hasCheck(checks, 'subflows')
-      ? [...data.lintResults.flatMap((result) => lintCheckFindings(result, 'subflows')), ...data.traversalFindings]
+      ? [
+          ...lintSubflowFindings.filter(
+            (finding) => finding.code !== 'missing-subflow' || !traversalOwnsMissingSubflows
+          ),
+          ...data.traversalFindings,
+        ]
       : []),
     ...(hasCheck(checks, 'dependencies') ? data.dependencyFindings : []),
     ...(hasCheck(checks, 'versions') ? data.versionFindings : []),

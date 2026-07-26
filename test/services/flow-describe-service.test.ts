@@ -8,7 +8,12 @@ import { expect } from 'chai';
 
 import { FlowDescribeService } from '../../src/services/flow-describe-service.js';
 import type { FlowProgressStage } from '../../src/utils/flow-progress.js';
-import { inspectionRequest, nestedFlowGateway, versionedSubflowGateway } from '../helpers/flow-inspection-fixtures.js';
+import {
+  inspectionRequest,
+  nestedFlowGateway,
+  subflowMetadata,
+  versionedSubflowGateway,
+} from '../helpers/flow-inspection-fixtures.js';
 
 describe('FlowDescribeService', (): void => {
   it('describes only the requested Flow when recursion is disabled', async (): Promise<void> => {
@@ -44,6 +49,20 @@ describe('FlowDescribeService', (): void => {
       flowName: 'Flow_B',
       path: ['Flow_A', 'Flow_B'],
     });
+  });
+
+  it('reports a malformed referenced subflow name without aborting traversal', async (): Promise<void> => {
+    const gateway = nestedFlowGateway();
+    gateway.metadata.set('301000000000000001', subflowMetadata('not a valid Flow name'));
+    const result = await new FlowDescribeService(gateway).describe(inspectionRequest());
+    expect(result.flows.map((flow) => flow.qualifiedName)).to.deep.equal(['Flow_A']);
+    expect(result.warnings).to.deep.equal([
+      {
+        kind: 'missing-subflow',
+        flowName: 'not a valid Flow name',
+        path: ['Flow_A', 'not a valid Flow name'],
+      },
+    ]);
   });
 });
 

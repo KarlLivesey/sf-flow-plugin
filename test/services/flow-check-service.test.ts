@@ -8,7 +8,7 @@ import { expect } from 'chai';
 
 import { FlowCheckService } from '../../src/services/flow-check-service.js';
 import type { FlowCheckRequest } from '../../src/types/flow-check.js';
-import { nestedFlowGateway } from '../helpers/flow-inspection-fixtures.js';
+import { nestedFlowGateway, subflowMetadata } from '../helpers/flow-inspection-fixtures.js';
 
 function request(overrides: Partial<FlowCheckRequest> = {}): FlowCheckRequest {
   return {
@@ -68,5 +68,32 @@ describe('FlowCheckService', (): void => {
     const result = await new FlowCheckService(gateway).check(request({ checks: ['dependencies'] }));
     expect(result.flows[0]).to.include({ apiName: 'Flow_A', resolvedVersion: 1 });
     expect(result.flows[0]?.contracts).to.deep.equal([]);
+  });
+});
+
+describe('FlowCheckService recursive subflow findings', (): void => {
+  it('reports one finding for a missing referenced subflow', async (): Promise<void> => {
+    const gateway = nestedFlowGateway();
+    gateway.metadata.set('301000000000000001', subflowMetadata('Missing_Flow'));
+    const result = await new FlowCheckService(gateway).check(request({ checks: ['subflows'], recursive: true }));
+    expect(result.findings.filter((finding) => finding.code === 'missing-subflow')).to.have.length(1);
+    expect(result).to.include({ errors: 1, warnings: 0 });
+  });
+
+  it('reports a malformed referenced subflow without aborting the aggregated check', async (): Promise<void> => {
+    const gateway = nestedFlowGateway();
+    gateway.metadata.set('301000000000000001', subflowMetadata('not a valid Flow name'));
+    const result = await new FlowCheckService(gateway).check(request({ checks: ['subflows'], recursive: true }));
+    expect(result.findings).to.deep.include({
+      apiName: 'Flow_A',
+      namespace: null,
+      version: 1,
+      check: 'subflows',
+      code: 'missing-subflow',
+      severity: 'error',
+      message: 'missing-subflow: Flow_A -> not a valid Flow name',
+      path: 'Flow_A -> not a valid Flow name',
+    });
+    expect(result).to.include({ errors: 1, warnings: 0 });
   });
 });

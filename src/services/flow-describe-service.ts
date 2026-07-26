@@ -47,7 +47,7 @@ function lookupForRequest(request: FlowDescribeRequest): FlowDefinitionLookup {
     : { apiName: request.apiName, namespace: request.namespace };
 }
 
-function lookupForSubflow(flowName: string): FlowDefinitionLookup {
+function lookupForSubflow(flowName: string): FlowDefinitionLookup | null {
   const separator = flowName.indexOf('__');
   const apiName = separator < 0 ? flowName : flowName.slice(separator + 2);
   const namespace = separator < 0 ? undefined : flowName.slice(0, separator);
@@ -55,7 +55,7 @@ function lookupForSubflow(flowName: string): FlowDefinitionLookup {
     !flowApiNameSchema.safeParse(apiName).success ||
     (namespace !== undefined && !namespaceSchema.safeParse(namespace).success)
   ) {
-    throw flowInspectionFailed(`Subflow name "${flowName}" is not a valid Salesforce metadata name.`);
+    return null;
   }
   return namespace === undefined ? { apiName } : { apiName, namespace };
 }
@@ -196,15 +196,23 @@ class FlowMetadataTraversal {
   }
 
   private async findSubflowDefinition(flowName: string, path: string[]): Promise<FlowDefinition | undefined> {
-    const definitions = await this.gateways.definitions.findDefinitions(lookupForSubflow(flowName));
+    const lookup = lookupForSubflow(flowName);
+    if (lookup === null) {
+      return this.missingSubflow(flowName, path);
+    }
+    const definitions = await this.gateways.definitions.findDefinitions(lookup);
     if (definitions.length === 0) {
-      this.addWarning({ kind: 'missing-subflow', flowName, path: [...path, flowName] });
-      return undefined;
+      return this.missingSubflow(flowName, path);
     }
     if (definitions.length > 1) {
       throw flowDefinitionAmbiguous(flowName);
     }
     return definitions[0];
+  }
+
+  private missingSubflow(flowName: string, path: string[]): FlowDefinition | undefined {
+    this.addWarning({ kind: 'missing-subflow', flowName, path: [...path, flowName] });
+    return undefined;
   }
 
   private async visitSubflow(definition: FlowDefinition, parent: VisitContext, path: string[]): Promise<void> {
