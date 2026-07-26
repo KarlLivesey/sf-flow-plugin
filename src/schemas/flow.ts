@@ -79,6 +79,8 @@ export const flowDependencyDirectionSchema: z.ZodType<FlowDependencyDirection> =
 
 export const flowDependencyTypeSchema = z.string().regex(/^[A-Za-z][A-Za-z0-9_]*$/);
 
+export const flowProcessTypeSchema = z.string().regex(/^[A-Za-z][A-Za-z0-9_]*$/);
+
 export const flowComparisonScopeSchema: z.ZodType<FlowComparisonScope> = z.enum([
   'metadata',
   'elements',

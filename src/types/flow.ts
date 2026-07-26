@@ -219,12 +219,16 @@ export interface FlowAuditResult {
   flowsWithIssues: number;
   maxInactiveVersions: number;
   olderThanDays: number | null;
+  types: string[];
+  namespace: string | null;
   flows: FlowAuditEntry[];
 }
 
 export interface FlowAuditRequest {
   targetOrg: string;
   apiNames: string[];
+  types: string[];
+  namespace?: string;
   maxInactiveVersions: number;
   olderThanDays?: number;
 }

@@ -29,8 +29,10 @@
       "flags-dir",
       "json",
       "max-inactive-versions",
+      "namespace",
       "older-than",
-      "target-org"
+      "target-org",
+      "type"
     ],
     "plugin": "sf-flow-plugin"
   },
