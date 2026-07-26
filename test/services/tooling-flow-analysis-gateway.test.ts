@@ -81,7 +81,7 @@ describe('ToolingFlowDefinitionGateway dependency queries', (): void => {
   it('queries outgoing dependencies by resolved Flow definition ID', async (): Promise<void> => {
     const connection = new QueryConnectionDouble(page([dependencyRecord()]));
     const gateway = new ToolingFlowDefinitionGateway(connection.asConnection());
-    const dependencies = await gateway.findDependencies('300000000000001', 'uses');
+    const dependencies = await gateway.findDependencies('300000000000001', 'uses', []);
     expect(connection.queries[0]).to.contain("WHERE MetadataComponentId = '300000000000001'");
     expect(connection.queries[0]).to.match(/LIMIT 2000$/);
     expect(dependencies[0]).to.deep.equal({
@@ -96,9 +96,18 @@ describe('ToolingFlowDefinitionGateway dependency queries', (): void => {
   it('maps incoming dependencies from the referencing component fields', async (): Promise<void> => {
     const connection = new QueryConnectionDouble(page([dependencyRecord()]));
     const gateway = new ToolingFlowDefinitionGateway(connection.asConnection());
-    const dependencies = await gateway.findDependencies('300000000000001', 'used-by');
+    const dependencies = await gateway.findDependencies('300000000000001', 'used-by', []);
     expect(connection.queries[0]).to.contain("WHERE RefMetadataComponentId = '300000000000001'");
     expect(connection.queries[0]).to.match(/LIMIT 2000$/);
     expect(dependencies[0]).to.include({ direction: 'used-by', name: 'Order_Processing', type: 'Flow' });
+  });
+
+  it('filters component types inside the capped dependency query', async (): Promise<void> => {
+    const connection = new QueryConnectionDouble(page([]));
+    const gateway = new ToolingFlowDefinitionGateway(connection.asConnection());
+    await gateway.findDependencies('300000000000001', 'uses', ['CustomObject', 'ApexClass']);
+    expect(connection.queries[0]).to.contain(
+      "AND RefMetadataComponentType IN ('ApexClass', 'CustomObject') LIMIT 2000"
+    );
   });
 });

@@ -25,6 +25,7 @@ export interface ActiveVersionUpdate {
 export interface DependencyQuery {
   definitionId: string;
   direction: FlowDependencyQueryDirection;
+  types: ReadonlyArray<string>;
 }
 
 export interface FlowDefinitionFixture {
@@ -92,12 +93,15 @@ export class FakeFlowGateway implements FlowDefinitionGateway {
 
   public async findDependencies(
     definitionId: string,
-    direction: FlowDependencyQueryDirection
+    direction: FlowDependencyQueryDirection,
+    types: ReadonlyArray<string>
   ): Promise<ReadonlyArray<IndexedFlowDependency>> {
     this.throwQueryError();
-    this.dependencyQueries.push({ definitionId, direction });
+    this.dependencyQueries.push({ definitionId, direction, types });
     return (this.dependenciesByDefinition.get(definitionId) ?? this.dependencies).filter(
-      (dependency) => dependency.direction === direction
+      (dependency) =>
+        dependency.direction === direction &&
+        (types.length === 0 || (dependency.type !== null && types.includes(dependency.type)))
     );
   }
 

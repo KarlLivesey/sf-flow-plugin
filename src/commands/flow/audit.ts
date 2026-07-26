@@ -23,13 +23,20 @@ export interface AuditFlagValues {
   'target-org': Org | undefined;
   'api-name': string[] | undefined;
   'fail-on-findings': boolean;
+  'max-inactive-versions': number;
+  'older-than': { days: number } | undefined;
   'api-version': string | undefined;
 }
 
 function createRequest(flags: AuditFlagValues, targetOrg: string): FlowAuditRequest {
   const apiNames = flags['api-name'] ?? [];
   apiNames.forEach(validateFlowApiName);
-  return { targetOrg, apiNames };
+  return {
+    targetOrg,
+    apiNames,
+    maxInactiveVersions: flags['max-inactive-versions'],
+    ...(flags['older-than'] === undefined ? {} : { olderThanDays: flags['older-than'].days }),
+  };
 }
 
 export default class FlowAudit extends SfCommand<FlowAuditResult> {
@@ -51,6 +58,15 @@ export default class FlowAudit extends SfCommand<FlowAuditResult> {
     'fail-on-findings': Flags.boolean({
       default: false,
       summary: messages.getMessage('flags.fail-on-findings.summary'),
+    }),
+    'max-inactive-versions': Flags.integer({
+      default: 0,
+      min: 0,
+      summary: messages.getMessage('flags.max-inactive-versions.summary'),
+    }),
+    'older-than': Flags.duration({
+      unit: 'days',
+      summary: messages.getMessage('flags.older-than.summary'),
     }),
     'api-version': Flags.orgApiVersion({
       summary: messages.getMessage('flags.api-version.summary'),

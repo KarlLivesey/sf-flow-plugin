@@ -29,6 +29,12 @@
             "$ref": "#/definitions/FlowVersionNumber"
           }
         },
+        "statuses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowVersionStatusFilter"
+          }
+        },
         "keepBy": {
           "$ref": "#/definitions/FlowPruneOrder"
         },
@@ -94,6 +100,7 @@
         "keep",
         "keepVersions",
         "ignoreVersions",
+        "statuses",
         "keepBy",
         "olderThanDays",
         "protectedVersions",
@@ -111,6 +118,10 @@
     },
     "FlowVersionNumber": {
       "type": "number"
+    },
+    "FlowVersionStatusFilter": {
+      "type": "string",
+      "enum": ["Active", "Draft", "InvalidDraft", "Obsolete"]
     },
     "FlowPruneOrder": {
       "type": "string",

@@ -34,6 +34,24 @@
             }
           ]
         },
+        "statuses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowVersionStatusFilter"
+          }
+        },
+        "createdBefore": {
+          "type": ["string", "null"]
+        },
+        "createdAfter": {
+          "type": ["string", "null"]
+        },
+        "sort": {
+          "$ref": "#/definitions/FlowVersionSort"
+        },
+        "order": {
+          "$ref": "#/definitions/FlowSortOrder"
+        },
         "versions": {
           "type": "array",
           "items": {
@@ -44,11 +62,36 @@
           "type": "string"
         }
       },
-      "required": ["apiName", "namespace", "definitionId", "activeVersion", "latestVersion", "versions", "targetOrg"],
+      "required": [
+        "apiName",
+        "namespace",
+        "definitionId",
+        "activeVersion",
+        "latestVersion",
+        "statuses",
+        "createdBefore",
+        "createdAfter",
+        "sort",
+        "order",
+        "versions",
+        "targetOrg"
+      ],
       "additionalProperties": false
     },
     "FlowVersionNumber": {
       "type": "number"
+    },
+    "FlowVersionStatusFilter": {
+      "type": "string",
+      "enum": ["Active", "Draft", "InvalidDraft", "Obsolete"]
+    },
+    "FlowVersionSort": {
+      "type": "string",
+      "enum": ["version", "created", "modified"]
+    },
+    "FlowSortOrder": {
+      "type": "string",
+      "enum": ["asc", "desc"]
     },
     "FlowVersionSummary": {
       "type": "object",

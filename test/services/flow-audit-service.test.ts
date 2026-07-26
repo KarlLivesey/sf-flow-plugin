@@ -31,7 +31,7 @@ describe('FlowAuditService', (): void => {
     ];
     const result = await new FlowAuditService(
       new FakeFlowGateway(definitions, [...firstVersions, ...secondVersions])
-    ).audit({ targetOrg: 'admin@example.com', apiNames: [] });
+    ).audit({ targetOrg: 'admin@example.com', apiNames: [], maxInactiveVersions: 0 });
     expect(result).to.include({ definitionsScanned: 2, flowsWithIssues: 2 });
     expect(result.flows[0]?.issues).to.deep.equal(['ActiveVersionBehindLatest', 'DraftVersionsPresent']);
     expect(result.flows[1]?.issues).to.deep.equal(['NoActiveVersion', 'ObsoleteVersionsPresent']);
@@ -51,6 +51,7 @@ describe('FlowAuditService clean and failure states', (): void => {
     const result = await new FlowAuditService(new FakeFlowGateway([definition], [version])).audit({
       targetOrg: 'admin@example.com',
       apiNames: [],
+      maxInactiveVersions: 0,
     });
     expect(result).to.include({ definitionsScanned: 1, flowsWithIssues: 0 });
     expect(result.flows).to.deep.equal([]);
@@ -59,7 +60,11 @@ describe('FlowAuditService clean and failure states', (): void => {
   it('wraps query failures', async (): Promise<void> => {
     const gateway = new FakeFlowGateway([], []);
     gateway.queryError = new Error('request failed');
-    const promise = new FlowAuditService(gateway).audit({ targetOrg: 'admin@example.com', apiNames: [] });
+    const promise = new FlowAuditService(gateway).audit({
+      targetOrg: 'admin@example.com',
+      apiNames: [],
+      maxInactiveVersions: 0,
+    });
     await expectErrorName(promise, 'FlowAuditFailed');
   });
 });
@@ -87,8 +92,40 @@ describe('FlowAuditService filtering', (): void => {
     const result = await new FlowAuditService(new FakeFlowGateway(definitions, [firstVersion, secondVersion])).audit({
       targetOrg: 'admin@example.com',
       apiNames: ['Selected_Flow', 'Selected_Flow'],
+      maxInactiveVersions: 0,
     });
     expect(result).to.include({ definitionsScanned: 1, flowsWithIssues: 1 });
     expect(result.flows[0]?.apiName).to.equal('Selected_Flow');
+  });
+});
+
+describe('FlowAuditService inactive-version thresholds', (): void => {
+  it('applies the inactive-version threshold only to versions older than the age cutoff', async (): Promise<void> => {
+    const definitionId = '300000000000001';
+    const active = flowVersion(definitionId, 1, 'Active');
+    const oldDraft = { ...flowVersion(definitionId, 2, 'Draft'), lastModifiedDate: '2026-01-01T00:00:00.000Z' };
+    const recentDraft = { ...flowVersion(definitionId, 3, 'Draft'), lastModifiedDate: '2026-07-20T00:00:00.000Z' };
+    const oldObsolete = {
+      ...flowVersion(definitionId, 4, 'Obsolete'),
+      lastModifiedDate: '2026-01-02T00:00:00.000Z',
+    };
+    const definition = flowDefinition({
+      id: definitionId,
+      apiName: 'Accumulated_Flow',
+      activeVersionId: active.id,
+      latestVersionId: active.id,
+    });
+    const result = await new FlowAuditService(
+      new FakeFlowGateway([definition], [active, oldDraft, recentDraft, oldObsolete]),
+      () => new Date('2026-07-26T00:00:00.000Z')
+    ).audit({
+      targetOrg: 'admin@example.com',
+      apiNames: [],
+      maxInactiveVersions: 1,
+      olderThanDays: 30,
+    });
+    expect(result).to.include({ maxInactiveVersions: 1, olderThanDays: 30, flowsWithIssues: 1 });
+    expect(result.flows[0]).to.include({ draftVersions: 1, obsoleteVersions: 1 });
+    expect(result.flows[0]?.issues).to.deep.equal(['DraftVersionsPresent', 'ObsoleteVersionsPresent']);
   });
 });

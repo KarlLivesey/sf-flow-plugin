@@ -10,6 +10,7 @@ import {
   flowDefinitionAmbiguous,
   flowDefinitionNotFound,
 } from '../errors/flow-errors.js';
+import { positiveFlowVersionSchema } from '../schemas/flow.js';
 import type {
   FlowActivationPlan,
   FlowActivationRequest,
@@ -22,6 +23,7 @@ import type {
   FlowVersionNumber,
 } from '../types/flow.js';
 import { noFlowProgress, type FlowProgressReporter, withFlowProgressStage } from '../utils/flow-progress.js';
+import { assertExpectedActiveVersion } from '../utils/flow-concurrency.js';
 import { qualifiedFlowName } from '../utils/flow-state.js';
 import { resolveFlowVersion } from '../utils/resolve-flow-version.js';
 
@@ -108,7 +110,14 @@ export class FlowDefinitionService implements FlowDefinitionServiceContract {
     request: FlowActivationRequest,
     progress: FlowProgressReporter = noFlowProgress
   ): Promise<FlowActivationResult> {
+    if (
+      request.expectedActiveVersion !== undefined &&
+      !positiveFlowVersionSchema.safeParse(request.expectedActiveVersion).success
+    ) {
+      throw flowActivationFailed('The expected active Flow version must be a positive whole number.');
+    }
     const plan = await this.planActivation(request, progress);
+    assertExpectedActiveVersion(request.apiName, request.expectedActiveVersion, plan.previousActiveVersion);
     return this.executeActivation(request, plan, progress);
   }
 
@@ -132,6 +141,11 @@ export class FlowDefinitionService implements FlowDefinitionServiceContract {
       return createResult(request, plan, false);
     }
     await withFlowProgressStage(progress, {
+      stage: 'checking-current-state',
+      detail: `${detail} (expected active v${request.expectedActiveVersion ?? 'any'})`,
+      operation: async () => this.assertCurrentActiveVersion(request),
+    });
+    await withFlowProgressStage(progress, {
       stage: 'applying-change',
       detail,
       operation: async () => this.update(plan),
@@ -142,6 +156,19 @@ export class FlowDefinitionService implements FlowDefinitionServiceContract {
       operation: async () => this.verify(plan, request),
     });
     return createResult(request, plan, true);
+  }
+
+  private async assertCurrentActiveVersion(request: FlowActivationRequest): Promise<void> {
+    if (request.expectedActiveVersion === undefined) {
+      return;
+    }
+    const definition = selectDefinition(request.apiName, await this.findDefinitions(request));
+    const versions = await this.findVersions(definition);
+    assertExpectedActiveVersion(
+      request.apiName,
+      request.expectedActiveVersion,
+      activeVersionNumber(definition, versions)
+    );
   }
 
   private async update(plan: FlowActivationPlan): Promise<void> {

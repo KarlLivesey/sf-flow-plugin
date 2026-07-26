@@ -26,6 +26,14 @@ Target version: active, latest, or a positive version number.
 
 Exit with status 1 when the selected Flow versions differ.
 
+# flags.only.summary
+
+Comparison scope to include: metadata, elements, resources, or connectors. Repeat to combine scopes.
+
+# flags.ignore-order.summary
+
+Ignore ordering changes in unnamed metadata arrays.
+
 # flags.namespace.summary
 
 Namespace that identifies a packaged Flow.
@@ -47,6 +55,10 @@ Salesforce API version to use for the Tooling API requests.
 - Return machine-readable structural changes:
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --from active --to latest --fail-on-difference --json
+
+- Compare only elements and connectors while ignoring array order:
+
+  <%= config.bin %> <%= command.id %> --api-name Order_Processing --only elements --only connectors --ignore-order
 
 # info.title
 

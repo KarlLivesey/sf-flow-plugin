@@ -24,6 +24,8 @@ describe('FlowVersionsService', (): void => {
       apiName: 'Order_Processing',
       targetOrg: 'admin@example.com',
       statuses: [],
+      sort: 'version',
+      order: 'asc',
     });
     expect(result.activeVersion).to.equal(1);
     expect(result.latestVersion).to.equal(2);
@@ -38,6 +40,8 @@ describe('FlowVersionsService', (): void => {
       apiName: 'Missing_Flow',
       targetOrg: 'admin@example.com',
       statuses: [],
+      sort: 'version',
+      order: 'asc',
     });
     await expectErrorName(promise, 'FlowDefinitionNotFound');
   });
@@ -61,8 +65,35 @@ describe('FlowVersionsService filtering', (): void => {
       apiName: 'Order_Processing',
       targetOrg: 'admin@example.com',
       statuses: ['Draft', 'InvalidDraft'],
+      sort: 'version',
+      order: 'asc',
       limit: 2,
     });
     expect(result.versions.map((version) => version.versionNumber)).to.deep.equal([3, 4]);
+  });
+
+  it('filters by creation date and sorts the selected versions', async (): Promise<void> => {
+    const versions = [
+      flowVersion(definitionId, 1, 'Draft'),
+      flowVersion(definitionId, 2, 'Draft'),
+      flowVersion(definitionId, 3, 'Draft'),
+      flowVersion(definitionId, 4, 'Draft'),
+    ];
+    const definition = flowDefinition({
+      id: definitionId,
+      apiName: 'Order_Processing',
+      activeVersionId: null,
+      latestVersionId: versions[3]?.id ?? null,
+    });
+    const result = await new FlowVersionsService(new FakeFlowGateway([definition], versions)).getVersions({
+      apiName: 'Order_Processing',
+      targetOrg: 'admin@example.com',
+      statuses: [],
+      createdAfter: '2026-01-01',
+      createdBefore: '2026-01-04',
+      sort: 'modified',
+      order: 'desc',
+    });
+    expect(result.versions.map((version) => version.versionNumber)).to.deep.equal([3, 2]);
   });
 });

@@ -26,6 +26,14 @@ Follow indexed Flow-to-Flow dependencies recursively.
 
 Maximum number of Flow dependency levels to follow when `--recursive` is enabled.
 
+# flags.type.summary
+
+Metadata component type to include. Repeat the flag to include multiple types.
+
+# flags.fail-on-dependencies.summary
+
+Exit with status 1 when matching dependencies are found.
+
 # flags.namespace.summary
 
 Namespace that identifies a packaged Flow.
@@ -51,6 +59,10 @@ Salesforce API version to use for the Tooling API requests.
 - Follow Flow dependencies recursively for up to five levels:
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --recursive --max-depth 5
+
+- Find Apex and object dependencies and fail CI when any are present:
+
+  <%= config.bin %> <%= command.id %> --api-name Order_Processing --type ApexClass --type CustomObject --fail-on-dependencies
 
 # info.title
 

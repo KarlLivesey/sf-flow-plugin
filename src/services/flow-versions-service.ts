@@ -5,7 +5,13 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import { flowQueryFailed } from '../errors/flow-errors.js';
-import { flowVersionStatusFilterSchema, positiveFlowVersionSchema } from '../schemas/flow.js';
+import {
+  flowSortOrderSchema,
+  flowVersionDateFilterSchema,
+  flowVersionSortSchema,
+  flowVersionStatusFilterSchema,
+  positiveFlowVersionSchema,
+} from '../schemas/flow.js';
 import type {
   FlowDefinition,
   FlowDefinitionGateway,
@@ -23,32 +29,61 @@ function createLookup(request: FlowVersionsRequest): FlowDefinitionLookup {
     : { apiName: request.apiName, namespace: request.namespace };
 }
 
+function versionSummaries(
+  versions: ReadonlyArray<FlowVersion>,
+  definition: FlowDefinition
+): FlowVersionsResult['versions'] {
+  return versions.map((version) => ({
+    id: version.id,
+    versionNumber: version.versionNumber,
+    status: version.status,
+    label: version.label,
+    processType: version.processType,
+    createdDate: version.createdDate,
+    lastModifiedDate: version.lastModifiedDate,
+    active: version.id === definition.activeVersionId,
+    latest: version.id === definition.latestVersionId,
+  }));
+}
+
 function createResult(
   request: FlowVersionsRequest,
   definition: FlowDefinition,
   versions: ReadonlyArray<FlowVersion>
 ): FlowVersionsResult {
   const statuses = new Set<string>(request.statuses);
-  const filtered =
+  const statusFiltered =
     request.statuses.length === 0 ? [...versions] : versions.filter((version) => statuses.has(version.status));
-  const selected = request.limit === undefined ? filtered : filtered.slice(-request.limit);
+  const createdBefore = request.createdBefore === undefined ? null : Date.parse(request.createdBefore);
+  const createdAfter = request.createdAfter === undefined ? null : Date.parse(request.createdAfter);
+  const dateFiltered = statusFiltered.filter((version) => {
+    const created = Date.parse(version.createdDate);
+    return (createdBefore === null || created < createdBefore) && (createdAfter === null || created > createdAfter);
+  });
+  const latest = [...dateFiltered].sort((left, right) => left.versionNumber - right.versionNumber);
+  const limited = request.limit === undefined ? latest : latest.slice(-request.limit);
+  const direction = request.order === 'asc' ? 1 : -1;
+  const selected = limited.sort((left, right) => {
+    const comparison =
+      request.sort === 'version'
+        ? left.versionNumber - right.versionNumber
+        : (request.sort === 'created' ? left.createdDate : left.lastModifiedDate).localeCompare(
+            request.sort === 'created' ? right.createdDate : right.lastModifiedDate
+          );
+    return direction * (comparison || left.versionNumber - right.versionNumber);
+  });
   return {
     apiName: definition.apiName,
     namespace: definition.namespace,
     definitionId: definition.id,
     activeVersion: resolveVersionNumber(definition.apiName, definition.activeVersionId, versions),
     latestVersion: resolveVersionNumber(definition.apiName, definition.latestVersionId, versions),
-    versions: selected.map((version) => ({
-      id: version.id,
-      versionNumber: version.versionNumber,
-      status: version.status,
-      label: version.label,
-      processType: version.processType,
-      createdDate: version.createdDate,
-      lastModifiedDate: version.lastModifiedDate,
-      active: version.id === definition.activeVersionId,
-      latest: version.id === definition.latestVersionId,
-    })),
+    statuses: request.statuses,
+    createdBefore: request.createdBefore ?? null,
+    createdAfter: request.createdAfter ?? null,
+    sort: request.sort,
+    order: request.order,
+    versions: versionSummaries(selected, definition),
     targetOrg: request.targetOrg,
   };
 }
@@ -62,6 +97,13 @@ export class FlowVersionsService {
   ): Promise<FlowVersionsResult> {
     if (
       !request.statuses.every((status) => flowVersionStatusFilterSchema.safeParse(status).success) ||
+      (request.createdBefore !== undefined && !flowVersionDateFilterSchema.safeParse(request.createdBefore).success) ||
+      (request.createdAfter !== undefined && !flowVersionDateFilterSchema.safeParse(request.createdAfter).success) ||
+      (request.createdBefore !== undefined &&
+        request.createdAfter !== undefined &&
+        Date.parse(request.createdAfter) >= Date.parse(request.createdBefore)) ||
+      !flowVersionSortSchema.safeParse(request.sort).success ||
+      !flowSortOrderSchema.safeParse(request.order).success ||
       (request.limit !== undefined && !positiveFlowVersionSchema.safeParse(request.limit).success)
     ) {
       throw flowQueryFailed('The Flow version filters are invalid.');

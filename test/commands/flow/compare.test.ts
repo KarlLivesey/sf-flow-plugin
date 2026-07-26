@@ -19,6 +19,8 @@ const result: FlowCompareResult = {
   definitionId: '300000000000001',
   requestedFrom: 'active',
   requestedTo: 'latest',
+  scopes: [],
+  ignoreOrder: false,
   fromVersion: 1,
   toVersion: 2,
   changes: [{ kind: 'changed', path: '$.label', before: 'One', after: 'Two' }],
@@ -56,6 +58,8 @@ describe('flow compare command execution', (): void => {
       from: 1 as const,
       to: 'latest' as const,
       'fail-on-difference': false,
+      only: ['elements' as const, 'resources' as const],
+      'ignore-order': true,
       namespace: 'example',
       'api-version': undefined,
     };
@@ -68,6 +72,8 @@ describe('flow compare command execution', (): void => {
       namespace: 'example',
       from: 1,
       to: 'latest',
+      scopes: ['elements', 'resources'],
+      ignoreOrder: true,
     });
     expect(actual).to.equal(result);
   });
@@ -79,6 +85,8 @@ describe('flow compare command execution', (): void => {
       from: 'active' as const,
       to: 'latest' as const,
       'fail-on-difference': true,
+      only: undefined,
+      'ignore-order': false,
       namespace: undefined,
       'api-version': undefined,
     };

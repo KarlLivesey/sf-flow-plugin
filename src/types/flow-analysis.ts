@@ -12,6 +12,8 @@ export type FlowDependencyDirection = 'uses' | 'used-by' | 'both';
 
 export type FlowDependencyQueryDirection = Exclude<FlowDependencyDirection, 'both'>;
 
+export type FlowComparisonScope = 'metadata' | 'elements' | 'resources' | 'connectors';
+
 export type JsonPrimitive = boolean | null | number | string;
 
 export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
@@ -41,7 +43,8 @@ export interface MetadataComponentDependencyRecord {
 export interface FlowDependencyGateway {
   findDependencies(
     definitionId: string,
-    direction: FlowDependencyQueryDirection
+    direction: FlowDependencyQueryDirection,
+    types: ReadonlyArray<string>
   ): Promise<ReadonlyArray<IndexedFlowDependency>>;
 }
 
@@ -53,6 +56,7 @@ export interface FlowDependenciesRequest extends NamedFlowRequest {
   direction: FlowDependencyDirection;
   recursive: boolean;
   maxDepth: number;
+  types: string[];
 }
 
 export interface IndexedFlowDependency {
@@ -77,6 +81,7 @@ export interface FlowDependenciesResult {
   direction: FlowDependencyDirection;
   recursive: boolean;
   maxDepth: number;
+  types: string[];
   definitionsScanned: number;
   dependencies: FlowDependency[];
   targetOrg: string;
@@ -85,6 +90,8 @@ export interface FlowDependenciesResult {
 export interface FlowCompareRequest extends NamedFlowRequest {
   from: FlowComparisonVersionSelector;
   to: FlowComparisonVersionSelector;
+  scopes: FlowComparisonScope[];
+  ignoreOrder: boolean;
 }
 
 export type FlowComparisonChangeKind = 'added' | 'removed' | 'changed';
@@ -102,6 +109,8 @@ export interface FlowCompareResult {
   definitionId: string;
   requestedFrom: FlowComparisonVersionSelector;
   requestedTo: FlowComparisonVersionSelector;
+  scopes: FlowComparisonScope[];
+  ignoreOrder: boolean;
   fromVersion: FlowVersionNumber;
   toVersion: FlowVersionNumber;
   changes: FlowComparisonChange[];

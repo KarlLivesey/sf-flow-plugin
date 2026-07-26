@@ -10,6 +10,7 @@ import type { z } from 'zod';
 import { flowMutationFailed, flowMutationPermissionDenied, flowQueryFailed } from '../errors/flow-errors.js';
 import {
   flowDefinitionRecordSchema,
+  flowDependencyTypeSchema,
   flowMetadataRecordSchema,
   flowVersionRecordSchema,
   metadataComponentDependencyRecordSchema,
@@ -143,11 +144,19 @@ const DEPENDENCY_FIELDS =
   'RefMetadataComponentId, RefMetadataComponentName, RefMetadataComponentNamespace, RefMetadataComponentType';
 const DEPENDENCY_QUERY_LIMIT = 2000;
 
-function buildDependencyQuery(definitionId: string, direction: FlowDependencyQueryDirection): string {
+function buildDependencyQuery(
+  definitionId: string,
+  direction: FlowDependencyQueryDirection,
+  types: ReadonlyArray<string>
+): string {
   const idField = direction === 'uses' ? 'MetadataComponentId' : 'RefMetadataComponentId';
+  const typeField = direction === 'uses' ? 'RefMetadataComponentType' : 'MetadataComponentType';
+  const uniqueTypes = [...new Set(types)].sort();
+  const typeClause =
+    uniqueTypes.length === 0 ? '' : ` AND ${typeField} IN (${uniqueTypes.map((type) => `'${type}'`).join(', ')})`;
   return (
     `SELECT ${DEPENDENCY_FIELDS} FROM MetadataComponentDependency ` +
-    `WHERE ${idField} = '${definitionId}' LIMIT ${DEPENDENCY_QUERY_LIMIT}`
+    `WHERE ${idField} = '${definitionId}'${typeClause} LIMIT ${DEPENDENCY_QUERY_LIMIT}`
   );
 }
 
@@ -197,10 +206,14 @@ export class ToolingFlowDefinitionGateway implements FlowDefinitionGateway {
 
   public async findDependencies(
     definitionId: string,
-    direction: FlowDependencyQueryDirection
+    direction: FlowDependencyQueryDirection,
+    types: ReadonlyArray<string>
   ): Promise<ReadonlyArray<IndexedFlowDependency>> {
     validateSalesforceId(definitionId, 'Flow definition ID');
-    const records = await this.queryAll(buildDependencyQuery(definitionId, direction));
+    if (!types.every((type) => flowDependencyTypeSchema.safeParse(type).success)) {
+      throw flowQueryFailed('The metadata dependency type filter is invalid.');
+    }
+    const records = await this.queryAll(buildDependencyQuery(definitionId, direction, types));
     return records.map((record) => parseDependency(record, direction));
   }
 

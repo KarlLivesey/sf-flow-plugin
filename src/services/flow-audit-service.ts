@@ -5,6 +5,7 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import { flowAuditFailed } from '../errors/flow-errors.js';
+import { nonnegativeIntegerSchema, positiveFlowVersionSchema } from '../schemas/flow.js';
 import type {
   FlowAuditEntry,
   FlowAuditIssueCode,
@@ -24,31 +25,54 @@ interface AuditCounts {
   obsoleteVersions: number;
 }
 
+interface AuditOptions {
+  maxInactiveVersions: number;
+  inactiveCutoff: number | null;
+}
+
+interface AuditResolutionContext {
+  gateway: FlowDefinitionGateway;
+  request: FlowAuditRequest;
+  progress: FlowProgressReporter;
+  now: Date;
+}
+
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+
 function countStatus(versions: ReadonlyArray<FlowVersion>, status: string): number {
   return versions.filter((version) => version.status === status).length;
 }
 
-function createIssues(counts: AuditCounts): FlowAuditIssueCode[] {
+function createIssues(counts: AuditCounts, maxInactiveVersions: number): FlowAuditIssueCode[] {
   const issues: FlowAuditIssueCode[] = [];
   if (counts.activeVersion === null) {
     issues.push('NoActiveVersion');
   } else if (counts.latestVersion !== null && counts.activeVersion < counts.latestVersion) {
     issues.push('ActiveVersionBehindLatest');
   }
-  if (counts.draftVersions > 0) {
-    issues.push('DraftVersionsPresent');
-  }
-  if (counts.obsoleteVersions > 0) {
-    issues.push('ObsoleteVersionsPresent');
+  if (counts.draftVersions + counts.obsoleteVersions > maxInactiveVersions) {
+    if (counts.draftVersions > 0) {
+      issues.push('DraftVersionsPresent');
+    }
+    if (counts.obsoleteVersions > 0) {
+      issues.push('ObsoleteVersionsPresent');
+    }
   }
   return issues;
 }
 
-function createEntry(definition: FlowDefinition, versions: ReadonlyArray<FlowVersion>): FlowAuditEntry {
+function createEntry(
+  definition: FlowDefinition,
+  versions: ReadonlyArray<FlowVersion>,
+  options: AuditOptions
+): FlowAuditEntry {
   const activeVersion = resolveVersionNumber(definition.apiName, definition.activeVersionId, versions);
   const latestVersion = resolveVersionNumber(definition.apiName, definition.latestVersionId, versions);
-  const draftVersions = countStatus(versions, 'Draft');
-  const obsoleteVersions = countStatus(versions, 'Obsolete');
+  const cutoff = options.inactiveCutoff;
+  const inactiveVersions =
+    cutoff === null ? versions : versions.filter((version) => Date.parse(version.lastModifiedDate) < cutoff);
+  const draftVersions = countStatus(inactiveVersions, 'Draft');
+  const obsoleteVersions = countStatus(inactiveVersions, 'Obsolete');
   return {
     apiName: definition.apiName,
     namespace: definition.namespace,
@@ -57,7 +81,10 @@ function createEntry(definition: FlowDefinition, versions: ReadonlyArray<FlowVer
     latestVersion,
     draftVersions,
     obsoleteVersions,
-    issues: createIssues({ activeVersion, latestVersion, draftVersions, obsoleteVersions }),
+    issues: createIssues(
+      { activeVersion, latestVersion, draftVersions, obsoleteVersions },
+      options.maxInactiveVersions
+    ),
   };
 }
 
@@ -93,29 +120,56 @@ async function loadVersions(
   return (await Promise.all(definitions.map((definition) => gateway.findVersions(definition.id)))).flat();
 }
 
+function validateAuditRequest(request: FlowAuditRequest): void {
+  if (
+    !nonnegativeIntegerSchema.safeParse(request.maxInactiveVersions).success ||
+    (request.olderThanDays !== undefined && !positiveFlowVersionSchema.safeParse(request.olderThanDays).success)
+  ) {
+    throw flowAuditFailed('The Flow audit thresholds are invalid.');
+  }
+}
+
+async function resolveAudit(context: AuditResolutionContext): Promise<FlowAuditResult> {
+  const { gateway, request, progress, now } = context;
+  const scope = request.apiNames.length === 0 ? 'all Flow definitions' : request.apiNames.join(', ');
+  progress('loading-flows', scope);
+  const definitions = await loadDefinitions(gateway, request.apiNames);
+  progress('loading-versions', `${scope} (all versions)`);
+  const versions = groupVersions(await loadVersions(gateway, definitions, request.apiNames.length > 0));
+  progress('analysing-results', `${definitions.length} Flow definitions`);
+  const inactiveCutoff =
+    request.olderThanDays === undefined ? null : now.getTime() - request.olderThanDays * MILLISECONDS_PER_DAY;
+  const flows = definitions
+    .map((definition) =>
+      createEntry(definition, versions.get(definition.id) ?? [], {
+        maxInactiveVersions: request.maxInactiveVersions,
+        inactiveCutoff,
+      })
+    )
+    .filter((entry) => entry.issues.length > 0);
+  return {
+    targetOrg: request.targetOrg,
+    definitionsScanned: definitions.length,
+    flowsWithIssues: flows.length,
+    maxInactiveVersions: request.maxInactiveVersions,
+    olderThanDays: request.olderThanDays ?? null,
+    flows,
+  };
+}
+
 export class FlowAuditService {
-  public constructor(private readonly gateway: FlowDefinitionGateway) {}
+  public constructor(
+    private readonly gateway: FlowDefinitionGateway,
+    private readonly now: () => Date = (): Date => new Date()
+  ) {}
 
   public async audit(
     request: FlowAuditRequest,
     progress: FlowProgressReporter = noFlowProgress
   ): Promise<FlowAuditResult> {
+    validateAuditRequest(request);
     try {
-      const scope = request.apiNames.length === 0 ? 'all Flow definitions' : request.apiNames.join(', ');
-      progress('loading-flows', scope);
-      const definitions = await loadDefinitions(this.gateway, request.apiNames);
-      progress('loading-versions', `${scope} (all versions)`);
-      const versions = groupVersions(await loadVersions(this.gateway, definitions, request.apiNames.length > 0));
-      progress('analysing-results', `${definitions.length} Flow definitions`);
-      const flows = definitions
-        .map((definition) => createEntry(definition, versions.get(definition.id) ?? []))
-        .filter((entry) => entry.issues.length > 0);
-      return {
-        targetOrg: request.targetOrg,
-        definitionsScanned: definitions.length,
-        flowsWithIssues: flows.length,
-        flows,
-      };
+      return await resolveAudit({ gateway: this.gateway, request, progress, now: this.now() });
     } catch (error: unknown) {
       throw flowAuditFailed('Failed to audit Flow definitions.', error);
     }

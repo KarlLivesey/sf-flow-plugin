@@ -54,6 +54,10 @@ Loading Flow metadata
 
 Checking permissions
 
+# stages.checking-current-state
+
+Checking current Flow state
+
 # stages.applying-change
 
 Applying change

@@ -12,6 +12,10 @@ export type FlowPruneOrder = 'created' | 'modified';
 
 export type FlowVersionStatusFilter = 'Active' | 'Draft' | 'InvalidDraft' | 'Obsolete';
 
+export type FlowVersionSort = 'version' | 'created' | 'modified';
+
+export type FlowSortOrder = 'asc' | 'desc';
+
 export type FlowMutationOperation = 'update-definition' | 'delete-version';
 
 export type FlowErrorCode =
@@ -20,6 +24,7 @@ export type FlowErrorCode =
   | 'FlowVersionInvalid'
   | 'FlowVersionNotFound'
   | 'FlowVersionNotActivatable'
+  | 'FlowActiveVersionMismatch'
   | 'FlowQueryFailed'
   | 'FlowMutationFailed'
   | 'FlowMutationPermissionDenied'
@@ -43,6 +48,7 @@ export interface NamedFlowRequest {
 
 export interface FlowActivationRequest extends NamedFlowRequest {
   requestedVersion: FlowVersionSelector;
+  expectedActiveVersion?: FlowVersionNumber;
   dryRun: boolean;
 }
 
@@ -156,16 +162,26 @@ export interface FlowVersionsResult {
   definitionId: string;
   activeVersion: FlowVersionNumber | null;
   latestVersion: FlowVersionNumber | null;
+  statuses: FlowVersionStatusFilter[];
+  createdBefore: string | null;
+  createdAfter: string | null;
+  sort: FlowVersionSort;
+  order: FlowSortOrder;
   versions: FlowVersionSummary[];
   targetOrg: string;
 }
 
 export interface FlowVersionsRequest extends NamedFlowRequest {
   statuses: FlowVersionStatusFilter[];
+  createdBefore?: string;
+  createdAfter?: string;
+  sort: FlowVersionSort;
+  order: FlowSortOrder;
   limit?: number;
 }
 
 export interface FlowDeactivationRequest extends NamedFlowRequest {
+  expectedActiveVersion?: FlowVersionNumber;
   dryRun: boolean;
 }
 
@@ -201,20 +217,26 @@ export interface FlowAuditResult {
   targetOrg: string;
   definitionsScanned: number;
   flowsWithIssues: number;
+  maxInactiveVersions: number;
+  olderThanDays: number | null;
   flows: FlowAuditEntry[];
 }
 
 export interface FlowAuditRequest {
   targetOrg: string;
   apiNames: string[];
+  maxInactiveVersions: number;
+  olderThanDays?: number;
 }
 
 export interface FlowPruneRequest extends NamedFlowRequest {
   keep: number;
   keepVersions: FlowVersionNumber[];
   ignoreVersions: FlowVersionNumber[];
+  statuses: FlowVersionStatusFilter[];
   keepBy: FlowPruneOrder;
   olderThanDays?: number;
+  expectedActiveVersion?: FlowVersionNumber;
   dryRun: boolean;
 }
 
@@ -233,6 +255,7 @@ export interface FlowPruneResult {
   keep: number;
   keepVersions: FlowVersionNumber[];
   ignoreVersions: FlowVersionNumber[];
+  statuses: FlowVersionStatusFilter[];
   keepBy: FlowPruneOrder;
   olderThanDays: number | null;
   protectedVersions: FlowPruneVersion[];

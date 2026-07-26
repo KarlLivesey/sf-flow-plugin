@@ -18,6 +18,14 @@ API name of a Flow to audit. Repeat the flag to audit multiple named Flows inste
 
 Exit with status 1 when the audit reports one or more Flows with findings.
 
+# flags.max-inactive-versions.summary
+
+Maximum combined Draft and Obsolete version count before inactive versions become a finding.
+
+# flags.older-than.summary
+
+Count only inactive versions last modified more than this many days ago.
+
 # flags.api-version.summary
 
 Salesforce API version to use for the Tooling API requests.
@@ -35,6 +43,10 @@ Salesforce API version to use for the Tooling API requests.
 - Audit two named Flows and fail CI when findings are present:
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --api-name Case_Routing --fail-on-findings
+
+- Report inactive-version accumulation only when more than five versions are at least 90 days old:
+
+  <%= config.bin %> <%= command.id %> --max-inactive-versions 5 --older-than 90
 
 # info.title
 

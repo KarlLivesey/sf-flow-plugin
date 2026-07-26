@@ -28,6 +28,8 @@ export interface DependenciesFlagValues {
   direction: FlowDependencyDirection;
   recursive: boolean;
   'max-depth': number;
+  type: string[] | undefined;
+  'fail-on-dependencies': boolean;
   namespace: string | undefined;
   'api-version': string | undefined;
 }
@@ -41,6 +43,7 @@ function createRequest(
     direction: flags.direction,
     recursive: flags.recursive,
     maxDepth: flags['max-depth'],
+    types: flags.type ?? [],
   };
 }
 
@@ -78,6 +81,14 @@ export default class FlowDependencies extends SfCommand<FlowDependenciesResult> 
       min: 0,
       summary: messages.getMessage('flags.max-depth.summary'),
     }),
+    type: Flags.string({
+      multiple: true,
+      summary: messages.getMessage('flags.type.summary'),
+    }),
+    'fail-on-dependencies': Flags.boolean({
+      default: false,
+      summary: messages.getMessage('flags.fail-on-dependencies.summary'),
+    }),
     namespace: Flags.string({
       summary: messages.getMessage('flags.namespace.summary'),
     }),
@@ -95,6 +106,9 @@ export default class FlowDependencies extends SfCommand<FlowDependenciesResult> 
       service.getDependencies(createRequest(flags, context), progress)
     );
     this.writeHumanOutput(result);
+    if (flags['fail-on-dependencies'] && result.dependencies.length > 0) {
+      process.exitCode = 1;
+    }
     return result;
   }
 

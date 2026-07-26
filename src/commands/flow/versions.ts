@@ -10,7 +10,13 @@ import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
 import { FlowVersionsService } from '../../services/flow-versions-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
-import type { FlowVersionsRequest, FlowVersionsResult, FlowVersionStatusFilter } from '../../types/flow.js';
+import type {
+  FlowSortOrder,
+  FlowVersionsRequest,
+  FlowVersionsResult,
+  FlowVersionSort,
+  FlowVersionStatusFilter,
+} from '../../types/flow.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
@@ -22,6 +28,10 @@ export interface VersionsFlagValues {
   'api-name': string;
   'target-org': Org | undefined;
   status: FlowVersionStatusFilter[] | undefined;
+  'created-before': string | undefined;
+  'created-after': string | undefined;
+  sort: FlowVersionSort;
+  order: FlowSortOrder;
   limit: number | undefined;
   namespace: string | undefined;
   'api-version': string | undefined;
@@ -34,6 +44,10 @@ function createRequest(
   return {
     ...createNamedFlowRequest(flags, context),
     statuses: flags.status ?? [],
+    ...(flags['created-before'] === undefined ? {} : { createdBefore: flags['created-before'] }),
+    ...(flags['created-after'] === undefined ? {} : { createdAfter: flags['created-after'] }),
+    sort: flags.sort,
+    order: flags.order,
     ...(flags.limit === undefined ? {} : { limit: flags.limit }),
   };
 }
@@ -58,6 +72,22 @@ export default class FlowVersions extends SfCommand<FlowVersionsResult> {
       multiple: true,
       options: ['Active', 'Draft', 'InvalidDraft', 'Obsolete'],
       summary: messages.getMessage('flags.status.summary'),
+    })(),
+    'created-before': Flags.string({
+      summary: messages.getMessage('flags.created-before.summary'),
+    }),
+    'created-after': Flags.string({
+      summary: messages.getMessage('flags.created-after.summary'),
+    }),
+    sort: Flags.custom<FlowVersionSort>({
+      default: 'version',
+      options: ['version', 'created', 'modified'],
+      summary: messages.getMessage('flags.sort.summary'),
+    })(),
+    order: Flags.custom<FlowSortOrder>({
+      default: 'asc',
+      options: ['asc', 'desc'],
+      summary: messages.getMessage('flags.order.summary'),
     })(),
     limit: Flags.integer({
       summary: messages.getMessage('flags.limit.summary'),

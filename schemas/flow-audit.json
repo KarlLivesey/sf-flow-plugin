@@ -14,6 +14,12 @@
         "flowsWithIssues": {
           "type": "number"
         },
+        "maxInactiveVersions": {
+          "type": "number"
+        },
+        "olderThanDays": {
+          "type": ["number", "null"]
+        },
         "flows": {
           "type": "array",
           "items": {
@@ -21,7 +27,14 @@
           }
         }
       },
-      "required": ["targetOrg", "definitionsScanned", "flowsWithIssues", "flows"],
+      "required": [
+        "targetOrg",
+        "definitionsScanned",
+        "flowsWithIssues",
+        "maxInactiveVersions",
+        "olderThanDays",
+        "flows"
+      ],
       "additionalProperties": false
     },
     "FlowAuditEntry": {

@@ -20,6 +20,15 @@
         "requestedTo": {
           "$ref": "#/definitions/FlowComparisonVersionSelector"
         },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowComparisonScope"
+          }
+        },
+        "ignoreOrder": {
+          "type": "boolean"
+        },
         "fromVersion": {
           "$ref": "#/definitions/FlowVersionNumber"
         },
@@ -54,6 +63,8 @@
         "definitionId",
         "requestedFrom",
         "requestedTo",
+        "scopes",
+        "ignoreOrder",
         "fromVersion",
         "toVersion",
         "changes",
@@ -82,6 +93,10 @@
     },
     "FlowVersionNumber": {
       "type": "number"
+    },
+    "FlowComparisonScope": {
+      "type": "string",
+      "enum": ["metadata", "elements", "resources", "connectors"]
     },
     "FlowComparisonChange": {
       "type": "object",

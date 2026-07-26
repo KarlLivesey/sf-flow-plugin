@@ -27,6 +27,7 @@ export type FlowProgressStage =
   | 'loading-versions'
   | 'loading-metadata'
   | 'checking-permissions'
+  | 'checking-current-state'
   | 'applying-change'
   | 'deleting-versions'
   | 'verifying-change'
@@ -55,6 +56,7 @@ const stageMessages: Record<FlowProgressStage, string> = {
   'analysing-results': messages.getMessage('stages.analysing-results'),
   'applying-change': messages.getMessage('stages.applying-change'),
   'checking-permissions': messages.getMessage('stages.checking-permissions'),
+  'checking-current-state': messages.getMessage('stages.checking-current-state'),
   'comparing-metadata': messages.getMessage('stages.comparing-metadata'),
   'deleting-versions': messages.getMessage('stages.deleting-versions'),
   'loading-dependencies': messages.getMessage('stages.loading-dependencies'),

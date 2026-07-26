@@ -16,7 +16,8 @@ import type {
   FlowVersion,
 } from '../types/flow.js';
 import { noFlowProgress, type FlowProgressReporter, withFlowProgressStage } from '../utils/flow-progress.js';
-import { qualifiedFlowName, selectFlowDefinition } from '../utils/flow-state.js';
+import { assertExpectedActiveVersion } from '../utils/flow-concurrency.js';
+import { qualifiedFlowName, resolveVersionNumber, selectFlowDefinition } from '../utils/flow-state.js';
 
 const PRUNABLE_STATUSES = new Set(['Draft', 'Obsolete', 'InvalidDraft']);
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -35,11 +36,6 @@ interface PruneCandidates {
   protectedVersions: FlowVersion[];
   candidates: FlowVersion[];
   skippedVersions: FlowVersion[];
-}
-
-interface PrunePlanningContext {
-  request: FlowPruneRequest;
-  now: Date;
 }
 
 function createLookup(request: FlowPruneRequest): FlowDefinitionLookup {
@@ -62,13 +58,15 @@ function isProtected(definition: FlowDefinition, version: FlowVersion): boolean 
   return version.id === definition.activeVersionId || version.id === definition.latestVersionId;
 }
 
-function classifyVersions(definition: FlowDefinition, versions: ReadonlyArray<FlowVersion>): PruneCandidates {
+function classifyVersions(
+  definition: FlowDefinition,
+  versions: ReadonlyArray<FlowVersion>,
+  statuses: ReadonlySet<string>
+): PruneCandidates {
   const protectedVersions = versions.filter((version) => isProtected(definition, version));
-  const candidates = versions.filter(
-    (version) => !isProtected(definition, version) && PRUNABLE_STATUSES.has(version.status)
-  );
+  const candidates = versions.filter((version) => !isProtected(definition, version) && statuses.has(version.status));
   const skippedVersions = versions.filter(
-    (version) => !isProtected(definition, version) && !PRUNABLE_STATUSES.has(version.status)
+    (version) => !isProtected(definition, version) && !statuses.has(version.status)
   );
   return { protectedVersions, candidates, skippedVersions };
 }
@@ -123,21 +121,35 @@ function validPruneRequest(request: FlowPruneRequest): boolean {
   return (
     nonnegativeIntegerSchema.safeParse(request.keep).success &&
     flowPruneOrderSchema.safeParse(request.keepBy).success &&
+    request.statuses.length > 0 &&
+    request.statuses.every((status) => PRUNABLE_STATUSES.has(status)) &&
     (request.olderThanDays === undefined || positiveFlowVersionSchema.safeParse(request.olderThanDays).success) &&
+    (request.expectedActiveVersion === undefined ||
+      positiveFlowVersionSchema.safeParse(request.expectedActiveVersion).success) &&
     [...request.keepVersions, ...request.ignoreVersions].every(
       (version) => positiveFlowVersionSchema.safeParse(version).success
     )
   );
 }
 
+function pruneCandidates(
+  definition: FlowDefinition,
+  versions: ReadonlyArray<FlowVersion>,
+  request: FlowPruneRequest
+): PruneCandidates {
+  const activeVersion = resolveVersionNumber(definition.apiName, definition.activeVersionId, versions);
+  assertExpectedActiveVersion(request.apiName, request.expectedActiveVersion, activeVersion);
+  return classifyVersions(definition, versions, new Set(request.statuses));
+}
+
 function createPlan(
   definition: FlowDefinition,
   versions: ReadonlyArray<FlowVersion>,
-  context: PrunePlanningContext
+  context: { request: FlowPruneRequest; now: Date }
 ): PrunePlan {
   const { request, now } = context;
   assertRequestedVersionsExist(request, versions);
-  const classified = classifyVersions(definition, versions);
+  const classified = pruneCandidates(definition, versions, request);
   const age = splitCandidatesByAge(classified.candidates, request, now);
   const ignoredNumbers = new Set(request.ignoreVersions);
   const ignored = age.eligible.filter((version) => ignoredNumbers.has(version.versionNumber));
@@ -168,6 +180,7 @@ function createResult(
     keep: request.keep,
     keepVersions: [...new Set(request.keepVersions)].filter((version) => !ignoredNumbers.has(version)),
     ignoreVersions: [...new Set(request.ignoreVersions)],
+    statuses: [...new Set(request.statuses)],
     keepBy: request.keepBy,
     olderThanDays: request.olderThanDays ?? null,
     protectedVersions: plan.protectedVersions,
@@ -218,6 +231,11 @@ export class FlowPruneService {
     if (request.dryRun) {
       return [];
     }
+    await withFlowProgressStage(progress, {
+      stage: 'checking-current-state',
+      detail: `${name} (expected active v${request.expectedActiveVersion ?? 'any'})`,
+      operation: async () => this.assertCurrentActiveVersion(request),
+    });
     await this.deleteVersions(plan, progress);
     await withFlowProgressStage(progress, {
       stage: 'verifying-change',
@@ -225,6 +243,16 @@ export class FlowPruneService {
       operation: async () => this.verify(plan),
     });
     return plan.plannedDeletions;
+  }
+
+  private async assertCurrentActiveVersion(request: FlowPruneRequest): Promise<void> {
+    if (request.expectedActiveVersion === undefined) {
+      return;
+    }
+    const definition = selectFlowDefinition(request.apiName, await this.gateway.findDefinitions(createLookup(request)));
+    const versions = await this.gateway.findVersions(definition.id);
+    const activeVersion = resolveVersionNumber(definition.apiName, definition.activeVersionId, versions);
+    assertExpectedActiveVersion(request.apiName, request.expectedActiveVersion, activeVersion);
   }
 
   private async plan(request: FlowPruneRequest, progress: FlowProgressReporter): Promise<PrunePlan> {
@@ -235,7 +263,10 @@ export class FlowPruneService {
       progress('loading-versions', `${qualifiedFlowName(definition.apiName, definition.namespace)} (all versions)`);
       return createPlan(definition, await this.gateway.findVersions(definition.id), { request, now: this.now() });
     } catch (error: unknown) {
-      if (error instanceof Error && ['FlowDefinitionNotFound', 'FlowDefinitionAmbiguous'].includes(error.name)) {
+      if (
+        error instanceof Error &&
+        ['FlowDefinitionNotFound', 'FlowDefinitionAmbiguous', 'FlowActiveVersionMismatch'].includes(error.name)
+      ) {
         throw error;
       }
       throw flowPruneFailed(`Failed to plan pruning for Flow "${request.apiName}".`, error);

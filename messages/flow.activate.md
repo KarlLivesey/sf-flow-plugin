@@ -18,6 +18,10 @@ Username or alias of the target Salesforce org. Uses the configured default `tar
 
 Flow version to activate: a positive whole number or `latest`.
 
+# flags.if-active-version.summary
+
+Activate only when this version is still active immediately before the update.
+
 # flags.namespace.summary
 
 Namespace that identifies a packaged Flow.

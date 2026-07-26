@@ -14,6 +14,7 @@ import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-defini
 import type {
   FlowCompareRequest,
   FlowCompareResult,
+  FlowComparisonScope,
   FlowComparisonVersionSelector,
   JsonValue,
 } from '../../types/flow-analysis.js';
@@ -30,6 +31,8 @@ export interface CompareFlagValues {
   from: FlowComparisonVersionSelector;
   to: FlowComparisonVersionSelector;
   'fail-on-difference': boolean;
+  only: FlowComparisonScope[] | undefined;
+  'ignore-order': boolean;
   namespace: string | undefined;
   'api-version': string | undefined;
 }
@@ -48,7 +51,13 @@ function createRequest(
   flags: CompareFlagValues,
   context: ReturnType<typeof createFlowCommandContext>
 ): FlowCompareRequest {
-  return { ...createNamedFlowRequest(flags, context), from: flags.from, to: flags.to };
+  return {
+    ...createNamedFlowRequest(flags, context),
+    from: flags.from,
+    to: flags.to,
+    scopes: flags.only ?? [],
+    ignoreOrder: flags['ignore-order'],
+  };
 }
 
 function displayValue(value: JsonValue | undefined): string {
@@ -91,6 +100,15 @@ export default class FlowCompare extends SfCommand<FlowCompareResult> {
     'fail-on-difference': Flags.boolean({
       default: false,
       summary: messages.getMessage('flags.fail-on-difference.summary'),
+    }),
+    only: Flags.custom<FlowComparisonScope>({
+      multiple: true,
+      options: ['metadata', 'elements', 'resources', 'connectors'],
+      summary: messages.getMessage('flags.only.summary'),
+    })(),
+    'ignore-order': Flags.boolean({
+      default: false,
+      summary: messages.getMessage('flags.ignore-order.summary'),
     }),
     namespace: Flags.string({
       summary: messages.getMessage('flags.namespace.summary'),

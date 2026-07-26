@@ -40,3 +40,39 @@ describe('compareFlowMetadata', (): void => {
     ]);
   });
 });
+
+describe('compareFlowMetadata scopes and ordering', (): void => {
+  it('filters changes by comparison scope', (): void => {
+    const before: JsonObject = {
+      label: 'Before',
+      variables: [{ name: 'Input', dataType: 'String' }],
+      assignments: [{ name: 'Set_Value', connector: { targetReference: 'Finish' }, label: 'Before' }],
+    };
+    const after: JsonObject = {
+      label: 'After',
+      variables: [{ name: 'Input', dataType: 'Number' }],
+      assignments: [{ name: 'Set_Value', connector: { targetReference: 'Done' }, label: 'After' }],
+    };
+    expect(compareFlowMetadata(before, after, { scopes: ['resources', 'connectors'] })).to.deep.equal([
+      {
+        kind: 'changed',
+        path: '$.assignments[name="Set_Value"].connector.targetReference',
+        before: 'Finish',
+        after: 'Done',
+      },
+      {
+        kind: 'changed',
+        path: '$.variables[name="Input"].dataType',
+        before: 'String',
+        after: 'Number',
+      },
+    ]);
+  });
+
+  it('can ignore ordering in unnamed arrays', (): void => {
+    expect(compareFlowMetadata({ values: ['one', 'two'] }, { values: ['two', 'one'] })).to.have.length(2);
+    expect(
+      compareFlowMetadata({ values: ['one', 'two'] }, { values: ['two', 'one'] }, { ignoreOrder: true })
+    ).to.deep.equal([]);
+  });
+});

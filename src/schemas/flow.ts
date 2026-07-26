@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import { FLOW_GRAPH_NAMED_COLOR_NAMES, type FlowGraphNamedColor } from '../constants/flow-graph-colors.js';
 import type {
+  FlowComparisonScope,
   FlowDependencyDirection,
   FlowMetadataRecord,
   MetadataComponentDependencyRecord,
@@ -29,6 +30,8 @@ import type {
 import type {
   FlowDefinitionRecord,
   FlowPruneOrder,
+  FlowSortOrder,
+  FlowVersionSort,
   FlowVersionRecord,
   FlowVersionStatusFilter,
 } from '../types/flow.js';
@@ -54,6 +57,11 @@ export const salesforceDateTimeSchema = z
   .regex(SALESFORCE_DATETIME_PATTERN)
   .refine((value) => !Number.isNaN(Date.parse(value)));
 
+export const flowVersionDateFilterSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:?\d{2}))?$/)
+  .refine((value) => !Number.isNaN(Date.parse(value.length === 10 ? `${value}T00:00:00.000Z` : value)));
+
 export const positiveFlowVersionSchema = z.number().int().positive().safe();
 
 export const nonnegativeIntegerSchema = z.number().int().nonnegative().safe();
@@ -68,6 +76,19 @@ export const flowVersionStatusFilterSchema: z.ZodType<FlowVersionStatusFilter> =
 ]);
 
 export const flowDependencyDirectionSchema: z.ZodType<FlowDependencyDirection> = z.enum(['uses', 'used-by', 'both']);
+
+export const flowDependencyTypeSchema = z.string().regex(/^[A-Za-z][A-Za-z0-9_]*$/);
+
+export const flowComparisonScopeSchema: z.ZodType<FlowComparisonScope> = z.enum([
+  'metadata',
+  'elements',
+  'resources',
+  'connectors',
+]);
+
+export const flowVersionSortSchema: z.ZodType<FlowVersionSort> = z.enum(['version', 'created', 'modified']);
+
+export const flowSortOrderSchema: z.ZodType<FlowSortOrder> = z.enum(['asc', 'desc']);
 
 export const flowSubflowVersionSelectorSchema: z.ZodType<FlowSubflowVersionSelector> = z.enum(['active', 'latest']);
 

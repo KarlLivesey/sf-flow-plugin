@@ -36,6 +36,7 @@ describe('flow deactivate command', (): void => {
       'target-org': createCommandOrg({} as Connection),
       namespace: undefined,
       'api-version': undefined,
+      'if-active-version': 2,
       'dry-run': true,
     };
     $$.SANDBOX.stub(FlowDeactivate.prototype, 'parseFlags').resolves(flags);
@@ -44,6 +45,7 @@ describe('flow deactivate command', (): void => {
     expect(deactivate.firstCall.args[0]).to.deep.equal({
       apiName: 'Order_Processing',
       targetOrg: 'admin@example.com',
+      expectedActiveVersion: 2,
       dryRun: true,
     });
     expect(actual).to.equal(result);

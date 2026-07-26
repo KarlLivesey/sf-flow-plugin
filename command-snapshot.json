@@ -4,7 +4,17 @@
     "command": "flow:activate",
     "flagAliases": [],
     "flagChars": ["n", "o"],
-    "flags": ["api-name", "api-version", "dry-run", "flags-dir", "flow-version", "json", "namespace", "target-org"],
+    "flags": [
+      "api-name",
+      "api-version",
+      "dry-run",
+      "flags-dir",
+      "flow-version",
+      "if-active-version",
+      "json",
+      "namespace",
+      "target-org"
+    ],
     "plugin": "sf-flow-plugin"
   },
   {
@@ -12,7 +22,16 @@
     "command": "flow:audit",
     "flagAliases": [],
     "flagChars": ["n", "o"],
-    "flags": ["api-name", "api-version", "fail-on-findings", "flags-dir", "json", "target-org"],
+    "flags": [
+      "api-name",
+      "api-version",
+      "fail-on-findings",
+      "flags-dir",
+      "json",
+      "max-inactive-versions",
+      "older-than",
+      "target-org"
+    ],
     "plugin": "sf-flow-plugin"
   },
   {
@@ -26,8 +45,10 @@
       "fail-on-difference",
       "flags-dir",
       "from",
+      "ignore-order",
       "json",
       "namespace",
+      "only",
       "target-org",
       "to"
     ],
@@ -38,7 +59,16 @@
     "command": "flow:deactivate",
     "flagAliases": [],
     "flagChars": ["n", "o"],
-    "flags": ["api-name", "api-version", "dry-run", "flags-dir", "json", "namespace", "target-org"],
+    "flags": [
+      "api-name",
+      "api-version",
+      "dry-run",
+      "flags-dir",
+      "if-active-version",
+      "json",
+      "namespace",
+      "target-org"
+    ],
     "plugin": "sf-flow-plugin"
   },
   {
@@ -50,12 +80,14 @@
       "api-name",
       "api-version",
       "direction",
+      "fail-on-dependencies",
       "flags-dir",
       "json",
       "max-depth",
       "namespace",
       "recursive",
-      "target-org"
+      "target-org",
+      "type"
     ],
     "plugin": "sf-flow-plugin"
   },
@@ -126,6 +158,7 @@
       "api-version",
       "dry-run",
       "flags-dir",
+      "if-active-version",
       "ignore",
       "json",
       "keep",
@@ -133,6 +166,7 @@
       "keep-version",
       "namespace",
       "older-than",
+      "status",
       "target-org"
     ],
     "plugin": "sf-flow-plugin"
@@ -142,7 +176,20 @@
     "command": "flow:versions",
     "flagAliases": [],
     "flagChars": ["n", "o"],
-    "flags": ["api-name", "api-version", "flags-dir", "json", "limit", "namespace", "status", "target-org"],
+    "flags": [
+      "api-name",
+      "api-version",
+      "created-after",
+      "created-before",
+      "flags-dir",
+      "json",
+      "limit",
+      "namespace",
+      "order",
+      "sort",
+      "status",
+      "target-org"
+    ],
     "plugin": "sf-flow-plugin"
   }
 ]

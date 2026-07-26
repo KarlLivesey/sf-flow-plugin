@@ -5,6 +5,7 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import { flowComparisonFailed, flowVersionNotFound } from '../errors/flow-errors.js';
+import { flowComparisonScopeSchema } from '../schemas/flow.js';
 import type {
   FlowCompareRequest,
   FlowCompareResult,
@@ -81,6 +82,8 @@ function createResult(
     definitionId: definition.id,
     requestedFrom: request.from,
     requestedTo: request.to,
+    scopes: request.scopes,
+    ignoreOrder: request.ignoreOrder,
     fromVersion: fromVersion.versionNumber,
     toVersion: toVersion.versionNumber,
     changes,
@@ -114,7 +117,10 @@ async function resolveComparison(
   const fromMetadata = await gateway.getVersionMetadata(fromVersion.id);
   const toMetadata = fromVersion.id === toVersion.id ? fromMetadata : await gateway.getVersionMetadata(toVersion.id);
   progress('comparing-metadata', `${name} v${fromVersion.versionNumber} → v${toVersion.versionNumber}`);
-  const changes = compareFlowMetadata(fromMetadata, toMetadata);
+  const changes = compareFlowMetadata(fromMetadata, toMetadata, {
+    scopes: request.scopes,
+    ignoreOrder: request.ignoreOrder,
+  });
   return { definition: context.definition, comparison: { fromVersion, toVersion, changes } };
 }
 
@@ -141,6 +147,9 @@ export class FlowComparisonService {
     request: FlowCompareRequest,
     progress: FlowProgressReporter = noFlowProgress
   ): Promise<FlowCompareResult> {
+    if (!request.scopes.every((scope) => flowComparisonScopeSchema.safeParse(scope).success)) {
+      throw flowComparisonFailed('The Flow comparison scope is invalid.');
+    }
     try {
       const { definition, comparison } = await resolveComparison(this.gateway, request, progress);
       return createResult(request, definition, comparison);

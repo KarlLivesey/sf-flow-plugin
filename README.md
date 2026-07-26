@@ -72,21 +72,23 @@ sf flow activate \
   --api-name Order_Processing \
   [--target-org ORG] \
   [--flow-version latest|NUMBER] \
+  [--if-active-version NUMBER] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--dry-run] \
   [--json]
 ```
 
-| Flag             | Short | Required | Default               | Description                                     |
-| ---------------- | ----- | -------- | --------------------- | ----------------------------------------------- |
-| `--api-name`     | `-n`  | Yes      | —                     | Flow definition developer name.                 |
-| `--target-org`   | `-o`  | No       | Configured target org | Authenticated org username or alias.            |
-| `--flow-version` | —     | No       | `latest`              | Positive Flow version number or `latest`.       |
-| `--namespace`    | —     | No       | —                     | Namespace used to identify a packaged Flow.     |
-| `--api-version`  | —     | No       | Connection default    | Salesforce API version override.                |
-| `--dry-run`      | —     | No       | `false`               | Resolve and report without changing Salesforce. |
-| `--json`         | —     | No       | `false`               | Return the standard structured command result.  |
+| Flag                  | Short | Required | Default               | Description                                        |
+| --------------------- | ----- | -------- | --------------------- | -------------------------------------------------- |
+| `--api-name`          | `-n`  | Yes      | —                     | Flow definition developer name.                    |
+| `--target-org`        | `-o`  | No       | Configured target org | Authenticated org username or alias.               |
+| `--flow-version`      | —     | No       | `latest`              | Positive Flow version number or `latest`.          |
+| `--if-active-version` | —     | No       | —                     | Continue only if this version is currently active. |
+| `--namespace`         | —     | No       | —                     | Namespace used to identify a packaged Flow.        |
+| `--api-version`       | —     | No       | Connection default    | Salesforce API version override.                   |
+| `--dry-run`           | —     | No       | `false`               | Resolve and report without changing Salesforce.    |
+| `--json`              | —     | No       | `false`               | Return the standard structured command result.     |
 
 Activate the latest eligible version:
 
@@ -149,6 +151,10 @@ sf flow versions \
   --api-name Order_Processing \
   [--target-org ORG] \
   [--status Active|Draft|InvalidDraft|Obsolete ...] \
+  [--created-before DATE] \
+  [--created-after DATE] \
+  [--sort version|created|modified] \
+  [--order asc|desc] \
   [--limit NUMBER] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
@@ -167,6 +173,8 @@ Use repeatable `--status` filters and `--limit` to return the newest matching ve
 sf flow versions --api-name Order_Processing --status Draft --status InvalidDraft --limit 5
 ```
 
+Creation filters accept ISO 8601 dates or date-times and use strict before/after boundaries. `--limit` selects the newest matching version numbers; `--sort` and `--order` control how that selected set is displayed.
+
 ## `sf flow compare`
 
 ```bash
@@ -176,6 +184,8 @@ sf flow compare \
   [--from active|latest|NUMBER] \
   [--to active|latest|NUMBER] \
   [--fail-on-difference] \
+  [--only metadata|elements|resources|connectors ...] \
+  [--ignore-order] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--json]
@@ -194,6 +204,8 @@ The command retrieves each version's validated `Flow.Metadata` value and reports
 
 `--fail-on-difference` retains the comparison output but sets process status 1 when changes exist, making the command suitable for CI checks.
 
+Use repeatable `--only` values to restrict changes to top-level metadata, executable elements, resources or connector paths. Connector changes are classified separately from their owning elements. `--ignore-order` suppresses order-only differences in unnamed arrays; named Flow collections are already matched by name.
+
 ## `sf flow dependencies`
 
 ```bash
@@ -203,6 +215,8 @@ sf flow dependencies \
   [--direction uses|used-by|both] \
   [--recursive] \
   [--max-depth NUMBER] \
+  [--type COMPONENT_TYPE ...] \
+  [--fail-on-dependencies] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--json]
@@ -219,6 +233,8 @@ sf flow dependencies \
 This command reports Salesforce's `MetadataComponentDependency` index. Salesforce can omit unsupported dependency types, and the index represents component-level rather than historical version-specific relationships.
 
 Dependency analysis is definition-level. With `--recursive`, indexed Flow dependencies are followed without revisiting definitions, up to `--max-depth` (default `10`). Every direction is a separate query capped at 2,000 records; `both` therefore runs one `uses` query and one `used-by` query per visited Flow definition.
+
+`--type` is repeatable and filters each capped query by metadata component type. Recursive filtered traversal includes `Flow` internally so it can reach nested definitions, but only requested types appear in the result. `--fail-on-dependencies` retains the result and sets process status 1 when matching records exist.
 
 ## `sf flow describe`
 
@@ -361,6 +377,7 @@ sf flow graph --api-name Order_Processing --format dot --output-file order-proce
 sf flow deactivate \
   --api-name Order_Processing \
   [--target-org ORG] \
+  [--if-active-version NUMBER] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--dry-run] \
@@ -386,6 +403,8 @@ sf flow audit \
   [--target-org ORG] \
   [--api-name FLOW ...] \
   [--fail-on-findings] \
+  [--max-inactive-versions NUMBER] \
+  [--older-than DAYS] \
   [--api-version VERSION] \
   [--json]
 ```
@@ -398,6 +417,8 @@ sf flow audit --target-org MySandbox
 
 Repeat `--api-name` to audit a selected set of Flows. `--fail-on-findings` retains the audit output but sets process status 1 when findings exist.
 
+`--max-inactive-versions` defaults to `0` and applies to the combined Draft and Obsolete count. `--older-than` counts only inactive versions last modified before the age cutoff. These thresholds affect inactive-version findings; missing or behind active-version findings remain independent.
+
 ## `sf flow prune`
 
 ```bash
@@ -407,22 +428,26 @@ sf flow prune \
   [--keep NUMBER] \
   [--keep-version NUMBER ...] \
   [--ignore NUMBER ...] \
+  [--status Draft|Obsolete|InvalidDraft ...] \
   [--keep-by created|modified] \
   [--older-than DAYS] \
+  [--if-active-version NUMBER] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--no-dry-run] \
   [--json]
 ```
 
-| Flag             | Default   | Description                                                                                |
-| ---------------- | --------- | ------------------------------------------------------------------------------------------ |
-| `--keep`         | `5`       | Number of prunable inactive versions to retain.                                            |
-| `--keep-version` | —         | Retain a specific version within the `--keep` total. Repeatable.                           |
-| `--ignore`       | —         | Protect a version for this invocation without reducing the `--keep` total. Repeatable.     |
-| `--keep-by`      | `created` | Select the newest retained versions by creation or last-modified date.                     |
-| `--older-than`   | —         | Protect newer versions by age without reducing the `--keep` total.                         |
-| `--dry-run`      | `true`    | Plan without deletion. Specify `--no-dry-run` to perform and verify the planned deletions. |
+| Flag                  | Default               | Description                                                                                |
+| --------------------- | --------------------- | ------------------------------------------------------------------------------------------ |
+| `--keep`              | `5`                   | Number of prunable inactive versions to retain.                                            |
+| `--keep-version`      | —                     | Retain a specific version within the `--keep` total. Repeatable.                           |
+| `--ignore`            | —                     | Protect a version for this invocation without reducing the `--keep` total. Repeatable.     |
+| `--status`            | All prunable statuses | Restrict eligible versions by status. Repeatable.                                          |
+| `--keep-by`           | `created`             | Select the newest retained versions by creation or last-modified date.                     |
+| `--older-than`        | —                     | Protect newer versions by age without reducing the `--keep` total.                         |
+| `--if-active-version` | —                     | Continue only if this version is currently active.                                         |
+| `--dry-run`           | `true`                | Plan without deletion. Specify `--no-dry-run` to perform and verify the planned deletions. |
 
 Active and latest versions are always protected outside the inactive retention total. `--ignore` wins when the same version is also passed to `--keep-version`.
 
@@ -467,6 +492,8 @@ Before proposing or performing a change, the mutation commands validate the targ
 - `sf flow deactivate` confirms that the Flow currently has an active version.
 - `sf flow prune` confirms that requested keep/ignore versions exist, protects active and latest versions, and selects only prunable statuses.
 
+Supply `--if-active-version NUMBER` to activation, deactivation or pruning when a script must stop if another user changes the active version after the script's earlier inspection. The plugin checks the expectation during planning and again immediately before a real mutation. This narrows the race window but cannot make separate Salesforce Tooling API requests atomic.
+
 When a plan contains a change, including during `--dry-run`, the plugin asks the Tooling API for the authenticated user's current object capabilities:
 
 - Activation and deactivation require `FlowDefinition.updateable`.
@@ -485,6 +512,7 @@ These checks are point-in-time preflights, not an atomic guarantee. Permissions 
 | `FlowVersionInvalid`                 | The version flag was neither `latest` nor a positive integer.               |
 | `FlowVersionNotFound`                | The requested version does not exist.                                       |
 | `FlowVersionNotActivatable`          | The selected version has an ineligible Salesforce status.                   |
+| `FlowActiveVersionMismatch`          | The active version did not match the supplied concurrency guard.            |
 | `FlowActivationFailed`               | A validated Tooling API query or update failed.                             |
 | `FlowActivationVerificationFailed`   | Salesforce did not report the requested version as active after the update. |
 | `FlowQueryFailed`                    | A validated Tooling API query or response failed.                           |

@@ -23,6 +23,12 @@
         "maxDepth": {
           "type": "number"
         },
+        "types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "definitionsScanned": {
           "type": "number"
         },
@@ -43,6 +49,7 @@
         "direction",
         "recursive",
         "maxDepth",
+        "types",
         "definitionsScanned",
         "dependencies",
         "targetOrg"

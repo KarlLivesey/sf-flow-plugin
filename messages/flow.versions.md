@@ -22,6 +22,22 @@ Flow version status to include. Repeat the flag to include multiple statuses.
 
 Maximum number of the newest matching Flow versions to return.
 
+# flags.created-before.summary
+
+Include versions created before this ISO 8601 date or date-time.
+
+# flags.created-after.summary
+
+Include versions created after this ISO 8601 date or date-time.
+
+# flags.sort.summary
+
+Field used to sort returned versions: version, created, or modified.
+
+# flags.order.summary
+
+Sort direction: asc or desc.
+
 # flags.namespace.summary
 
 Namespace that identifies a packaged Flow.
@@ -43,6 +59,10 @@ Salesforce API version to use for the Tooling API requests.
 - List the five newest Draft or InvalidDraft versions:
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --status Draft --status InvalidDraft --limit 5
+
+- List versions created during 2025, newest modification first:
+
+  <%= config.bin %> <%= command.id %> --api-name Order_Processing --created-after 2025-01-01 --created-before 2026-01-01 --sort modified --order desc
 
 # info.title
 

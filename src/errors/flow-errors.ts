@@ -64,6 +64,14 @@ export function flowVersionNotActivatable(apiName: string, version: number, stat
   });
 }
 
+export function flowActiveVersionMismatch(apiName: string, expected: number, actual: number | null): SfError {
+  return createFlowError({
+    code: 'FlowActiveVersionMismatch',
+    message: `Flow "${apiName}" has active version ${actual ?? 'none'}; expected version ${expected}.`,
+    action: 'Inspect the current Flow state and retry with the expected active version.',
+  });
+}
+
 export function flowActivationFailed(message: string, cause?: unknown): SfError {
   return createFlowError({
     code: 'FlowActivationFailed',

@@ -26,6 +26,10 @@ Specific Flow version to retain within the `--keep` total. Repeat the flag to re
 
 Specific Flow version to protect for this invocation without reducing the `--keep` total. Repeat the flag to protect multiple versions.
 
+# flags.status.summary
+
+Prunable status to include: Draft, Obsolete, or InvalidDraft. Repeat to combine statuses.
+
 # flags.keep-by.summary
 
 Date used to choose the newest retained versions: `created` (default) or `modified`.
@@ -33,6 +37,10 @@ Date used to choose the newest retained versions: `created` (default) or `modifi
 # flags.older-than.summary
 
 Minimum age in days for a version to be eligible for deletion. Recent versions do not reduce the `--keep` total.
+
+# flags.if-active-version.summary
+
+Prune only when this version is still active immediately before deletion.
 
 # flags.namespace.summary
 

@@ -19,6 +19,8 @@ function request(overrides: Partial<FlowCompareRequest> = {}): FlowCompareReques
     targetOrg: 'admin@example.com',
     from: 'active',
     to: 'latest',
+    scopes: [],
+    ignoreOrder: false,
     ...overrides,
   };
 }

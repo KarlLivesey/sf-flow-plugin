@@ -17,6 +17,8 @@ const result: FlowAuditResult = {
   targetOrg: 'admin@example.com',
   definitionsScanned: 0,
   flowsWithIssues: 0,
+  maxInactiveVersions: 0,
+  olderThanDays: null,
   flows: [],
 };
 
@@ -31,6 +33,8 @@ describe('flow audit command', (): void => {
       'target-org': createCommandOrg({} as Connection),
       'api-name': ['Order_Processing'],
       'fail-on-findings': false,
+      'max-inactive-versions': 3,
+      'older-than': { days: 30 },
       'api-version': undefined,
     };
     $$.SANDBOX.stub(FlowAudit.prototype, 'parseFlags').resolves(flags);
@@ -40,6 +44,8 @@ describe('flow audit command', (): void => {
     expect(audit.firstCall.args[0]).to.deep.equal({
       targetOrg: 'admin@example.com',
       apiNames: ['Order_Processing'],
+      maxInactiveVersions: 3,
+      olderThanDays: 30,
     });
     expect(audit.firstCall.args[1]).to.be.a('function');
     expect(actual).to.equal(result);
@@ -50,6 +56,8 @@ describe('flow audit command', (): void => {
       'target-org': createCommandOrg({} as Connection),
       'api-name': undefined,
       'fail-on-findings': true,
+      'max-inactive-versions': 0,
+      'older-than': undefined,
       'api-version': undefined,
     };
     $$.SANDBOX.stub(FlowAudit.prototype, 'parseFlags').resolves(flags);

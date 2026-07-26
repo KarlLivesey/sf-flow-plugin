@@ -20,6 +20,7 @@ const result: FlowDependenciesResult = {
   direction: 'both',
   recursive: false,
   maxDepth: 10,
+  types: [],
   definitionsScanned: 1,
   dependencies: [],
   targetOrg: 'admin@example.com',
@@ -42,6 +43,8 @@ describe('flow dependencies command execution', (): void => {
       direction: 'used-by' as const,
       recursive: true,
       'max-depth': 4,
+      type: ['ApexClass', 'CustomObject'],
+      'fail-on-dependencies': false,
       namespace: undefined,
       'api-version': undefined,
     };
@@ -54,7 +57,47 @@ describe('flow dependencies command execution', (): void => {
       direction: 'used-by',
       recursive: true,
       maxDepth: 4,
+      types: ['ApexClass', 'CustomObject'],
     });
     expect(actual).to.equal(result);
+  });
+});
+
+describe('flow dependencies CI execution', (): void => {
+  it('sets a failing process status when requested and matching dependencies exist', async (): Promise<void> => {
+    const flags = {
+      'api-name': 'Order_Processing',
+      'target-org': createCommandOrg({} as Connection),
+      direction: 'both' as const,
+      recursive: false,
+      'max-depth': 10,
+      type: undefined,
+      'fail-on-dependencies': true,
+      namespace: undefined,
+      'api-version': undefined,
+    };
+    $$.SANDBOX.stub(FlowDependencies.prototype, 'parseFlags').resolves(flags);
+    $$.SANDBOX.stub(FlowDependenciesService.prototype, 'getDependencies').resolves({
+      ...result,
+      dependencies: [
+        {
+          sourceDefinitionId: result.definitionId,
+          sourceApiName: result.apiName,
+          sourceNamespace: null,
+          depth: 0,
+          direction: 'uses',
+          componentId: '01I000000000001',
+          name: 'Account',
+          namespace: null,
+          type: 'CustomObject',
+        },
+      ],
+    });
+    try {
+      await FlowDependencies.run(['--json']);
+      expect(process.exitCode).to.equal(1);
+    } finally {
+      process.exitCode = undefined;
+    }
   });
 });

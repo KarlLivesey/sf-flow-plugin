@@ -5,6 +5,7 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import { flowDeactivationFailed, flowDeactivationVerificationFailed } from '../errors/flow-errors.js';
+import { positiveFlowVersionSchema } from '../schemas/flow.js';
 import type {
   FlowDeactivationRequest,
   FlowDeactivationResult,
@@ -14,6 +15,7 @@ import type {
   FlowVersion,
 } from '../types/flow.js';
 import { noFlowProgress, type FlowProgressReporter, withFlowProgressStage } from '../utils/flow-progress.js';
+import { assertExpectedActiveVersion } from '../utils/flow-concurrency.js';
 import { qualifiedFlowName, resolveVersionNumber, selectFlowDefinition } from '../utils/flow-state.js';
 
 interface FlowState {
@@ -51,8 +53,19 @@ export class FlowDeactivationService {
     request: FlowDeactivationRequest,
     progress: FlowProgressReporter = noFlowProgress
   ): Promise<FlowDeactivationResult> {
+    if (
+      request.expectedActiveVersion !== undefined &&
+      !positiveFlowVersionSchema.safeParse(request.expectedActiveVersion).success
+    ) {
+      throw flowDeactivationFailed('The expected active Flow version must be a positive whole number.');
+    }
     progress('resolving-flow', request.apiName);
     const state = await this.getState(request, progress);
+    assertExpectedActiveVersion(
+      request.apiName,
+      request.expectedActiveVersion,
+      resolveVersionNumber(request.apiName, state.definition.activeVersionId, state.versions)
+    );
     return this.executeDeactivation(request, state, progress);
   }
 
@@ -74,6 +87,11 @@ export class FlowDeactivationService {
       return createResult(request, state, false);
     }
     await withFlowProgressStage(progress, {
+      stage: 'checking-current-state',
+      detail: `${detail} (expected active v${request.expectedActiveVersion ?? 'any'})`,
+      operation: async () => this.assertCurrentActiveVersion(request),
+    });
+    await withFlowProgressStage(progress, {
       stage: 'applying-change',
       detail,
       operation: async () => this.clearActiveVersion(state.definition),
@@ -84,6 +102,18 @@ export class FlowDeactivationService {
       operation: async () => this.verify(request),
     });
     return createResult(request, state, true);
+  }
+
+  private async assertCurrentActiveVersion(request: FlowDeactivationRequest): Promise<void> {
+    if (request.expectedActiveVersion === undefined) {
+      return;
+    }
+    const state = await this.getState(request);
+    assertExpectedActiveVersion(
+      request.apiName,
+      request.expectedActiveVersion,
+      resolveVersionNumber(request.apiName, state.definition.activeVersionId, state.versions)
+    );
   }
 
   private async getState(

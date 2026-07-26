@@ -67,6 +67,18 @@ describe('FlowDeactivationService', (): void => {
     expect(gateway.updates).to.deep.equal([]);
     expect(gateway.permissionChecks).to.deep.equal([]);
   });
+
+  it('rejects a stale expected active version', async (): Promise<void> => {
+    const fake = gatewayWithActiveFlow();
+    await expectErrorName(
+      new FlowDeactivationService(fake).deactivate({
+        ...request(),
+        expectedActiveVersion: 2,
+      }),
+      'FlowActiveVersionMismatch'
+    );
+    expect(fake.updates).to.deep.equal([]);
+  });
 });
 
 describe('FlowDeactivationService mutation', (): void => {

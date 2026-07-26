@@ -5,7 +5,7 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import { flowDependenciesFailed } from '../errors/flow-errors.js';
-import { flowDependencyDirectionSchema, nonnegativeIntegerSchema } from '../schemas/flow.js';
+import { flowDependencyDirectionSchema, flowDependencyTypeSchema, nonnegativeIntegerSchema } from '../schemas/flow.js';
 import type {
   FlowDependenciesRequest,
   FlowDependenciesResult,
@@ -60,6 +60,7 @@ function createResult(
     direction: request.direction,
     recursive: request.recursive,
     maxDepth: request.maxDepth,
+    types: request.types,
     definitionsScanned: traversal.definitionsScanned,
     dependencies: uniqueDependencies(traversal.dependencies),
     targetOrg: request.targetOrg,
@@ -78,7 +79,11 @@ async function queryDependencies(
   definition: FlowDefinition,
   request: FlowDependenciesRequest
 ): Promise<IndexedFlowDependency[]> {
-  const queries = requestedDirections(request).map((direction) => gateway.findDependencies(definition.id, direction));
+  const types =
+    request.recursive && request.types.length > 0 ? [...new Set([...request.types, 'Flow'])] : request.types;
+  const queries = requestedDirections(request).map((direction) =>
+    gateway.findDependencies(definition.id, direction, types)
+  );
   return (await Promise.all(queries)).flat();
 }
 
@@ -130,6 +135,10 @@ function decorateDependency(scope: DependencyScope, dependency: IndexedFlowDepen
   };
 }
 
+function requestedDependency(request: FlowDependenciesRequest, dependency: IndexedFlowDependency): boolean {
+  return request.types.length === 0 || (dependency.type !== null && request.types.includes(dependency.type));
+}
+
 function flowReferenceKey(dependency: IndexedFlowDependency): string | null {
   return dependency.type === 'Flow' && dependency.name !== null
     ? `${dependency.namespace ?? ''}\u0000${dependency.name}`
@@ -173,7 +182,11 @@ async function traverseLevel(
   current.forEach((scope) => state.visited.add(scope.definition.id));
   const batches = await Promise.all(current.map((scope) => queryScope(context, scope)));
   state.dependencies.push(
-    ...batches.flatMap(({ scope, indexed }) => indexed.map((dependency) => decorateDependency(scope, dependency)))
+    ...batches.flatMap(({ scope, indexed }) =>
+      indexed
+        .filter((dependency) => requestedDependency(context.request, dependency))
+        .map((dependency) => decorateDependency(scope, dependency))
+    )
   );
   if (!context.request.recursive || scopeDepth(current) >= context.request.maxDepth) {
     return;
@@ -219,7 +232,8 @@ export class FlowDependenciesService {
   ): Promise<FlowDependenciesResult> {
     if (
       !flowDependencyDirectionSchema.safeParse(request.direction).success ||
-      !nonnegativeIntegerSchema.safeParse(request.maxDepth).success
+      !nonnegativeIntegerSchema.safeParse(request.maxDepth).success ||
+      !request.types.every((type) => flowDependencyTypeSchema.safeParse(type).success)
     ) {
       throw flowDependenciesFailed('The Flow dependency traversal options are invalid.');
     }

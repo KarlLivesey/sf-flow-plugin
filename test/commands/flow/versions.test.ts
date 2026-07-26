@@ -19,6 +19,11 @@ const result: FlowVersionsResult = {
   definitionId: '300000000000001',
   activeVersion: 1,
   latestVersion: 2,
+  statuses: [],
+  createdBefore: null,
+  createdAfter: null,
+  sort: 'version',
+  order: 'asc',
   versions: [],
   targetOrg: 'admin@example.com',
 };
@@ -35,6 +40,10 @@ describe('flow versions command', (): void => {
       'api-name': 'Order_Processing',
       'target-org': createCommandOrg({} as Connection),
       status: ['Draft' as const, 'InvalidDraft' as const],
+      'created-before': '2026-07-01',
+      'created-after': '2026-01-01',
+      sort: 'modified' as const,
+      order: 'desc' as const,
       limit: 5,
       namespace: 'example',
       'api-version': '65.0',
@@ -48,6 +57,10 @@ describe('flow versions command', (): void => {
       namespace: 'example',
       apiVersion: '65.0',
       statuses: ['Draft', 'InvalidDraft'],
+      createdBefore: '2026-07-01',
+      createdAfter: '2026-01-01',
+      sort: 'modified',
+      order: 'desc',
       limit: 5,
     });
     expect(actual).to.equal(result);

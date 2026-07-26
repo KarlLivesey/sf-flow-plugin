@@ -10,7 +10,7 @@ import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
 import { FlowPruneService } from '../../services/flow-prune-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
-import type { FlowPruneOrder, FlowPruneRequest, FlowPruneResult } from '../../types/flow.js';
+import type { FlowPruneOrder, FlowPruneRequest, FlowPruneResult, FlowVersionStatusFilter } from '../../types/flow.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
@@ -24,8 +24,10 @@ export interface PruneFlagValues {
   keep: number;
   'keep-version': number[];
   ignore: number[];
+  status: FlowVersionStatusFilter[] | undefined;
   'keep-by': FlowPruneOrder;
   'older-than': { days: number } | undefined;
+  'if-active-version': number | undefined;
   namespace: string | undefined;
   'api-version': string | undefined;
   'dry-run': boolean;
@@ -37,8 +39,10 @@ function createRequest(flags: PruneFlagValues, context: ReturnType<typeof create
     keep: flags.keep,
     keepVersions: flags['keep-version'],
     ignoreVersions: flags.ignore,
+    statuses: flags.status ?? ['Draft', 'Obsolete', 'InvalidDraft'],
     keepBy: flags['keep-by'],
     ...(flags['older-than'] === undefined ? {} : { olderThanDays: flags['older-than'].days }),
+    ...(flags['if-active-version'] === undefined ? {} : { expectedActiveVersion: flags['if-active-version'] }),
     dryRun: flags['dry-run'],
   };
 }
@@ -76,6 +80,11 @@ export default class FlowPrune extends SfCommand<FlowPruneResult> {
       multiple: true,
       summary: messages.getMessage('flags.ignore.summary'),
     }),
+    status: Flags.custom<FlowVersionStatusFilter>({
+      multiple: true,
+      options: ['Draft', 'Obsolete', 'InvalidDraft'],
+      summary: messages.getMessage('flags.status.summary'),
+    })(),
     'keep-by': Flags.custom<FlowPruneOrder>({
       default: 'created',
       options: ['created', 'modified'],
@@ -85,6 +94,9 @@ export default class FlowPrune extends SfCommand<FlowPruneResult> {
     'older-than': Flags.duration({
       unit: 'days',
       summary: messages.getMessage('flags.older-than.summary'),
+    }),
+    'if-active-version': Flags.integer({
+      summary: messages.getMessage('flags.if-active-version.summary'),
     }),
     namespace: Flags.string({
       summary: messages.getMessage('flags.namespace.summary'),

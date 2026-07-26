@@ -19,6 +19,7 @@ function request(overrides: Partial<FlowPruneRequest> = {}): FlowPruneRequest {
     keep: 2,
     keepVersions: [],
     ignoreVersions: [],
+    statuses: ['Draft', 'Obsolete', 'InvalidDraft'],
     keepBy: 'created',
     dryRun: true,
     ...overrides,
@@ -93,6 +94,23 @@ describe('FlowPruneService planning', (): void => {
   it('rejects an invalid keep value at the service boundary', async (): Promise<void> => {
     const promise = new FlowPruneService(gateway()).prune(request({ keep: -1 }));
     await expectErrorName(promise, 'FlowPruneFailed');
+  });
+});
+
+describe('FlowPruneService status and concurrency guards', (): void => {
+  it('restricts deletion candidates to the requested statuses', async (): Promise<void> => {
+    const result = await new FlowPruneService(gateway()).prune(request({ keep: 0, statuses: ['Draft'] }));
+    expect(result.plannedDeletions.map((version) => version.versionNumber)).to.deep.equal([2, 3]);
+    expect(result.skippedVersions.map((version) => version.versionNumber)).to.deep.equal([1, 6]);
+  });
+
+  it('rejects a stale expected active version before deleting', async (): Promise<void> => {
+    const fake = gateway();
+    await expectErrorName(
+      new FlowPruneService(fake).prune(request({ keep: 0, dryRun: false, expectedActiveVersion: 3 })),
+      'FlowActiveVersionMismatch'
+    );
+    expect(fake.deletes).to.deep.equal([]);
   });
 });
 
