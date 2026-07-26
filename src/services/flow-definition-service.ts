@@ -23,8 +23,8 @@ import type {
   FlowVersionNumber,
 } from '../types/flow.js';
 import { noFlowProgress, type FlowProgressReporter, withFlowProgressStage } from '../utils/flow-progress.js';
-import { assertExpectedActiveVersion } from '../utils/flow-concurrency.js';
-import { qualifiedFlowName } from '../utils/flow-state.js';
+import { assertExpectedActiveVersion, assertExpectedLatestVersion } from '../utils/flow-concurrency.js';
+import { qualifiedFlowName, resolveVersionNumber } from '../utils/flow-state.js';
 import { resolveFlowVersion } from '../utils/resolve-flow-version.js';
 
 function createLookup(request: FlowActivationRequest): FlowDefinitionLookup {
@@ -102,6 +102,7 @@ export class FlowDefinitionService implements FlowDefinitionServiceContract {
       requestedVersion: request.requestedVersion,
       selectedVersion,
       previousActiveVersion,
+      latestVersion: resolveVersionNumber(definition.apiName, definition.latestVersionId, versions),
       changeRequired: previousActiveVersion !== selectedVersion.versionNumber,
     };
   }
@@ -111,13 +112,15 @@ export class FlowDefinitionService implements FlowDefinitionServiceContract {
     progress: FlowProgressReporter = noFlowProgress
   ): Promise<FlowActivationResult> {
     if (
-      request.expectedActiveVersion !== undefined &&
-      !positiveFlowVersionSchema.safeParse(request.expectedActiveVersion).success
+      [request.expectedActiveVersion, request.expectedLatestVersion].some(
+        (version) => version !== undefined && !positiveFlowVersionSchema.safeParse(version).success
+      )
     ) {
-      throw flowActivationFailed('The expected active Flow version must be a positive whole number.');
+      throw flowActivationFailed('Expected Flow versions must be positive whole numbers.');
     }
     const plan = await this.planActivation(request, progress);
     assertExpectedActiveVersion(request.apiName, request.expectedActiveVersion, plan.previousActiveVersion);
+    assertExpectedLatestVersion(request.apiName, request.expectedLatestVersion, plan.latestVersion);
     return this.executeActivation(request, plan, progress);
   }
 
@@ -142,8 +145,8 @@ export class FlowDefinitionService implements FlowDefinitionServiceContract {
     }
     await withFlowProgressStage(progress, {
       stage: 'checking-current-state',
-      detail: `${detail} (expected active v${request.expectedActiveVersion ?? 'any'})`,
-      operation: async () => this.assertCurrentActiveVersion(request),
+      detail: `${detail} (checking active and latest guards)`,
+      operation: async () => this.assertCurrentVersions(request),
     });
     await withFlowProgressStage(progress, {
       stage: 'applying-change',
@@ -158,8 +161,8 @@ export class FlowDefinitionService implements FlowDefinitionServiceContract {
     return createResult(request, plan, true);
   }
 
-  private async assertCurrentActiveVersion(request: FlowActivationRequest): Promise<void> {
-    if (request.expectedActiveVersion === undefined) {
+  private async assertCurrentVersions(request: FlowActivationRequest): Promise<void> {
+    if (request.expectedActiveVersion === undefined && request.expectedLatestVersion === undefined) {
       return;
     }
     const definition = selectDefinition(request.apiName, await this.findDefinitions(request));
@@ -168,6 +171,11 @@ export class FlowDefinitionService implements FlowDefinitionServiceContract {
       request.apiName,
       request.expectedActiveVersion,
       activeVersionNumber(definition, versions)
+    );
+    assertExpectedLatestVersion(
+      request.apiName,
+      request.expectedLatestVersion,
+      resolveVersionNumber(definition.apiName, definition.latestVersionId, versions)
     );
   }
 

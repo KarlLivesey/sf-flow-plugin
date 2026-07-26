@@ -11,6 +11,7 @@ export type FlowErrorCode =
   | 'FlowVersionNotFound'
   | 'FlowVersionNotActivatable'
   | 'FlowActiveVersionMismatch'
+  | 'FlowLatestVersionMismatch'
   | 'FlowQueryFailed'
   | 'FlowMutationFailed'
   | 'FlowMutationPermissionDenied'

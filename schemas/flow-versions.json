@@ -46,6 +46,12 @@
         "createdAfter": {
           "type": ["string", "null"]
         },
+        "modifiedBefore": {
+          "type": ["string", "null"]
+        },
+        "modifiedAfter": {
+          "type": ["string", "null"]
+        },
         "sort": {
           "$ref": "#/definitions/FlowVersionSort"
         },
@@ -71,6 +77,8 @@
         "statuses",
         "createdBefore",
         "createdAfter",
+        "modifiedBefore",
+        "modifiedAfter",
         "sort",
         "order",
         "versions",

@@ -37,6 +37,7 @@ describe('flow deactivate command', (): void => {
       namespace: undefined,
       'api-version': undefined,
       'if-active-version': 2,
+      'if-latest-version': 3,
       'dry-run': true,
     };
     $$.SANDBOX.stub(FlowDeactivate.prototype, 'parseFlags').resolves(flags);
@@ -46,6 +47,7 @@ describe('flow deactivate command', (): void => {
       apiName: 'Order_Processing',
       targetOrg: 'admin@example.com',
       expectedActiveVersion: 2,
+      expectedLatestVersion: 3,
       dryRun: true,
     });
     expect(actual).to.equal(result);

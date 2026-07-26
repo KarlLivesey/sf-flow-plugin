@@ -7,6 +7,13 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
+export async function writeFlowReport(outputFile: string, content: string): Promise<string> {
+  const resolved = resolve(outputFile);
+  await mkdir(dirname(resolved), { recursive: true });
+  await writeFile(resolved, content.endsWith('\n') ? content : `${content}\n`, 'utf8');
+  return resolved;
+}
+
 export async function writeFlowReportFile(
   outputFile: string,
   content: string,
@@ -14,9 +21,7 @@ export async function writeFlowReportFile(
 ): Promise<string> {
   const resolved = resolve(outputFile);
   try {
-    await mkdir(dirname(resolved), { recursive: true });
-    await writeFile(resolved, `${content}\n`, 'utf8');
-    return resolved;
+    return await writeFlowReport(resolved, content);
   } catch (error: unknown) {
     throw createError(`Could not write Flow report to "${resolved}".`, error);
   }

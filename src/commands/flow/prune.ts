@@ -28,6 +28,7 @@ export interface PruneFlagValues {
   'keep-by': FlowPruneOrder;
   'older-than': { days: number } | undefined;
   'if-active-version': number | undefined;
+  'if-latest-version': number | undefined;
   namespace: string | undefined;
   'api-version': string | undefined;
   'dry-run': boolean;
@@ -43,6 +44,7 @@ function createRequest(flags: PruneFlagValues, context: ReturnType<typeof create
     keepBy: flags['keep-by'],
     ...(flags['older-than'] === undefined ? {} : { olderThanDays: flags['older-than'].days }),
     ...(flags['if-active-version'] === undefined ? {} : { expectedActiveVersion: flags['if-active-version'] }),
+    ...(flags['if-latest-version'] === undefined ? {} : { expectedLatestVersion: flags['if-latest-version'] }),
     dryRun: flags['dry-run'],
   };
 }
@@ -97,6 +99,9 @@ export default class FlowPrune extends SfCommand<FlowPruneResult> {
     }),
     'if-active-version': Flags.integer({
       summary: messages.getMessage('flags.if-active-version.summary'),
+    }),
+    'if-latest-version': Flags.integer({
+      summary: messages.getMessage('flags.if-latest-version.summary'),
     }),
     namespace: Flags.string({
       summary: messages.getMessage('flags.namespace.summary'),

@@ -22,6 +22,10 @@ Flow version to activate: a positive whole number or `latest`.
 
 Activate only when this version is still active immediately before the update.
 
+# flags.if-latest-version.summary
+
+Activate only when this version is still the latest immediately before the update.
+
 # flags.namespace.summary
 
 Namespace that identifies a packaged Flow.

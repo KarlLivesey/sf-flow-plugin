@@ -29,6 +29,12 @@
             "type": "string"
           }
         },
+        "excludeTypes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "definitionsScanned": {
           "type": "number"
         },
@@ -59,6 +65,7 @@
         "recursive",
         "maxDepth",
         "types",
+        "excludeTypes",
         "definitionsScanned",
         "dependencies",
         "truncated",

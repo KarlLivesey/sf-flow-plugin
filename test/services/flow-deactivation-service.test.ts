@@ -81,6 +81,20 @@ describe('FlowDeactivationService', (): void => {
   });
 });
 
+describe('FlowDeactivationService latest-version guard', (): void => {
+  it('rejects a stale expected latest version', async (): Promise<void> => {
+    const fake = gatewayWithActiveFlow();
+    await expectErrorName(
+      new FlowDeactivationService(fake).deactivate({
+        ...request(),
+        expectedLatestVersion: 2,
+      }),
+      'FlowLatestVersionMismatch'
+    );
+    expect(fake.updates).to.deep.equal([]);
+  });
+});
+
 describe('FlowDeactivationService mutation', (): void => {
   it('clears and verifies the active version', async (): Promise<void> => {
     const gateway = new FakeFlowGateway(

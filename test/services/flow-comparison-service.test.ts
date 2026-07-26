@@ -23,6 +23,7 @@ function request(overrides: Partial<FlowCompareRequest> = {}): FlowCompareReques
     to: 'latest',
     scopes: [],
     ignoreOrder: false,
+    ignorePaths: [],
     ...overrides,
   };
 }
@@ -50,6 +51,14 @@ describe('FlowComparisonService', (): void => {
   it('resolves explicit version numbers', async (): Promise<void> => {
     const result = await new FlowComparisonService(gateway()).compare(request({ from: 2, to: 2 }));
     expect(result).to.include({ fromVersion: 2, toVersion: 2, different: false });
+    expect(result.changes).to.deep.equal([]);
+  });
+
+  it('excludes ignored paths and their descendants', async (): Promise<void> => {
+    const fake = gateway();
+    fake.metadata.set(versions[0]?.id ?? '', { status: 'Active', settings: { label: 'One' } });
+    fake.metadata.set(versions[1]?.id ?? '', { status: 'Draft', settings: { label: 'Two' } });
+    const result = await new FlowComparisonService(fake).compare(request({ ignorePaths: ['$.settings'] }));
     expect(result.changes).to.deep.equal([]);
   });
 
