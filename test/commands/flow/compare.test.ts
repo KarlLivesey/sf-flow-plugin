@@ -42,6 +42,12 @@ describe('flow compare flags', (): void => {
     expect(FlowCompare.flags.to.default).to.equal('latest');
   });
 
+  it('rejects combining the single-org and cross-org flags', (): void => {
+    expect(FlowCompare.flags['target-org'].exclusive).to.deep.equal(['from-org', 'to-org']);
+    expect(FlowCompare.flags['from-org'].exclusive).to.deep.equal(['target-org']);
+    expect(FlowCompare.flags['to-org'].exclusive).to.deep.equal(['target-org']);
+  });
+
   it('parses selectors', (): void => {
     expect(parseComparisonVersionSelector('active')).to.equal('active');
     expect(parseComparisonVersionSelector('latest')).to.equal('latest');

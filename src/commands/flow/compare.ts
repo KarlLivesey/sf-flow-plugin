@@ -97,17 +97,20 @@ export default class FlowCompare extends SfCommand<FlowCompareResult> {
     'target-org': Flags.requiredOrg({
       char: 'o',
       required: false,
+      exclusive: ['from-org', 'to-org'],
       summary: messages.getMessage('flags.target-org.summary'),
     }),
     'from-org': Flags.custom<Org>({
       required: false,
       dependsOn: ['to-org'],
+      exclusive: ['target-org'],
       summary: messages.getMessage('flags.from-org.summary'),
       parse: async (input: string): Promise<Org> => Org.create({ aliasOrUsername: input }),
     })(),
     'to-org': Flags.custom<Org>({
       required: false,
       dependsOn: ['from-org'],
+      exclusive: ['target-org'],
       summary: messages.getMessage('flags.to-org.summary'),
       parse: async (input: string): Promise<Org> => Org.create({ aliasOrUsername: input }),
     })(),
