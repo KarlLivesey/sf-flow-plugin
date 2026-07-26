@@ -18,16 +18,25 @@ interface StagedFile {
   targetPath: string;
 }
 
-interface BackupFile {
+export interface FlowBundleBackupFile {
   backupPath: string;
   targetPath: string;
 }
 
-interface BundleTransaction {
+export interface FlowBundleRollbackState {
   stageDir: string;
-  staged: StagedFile[];
-  backups: BackupFile[];
+  backups: FlowBundleBackupFile[];
   installed: string[];
+}
+
+export interface FlowBundleRollbackOperations {
+  removeInstalled(file: string): Promise<void>;
+  restoreBackup(file: FlowBundleBackupFile): Promise<void>;
+  removeStage(stageDir: string): Promise<void>;
+}
+
+interface BundleTransaction extends FlowBundleRollbackState {
+  staged: StagedFile[];
 }
 
 interface PreparedTransaction {
@@ -164,18 +173,27 @@ function failed(results: ReadonlyArray<PromiseSettledResult<unknown>>): boolean 
   return results.some((result) => result.status === 'rejected');
 }
 
-async function rollback(transaction: BundleTransaction): Promise<void> {
-  const removed = await Promise.allSettled(transaction.installed.map(async (file) => rm(file, { force: true })));
-  const restored = await Promise.allSettled(
-    transaction.backups.map(async (file) => {
-      await mkdir(dirname(file.targetPath), { recursive: true });
-      await rename(file.backupPath, file.targetPath);
-    })
-  );
-  const cleaned = await Promise.allSettled([rm(transaction.stageDir, { recursive: true, force: true })]);
-  if (failed(removed) || failed(restored) || failed(cleaned)) {
-    throw new Error('The Flow bundle rollback did not complete.');
+const defaultRollbackOperations: FlowBundleRollbackOperations = {
+  removeInstalled: async (file) => rm(file, { force: true }),
+  restoreBackup: async (file) => {
+    await mkdir(dirname(file.targetPath), { recursive: true });
+    await rename(file.backupPath, file.targetPath);
+  },
+  removeStage: async (stageDir) => rm(stageDir, { recursive: true, force: true }),
+};
+
+export async function rollbackFlowBundleFiles(
+  transaction: FlowBundleRollbackState,
+  operations: FlowBundleRollbackOperations = defaultRollbackOperations
+): Promise<void> {
+  const removed = await Promise.allSettled(transaction.installed.map(async (file) => operations.removeInstalled(file)));
+  const restored = await Promise.allSettled(transaction.backups.map(async (file) => operations.restoreBackup(file)));
+  if (failed(removed) || failed(restored)) {
+    throw new Error(
+      `The Flow bundle rollback did not complete; staging directory "${transaction.stageDir}" was retained.`
+    );
   }
+  await operations.removeStage(transaction.stageDir);
 }
 
 async function commit(transaction: BundleTransaction, stale: ReadonlyArray<string>, overwrite: boolean): Promise<void> {
@@ -237,9 +255,12 @@ async function prepareTargets(
 
 async function handleFailure(transaction: BundleTransaction, error: unknown): Promise<never> {
   try {
-    await rollback(transaction);
+    await rollbackFlowBundleFiles(transaction);
   } catch (rollbackError: unknown) {
-    throw flowBundleFailed('Could not write the Flow bundle and rollback was incomplete.', rollbackError);
+    throw flowBundleFailed(
+      `Could not write the Flow bundle and rollback was incomplete; staging directory "${transaction.stageDir}" was retained.`,
+      rollbackError
+    );
   }
   throw flowBundleFailed('Could not write the Flow bundle; previous files were restored.', error);
 }
