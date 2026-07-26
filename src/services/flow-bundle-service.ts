@@ -10,7 +10,7 @@ import { flowBundleFailed } from '../errors/flow-errors.js';
 import type { FlowDependencyGateway, FlowMetadataGateway } from '../types/flow-analysis.js';
 import type { FlowBundleArtifact, FlowBundleFile, FlowBundleRequest, FlowBundleVersion } from '../types/flow-bundle.js';
 import type { FlowDefinitionGateway } from '../types/flow.js';
-import type { FlowDescribeRequest, FlowDescription } from '../types/flow-inspection.js';
+import type { FlowDescribeRequest, FlowDescription, FlowTraversalWarning } from '../types/flow-inspection.js';
 import { externalDependencies, renderPackageXml } from '../utils/flow-bundle-manifest.js';
 import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
 import { FlowDependenciesService } from './flow-dependencies-service.js';
@@ -38,6 +38,15 @@ function describeRequest(request: FlowBundleRequest): FlowDescribeRequest {
 
 function flowPath(request: FlowBundleRequest, flow: FlowDescription): string {
   return join(request.outputDir, 'flows', `${flow.qualifiedName}.flow-meta.xml`);
+}
+
+function assertCompleteTraversal(warnings: ReadonlyArray<FlowTraversalWarning>): void {
+  const incomplete = warnings.filter((warning) => warning.kind !== 'subflow-version-fallback');
+  if (incomplete.length === 0) {
+    return;
+  }
+  const details = incomplete.map((warning) => `${warning.kind}: ${warning.path.join(' -> ')}`).join('; ');
+  throw flowBundleFailed(`Refusing to create an incomplete Flow bundle. ${details}`);
 }
 
 async function exportFlows(
@@ -104,6 +113,7 @@ function reportFiles(
 async function createBundle(context: BundleContext): Promise<FlowBundleArtifact> {
   const { gateway, request, progress } = context;
   const described = await new FlowDescribeService(gateway).describe(describeRequest(request), progress);
+  assertCompleteTraversal(described.warnings);
   const dependencies = await new FlowDependenciesService(gateway).getDependencies(
     { ...request, direction: 'uses', recursive: true, maxDepth: request.maxDepth, types: [] },
     progress

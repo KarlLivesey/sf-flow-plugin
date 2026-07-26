@@ -38,7 +38,7 @@ Salesforce metadata directory that receives the `flows` directory and `.sf-flow-
 
 # flags.overwrite.summary
 
-Overwrite bundle files that already exist.
+Replace bundle files that already exist and remove stale Flow files owned by the previous bundle manifest.
 
 # flags.namespace.summary
 

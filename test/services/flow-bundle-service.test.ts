@@ -8,8 +8,8 @@ import { expect } from 'chai';
 
 import { FlowBundleService } from '../../src/services/flow-bundle-service.js';
 import type { FlowBundleRequest } from '../../src/types/flow-bundle.js';
-import { expectErrorName } from '../helpers/fake-flow-gateway.js';
-import { nestedFlowGateway } from '../helpers/flow-inspection-fixtures.js';
+import { FakeFlowGateway, expectErrorName, flowDefinition, flowVersion } from '../helpers/fake-flow-gateway.js';
+import { nestedFlowGateway, subflowMetadata, versionedSubflowGateway } from '../helpers/flow-inspection-fixtures.js';
 
 function request(): FlowBundleRequest {
   return {
@@ -55,5 +55,49 @@ describe('FlowBundleService', (): void => {
     const gateway = nestedFlowGateway();
     gateway.truncatedDependencyQueries.add('300000000000001:uses');
     await expectErrorName(new FlowBundleService(gateway).bundle(request()), 'FlowBundleFailed');
+  });
+});
+
+describe('FlowBundleService traversal completeness', (): void => {
+  it('refuses a bundle stopped by the traversal depth limit', async (): Promise<void> => {
+    await expectErrorName(
+      new FlowBundleService(nestedFlowGateway()).bundle({ ...request(), maxDepth: 0 }),
+      'FlowBundleFailed'
+    );
+  });
+
+  it('refuses a bundle with a missing referenced subflow', async (): Promise<void> => {
+    const gateway = nestedFlowGateway();
+    gateway.metadata.set('301000000000000001', subflowMetadata('Missing_Flow'));
+    await expectErrorName(new FlowBundleService(gateway).bundle(request()), 'FlowBundleFailed');
+  });
+
+  it('refuses a bundle when a referenced subflow has no selectable version', async (): Promise<void> => {
+    const root = flowVersion('300000000000001', 1, 'Active');
+    const gateway = new FakeFlowGateway(
+      [
+        flowDefinition({
+          id: root.definitionId,
+          apiName: 'Flow_A',
+          activeVersionId: root.id,
+          latestVersionId: root.id,
+        }),
+        flowDefinition({
+          id: '300000000000101',
+          apiName: 'Flow_B',
+          activeVersionId: null,
+          latestVersionId: null,
+        }),
+      ],
+      [root]
+    );
+    gateway.metadata.set(root.id, subflowMetadata('Flow_B'));
+    await expectErrorName(new FlowBundleService(gateway).bundle(request()), 'FlowBundleFailed');
+  });
+
+  it('allows the documented active-to-latest subflow fallback', async (): Promise<void> => {
+    const artifact = await new FlowBundleService(versionedSubflowGateway(false)).bundle(request());
+    expect(artifact.result.warnings.map((warning) => warning.kind)).to.deep.equal(['subflow-version-fallback']);
+    expect(artifact.result.flows.map((flow) => flow.qualifiedName)).to.deep.equal(['Flow_A', 'Flow_B']);
   });
 });
