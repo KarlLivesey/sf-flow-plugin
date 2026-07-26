@@ -31,6 +31,7 @@ import {
   resolveFlowCheckRoot,
 } from '../utils/flow-check-resolution.js';
 import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
+import { CachingFlowMetadataGateway } from './caching-flow-metadata-gateway.js';
 import { FlowDependenciesService } from './flow-dependencies-service.js';
 import { FlowDescribeService } from './flow-describe-service.js';
 import { FlowLintService } from './flow-lint-service.js';
@@ -168,8 +169,12 @@ export class FlowCheckService {
 
   private async checkFlow(context: FlowCheckContext): Promise<FlowCheckEntry> {
     const { request, apiName, checks, progress } = context;
+    const metadataGateway = new CachingFlowMetadataGateway(this.gateway);
     const described = requiresFlowDescription(checks)
-      ? await new FlowDescribeService(this.gateway).describe(describeRequest(request, apiName), progress)
+      ? await new FlowDescribeService(this.gateway, metadataGateway).describe(
+          describeRequest(request, apiName),
+          progress
+        )
       : null;
     const root =
       described === null
@@ -177,10 +182,10 @@ export class FlowCheckService {
         : { apiName: described.apiName, namespace: described.namespace, versionNumber: described.resolvedVersion };
     const descriptions = described?.flows ?? [];
     const [lintResults, dependencyFindings, versionFindings, metrics] = await Promise.all([
-      this.lintFlows(context, descriptions),
+      this.lintFlows(context, descriptions, metadataGateway),
       this.checkDependencies(context),
       this.checkVersions(context),
-      this.calculateMetrics(context),
+      this.calculateMetrics(context, metadataGateway),
     ]);
     const traversalFindings =
       described === null
@@ -200,14 +205,18 @@ export class FlowCheckService {
     });
   }
 
-  private async lintFlows(context: FlowCheckContext, flows: ReadonlyArray<FlowDescription>): Promise<FlowLintResult[]> {
+  private async lintFlows(
+    context: FlowCheckContext,
+    flows: ReadonlyArray<FlowDescription>,
+    metadataGateway: FlowMetadataGateway
+  ): Promise<FlowLintResult[]> {
     const { request, checks, progress } = context;
     if (!hasCheck(checks, 'lint') && !hasCheck(checks, 'subflows')) {
       return [];
     }
     return Promise.all(
       flows.map(async (flow) =>
-        new FlowLintService(this.gateway).lint(
+        new FlowLintService(this.gateway, metadataGateway).lint(
           {
             apiName: flow.apiName,
             targetOrg: request.targetOrg,
@@ -247,12 +256,15 @@ export class FlowCheckService {
       : [];
   }
 
-  private async calculateMetrics(context: FlowCheckContext): Promise<FlowMetricsResult | null> {
+  private async calculateMetrics(
+    context: FlowCheckContext,
+    metadataGateway: FlowMetadataGateway
+  ): Promise<FlowMetricsResult | null> {
     const { request, apiName, checks, progress } = context;
     if (!hasCheck(checks, 'metrics')) {
       return null;
     }
-    const metrics = await new FlowMetricsService(this.gateway).calculate(
+    const metrics = await new FlowMetricsService(this.gateway, undefined, metadataGateway).calculate(
       { ...describeRequest(request, apiName), dataCloud: false, dataCloudDays: 30 },
       progress
     );
