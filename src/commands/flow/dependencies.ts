@@ -8,15 +8,19 @@ import { Messages } from '@salesforce/core';
 import type { Org } from '@salesforce/core';
 import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
+import { flowDependenciesFailed } from '../../errors/flow-errors.js';
 import { FlowDependenciesService } from '../../services/flow-dependencies-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type {
   FlowDependenciesRequest,
   FlowDependenciesResult,
   FlowDependencyDirection,
+  FlowDependencyFormat,
 } from '../../types/flow-analysis.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
+import { renderFlowDependencies } from '../../utils/flow-dependencies-renderer.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
+import { writeFlowReport } from '../../utils/flow-report-file.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -29,6 +33,9 @@ export interface DependenciesFlagValues {
   recursive: boolean;
   'max-depth': number;
   type: string[] | undefined;
+  'exclude-type': string[] | undefined;
+  format: FlowDependencyFormat;
+  'output-file': string | undefined;
   'fail-on-dependencies': boolean;
   'allow-truncated': boolean;
   namespace: string | undefined;
@@ -45,7 +52,16 @@ function createRequest(
     recursive: flags.recursive,
     maxDepth: flags['max-depth'],
     types: flags.type ?? [],
+    excludeTypes: flags['exclude-type'] ?? [],
   };
+}
+
+async function writeDependenciesReport(outputFile: string, content: string): Promise<void> {
+  try {
+    await writeFlowReport(outputFile, content);
+  } catch (error: unknown) {
+    throw flowDependenciesFailed(`Could not write the Flow dependencies to "${outputFile}".`, error);
+  }
 }
 
 export default class FlowDependencies extends SfCommand<FlowDependenciesResult> {
@@ -86,6 +102,18 @@ export default class FlowDependencies extends SfCommand<FlowDependenciesResult> 
       multiple: true,
       summary: messages.getMessage('flags.type.summary'),
     }),
+    'exclude-type': Flags.string({
+      multiple: true,
+      summary: messages.getMessage('flags.exclude-type.summary'),
+    }),
+    format: Flags.custom<FlowDependencyFormat>({
+      default: 'table',
+      options: ['table', 'tree', 'mermaid', 'dot'],
+      summary: messages.getMessage('flags.format.summary'),
+    })(),
+    'output-file': Flags.file({
+      summary: messages.getMessage('flags.output-file.summary'),
+    }),
     'fail-on-dependencies': Flags.boolean({
       default: false,
       summary: messages.getMessage('flags.fail-on-dependencies.summary'),
@@ -110,7 +138,7 @@ export default class FlowDependencies extends SfCommand<FlowDependenciesResult> 
     const result = await withFlowProgress(this.spinner, 'dependencies', async (progress) =>
       service.getDependencies(createRequest(flags, context), progress)
     );
-    this.writeHumanOutput(result);
+    await this.writeOutput(result, flags);
     if (
       (flags['fail-on-dependencies'] && result.dependencies.length > 0) ||
       (!flags['allow-truncated'] && result.truncated)
@@ -123,6 +151,19 @@ export default class FlowDependencies extends SfCommand<FlowDependenciesResult> 
   public async parseFlags(): Promise<DependenciesFlagValues> {
     const { flags } = await this.parse(FlowDependencies);
     return flags;
+  }
+
+  private async writeOutput(result: FlowDependenciesResult, flags: DependenciesFlagValues): Promise<void> {
+    const rendered = renderFlowDependencies(result, flags.format);
+    if (flags['output-file'] !== undefined) {
+      await writeDependenciesReport(flags['output-file'], rendered);
+    }
+    if (flags.format === 'table') {
+      this.writeHumanOutput(result);
+    } else if (!this.jsonEnabled()) {
+      this.log(rendered);
+      this.writeTruncationWarnings(result);
+    }
   }
 
   private writeHumanOutput(result: FlowDependenciesResult): void {
@@ -139,17 +180,22 @@ export default class FlowDependencies extends SfCommand<FlowDependenciesResult> 
         { key: 'componentId', name: 'Component ID' },
       ],
     });
-    if (!this.jsonEnabled()) {
-      for (const truncation of result.truncations) {
-        this.warn(
-          messages.getMessage('warnings.truncated', [
-            qualifiedFlowName(truncation.apiName, truncation.namespace),
-            truncation.direction,
-            truncation.depth,
-            truncation.limit,
-          ])
-        );
-      }
+    this.writeTruncationWarnings(result);
+  }
+
+  private writeTruncationWarnings(result: FlowDependenciesResult): void {
+    if (this.jsonEnabled()) {
+      return;
+    }
+    for (const truncation of result.truncations) {
+      this.warn(
+        messages.getMessage('warnings.truncated', [
+          qualifiedFlowName(truncation.apiName, truncation.namespace),
+          truncation.direction,
+          truncation.depth,
+          truncation.limit,
+        ])
+      );
     }
   }
 }

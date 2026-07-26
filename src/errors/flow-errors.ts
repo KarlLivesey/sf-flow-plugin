@@ -6,7 +6,8 @@
  */
 import { SfError } from '@salesforce/core';
 
-import type { FlowErrorCode, FlowVersionSelector } from '../types/flow.js';
+import type { FlowErrorCode } from '../types/flow-errors.js';
+import type { FlowVersionSelector } from '../types/flow.js';
 
 interface FlowErrorOptions {
   code: FlowErrorCode;
@@ -69,6 +70,14 @@ export function flowActiveVersionMismatch(apiName: string, expected: number, act
     code: 'FlowActiveVersionMismatch',
     message: `Flow "${apiName}" has active version ${actual ?? 'none'}; expected version ${expected}.`,
     action: 'Inspect the current Flow state and retry with the expected active version.',
+  });
+}
+
+export function flowLatestVersionMismatch(apiName: string, expected: number, actual: number | null): SfError {
+  return createFlowError({
+    code: 'FlowLatestVersionMismatch',
+    message: `Flow "${apiName}" has latest version ${actual ?? 'none'}; expected version ${expected}.`,
+    action: 'Inspect the current Flow state and retry with the expected latest version.',
   });
 }
 

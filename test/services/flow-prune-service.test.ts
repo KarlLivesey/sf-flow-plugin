@@ -112,6 +112,15 @@ describe('FlowPruneService status and concurrency guards', (): void => {
     );
     expect(fake.deletes).to.deep.equal([]);
   });
+
+  it('rejects a stale expected latest version before deleting', async (): Promise<void> => {
+    const fake = gateway();
+    await expectErrorName(
+      new FlowPruneService(fake).prune(request({ keep: 0, dryRun: false, expectedLatestVersion: 6 })),
+      'FlowLatestVersionMismatch'
+    );
+    expect(fake.deletes).to.deep.equal([]);
+  });
 });
 
 describe('FlowPruneService age protection', (): void => {

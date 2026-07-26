@@ -23,6 +23,7 @@ const result: FlowCompareResult = {
   requestedTo: 'latest',
   scopes: [],
   ignoreOrder: false,
+  ignorePaths: [],
   fromVersion: 1,
   toVersion: 2,
   changes: [{ kind: 'changed', path: '$.label', before: 'One', after: 'Two' }],
@@ -73,6 +74,9 @@ describe('flow compare request execution', (): void => {
       'fail-on-difference': false,
       only: ['elements' as const, 'resources' as const],
       'ignore-order': true,
+      'ignore-path': ['$.metadata.description'],
+      format: 'summary' as const,
+      'output-file': undefined,
       namespace: 'example',
       'api-version': undefined,
     };
@@ -89,6 +93,7 @@ describe('flow compare request execution', (): void => {
       toOrg: 'admin@example.com',
       scopes: ['elements', 'resources'],
       ignoreOrder: true,
+      ignorePaths: ['$.metadata.description'],
     });
     expect(actual).to.equal(result);
   });
@@ -106,6 +111,9 @@ describe('flow compare exit status', (): void => {
       'fail-on-difference': true,
       only: undefined,
       'ignore-order': false,
+      'ignore-path': undefined,
+      format: 'summary' as const,
+      'output-file': undefined,
       namespace: undefined,
       'api-version': undefined,
     };
@@ -132,6 +140,9 @@ describe('flow compare cross-org execution', (): void => {
       'fail-on-difference': false,
       only: undefined,
       'ignore-order': false,
+      'ignore-path': undefined,
+      format: 'summary' as const,
+      'output-file': undefined,
       namespace: undefined,
       'api-version': undefined,
     };

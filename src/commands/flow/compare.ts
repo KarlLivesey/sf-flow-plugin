@@ -13,12 +13,15 @@ import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-defini
 import type {
   FlowCompareRequest,
   FlowCompareResult,
+  FlowComparisonFormat,
   FlowComparisonScope,
   FlowComparisonVersionSelector,
   JsonValue,
 } from '../../types/flow-analysis.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
+import { renderFlowComparison } from '../../utils/flow-comparison-renderer.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
+import { writeFlowReport } from '../../utils/flow-report-file.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -34,6 +37,9 @@ export interface CompareFlagValues {
   'fail-on-difference': boolean;
   only: FlowComparisonScope[] | undefined;
   'ignore-order': boolean;
+  'ignore-path': string[] | undefined;
+  format: FlowComparisonFormat;
+  'output-file': string | undefined;
   namespace: string | undefined;
   'api-version': string | undefined;
 }
@@ -62,6 +68,7 @@ function createRequest(flags: CompareFlagValues, contexts: ComparisonContexts): 
     toOrg: contexts.to.targetOrg,
     scopes: flags.only ?? [],
     ignoreOrder: flags['ignore-order'],
+    ignorePaths: flags['ignore-path'] ?? [],
   };
 }
 
@@ -81,6 +88,14 @@ function displayValue(value: JsonValue | undefined): string {
     return '';
   }
   return typeof value === 'string' ? value : JSON.stringify(value);
+}
+
+async function writeComparisonReport(outputFile: string, content: string): Promise<void> {
+  try {
+    await writeFlowReport(outputFile, content);
+  } catch (error: unknown) {
+    throw flowComparisonFailed(`Could not write the Flow comparison to "${outputFile}".`, error);
+  }
 }
 
 export default class FlowCompare extends SfCommand<FlowCompareResult> {
@@ -141,6 +156,18 @@ export default class FlowCompare extends SfCommand<FlowCompareResult> {
       default: false,
       summary: messages.getMessage('flags.ignore-order.summary'),
     }),
+    'ignore-path': Flags.string({
+      multiple: true,
+      summary: messages.getMessage('flags.ignore-path.summary'),
+    }),
+    format: Flags.custom<FlowComparisonFormat>({
+      default: 'summary',
+      options: ['summary', 'unified', 'markdown'],
+      summary: messages.getMessage('flags.format.summary'),
+    })(),
+    'output-file': Flags.file({
+      summary: messages.getMessage('flags.output-file.summary'),
+    }),
     namespace: Flags.string({
       summary: messages.getMessage('flags.namespace.summary'),
     }),
@@ -161,7 +188,7 @@ export default class FlowCompare extends SfCommand<FlowCompareResult> {
     const result = await withFlowProgress(this.spinner, 'compare', async (progress) =>
       service.compare(createRequest(flags, contexts), progress)
     );
-    this.writeHumanOutput(result);
+    await this.writeOutput(result, flags);
     if (flags['fail-on-difference'] && result.different) {
       process.exitCode = 1;
     }
@@ -171,6 +198,18 @@ export default class FlowCompare extends SfCommand<FlowCompareResult> {
   public async parseFlags(): Promise<CompareFlagValues> {
     const { flags } = await this.parse(FlowCompare);
     return flags;
+  }
+
+  private async writeOutput(result: FlowCompareResult, flags: CompareFlagValues): Promise<void> {
+    const rendered = renderFlowComparison(result, flags.format);
+    if (flags['output-file'] !== undefined) {
+      await writeComparisonReport(flags['output-file'], rendered);
+    }
+    if (flags.format === 'summary') {
+      this.writeHumanOutput(result);
+    } else if (!this.jsonEnabled()) {
+      this.log(rendered);
+    }
   }
 
   private writeHumanOutput(result: FlowCompareResult): void {

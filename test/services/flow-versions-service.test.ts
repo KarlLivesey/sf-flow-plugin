@@ -97,3 +97,25 @@ describe('FlowVersionsService filtering', (): void => {
     expect(result.versions.map((version) => version.versionNumber)).to.deep.equal([3, 2]);
   });
 });
+
+describe('FlowVersionsService modification filters', (): void => {
+  it('filters by modification date', async (): Promise<void> => {
+    const versions = [1, 2, 3, 4].map((number) => flowVersion(definitionId, number, 'Draft'));
+    const definition = flowDefinition({
+      id: definitionId,
+      apiName: 'Order_Processing',
+      activeVersionId: null,
+      latestVersionId: versions[3]?.id ?? null,
+    });
+    const result = await new FlowVersionsService(new FakeFlowGateway([definition], versions)).getVersions({
+      apiName: 'Order_Processing',
+      targetOrg: 'admin@example.com',
+      statuses: [],
+      modifiedAfter: '2026-02-01',
+      modifiedBefore: '2026-02-04',
+      sort: 'version',
+      order: 'asc',
+    });
+    expect(result.versions.map((version) => version.versionNumber)).to.deep.equal([2, 3]);
+  });
+});

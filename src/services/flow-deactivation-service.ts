@@ -15,7 +15,7 @@ import type {
   FlowVersion,
 } from '../types/flow.js';
 import { noFlowProgress, type FlowProgressReporter, withFlowProgressStage } from '../utils/flow-progress.js';
-import { assertExpectedActiveVersion } from '../utils/flow-concurrency.js';
+import { assertExpectedActiveVersion, assertExpectedLatestVersion } from '../utils/flow-concurrency.js';
 import { qualifiedFlowName, resolveVersionNumber, selectFlowDefinition } from '../utils/flow-state.js';
 
 interface FlowState {
@@ -54,10 +54,11 @@ export class FlowDeactivationService {
     progress: FlowProgressReporter = noFlowProgress
   ): Promise<FlowDeactivationResult> {
     if (
-      request.expectedActiveVersion !== undefined &&
-      !positiveFlowVersionSchema.safeParse(request.expectedActiveVersion).success
+      [request.expectedActiveVersion, request.expectedLatestVersion].some(
+        (version) => version !== undefined && !positiveFlowVersionSchema.safeParse(version).success
+      )
     ) {
-      throw flowDeactivationFailed('The expected active Flow version must be a positive whole number.');
+      throw flowDeactivationFailed('Expected Flow versions must be positive whole numbers.');
     }
     progress('resolving-flow', request.apiName);
     const state = await this.getState(request, progress);
@@ -65,6 +66,11 @@ export class FlowDeactivationService {
       request.apiName,
       request.expectedActiveVersion,
       resolveVersionNumber(request.apiName, state.definition.activeVersionId, state.versions)
+    );
+    assertExpectedLatestVersion(
+      request.apiName,
+      request.expectedLatestVersion,
+      resolveVersionNumber(request.apiName, state.definition.latestVersionId, state.versions)
     );
     return this.executeDeactivation(request, state, progress);
   }
@@ -88,8 +94,8 @@ export class FlowDeactivationService {
     }
     await withFlowProgressStage(progress, {
       stage: 'checking-current-state',
-      detail: `${detail} (expected active v${request.expectedActiveVersion ?? 'any'})`,
-      operation: async () => this.assertCurrentActiveVersion(request),
+      detail: `${detail} (checking active and latest guards)`,
+      operation: async () => this.assertCurrentVersions(request),
     });
     await withFlowProgressStage(progress, {
       stage: 'applying-change',
@@ -104,8 +110,8 @@ export class FlowDeactivationService {
     return createResult(request, state, true);
   }
 
-  private async assertCurrentActiveVersion(request: FlowDeactivationRequest): Promise<void> {
-    if (request.expectedActiveVersion === undefined) {
+  private async assertCurrentVersions(request: FlowDeactivationRequest): Promise<void> {
+    if (request.expectedActiveVersion === undefined && request.expectedLatestVersion === undefined) {
       return;
     }
     const state = await this.getState(request);
@@ -113,6 +119,11 @@ export class FlowDeactivationService {
       request.apiName,
       request.expectedActiveVersion,
       resolveVersionNumber(request.apiName, state.definition.activeVersionId, state.versions)
+    );
+    assertExpectedLatestVersion(
+      request.apiName,
+      request.expectedLatestVersion,
+      resolveVersionNumber(request.apiName, state.definition.latestVersionId, state.versions)
     );
   }
 
