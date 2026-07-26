@@ -70,3 +70,13 @@ describe('FlowCheckService', (): void => {
     expect(result.flows[0]?.contracts).to.deep.equal([]);
   });
 });
+
+describe('FlowCheckService query selection', (): void => {
+  it('does not query referenced subflows when only lint is selected', async (): Promise<void> => {
+    const gateway = nestedFlowGateway();
+    const result = await new FlowCheckService(gateway).check(request({ checks: ['lint'], recursive: true }));
+    expect(result.checks).to.deep.equal(['lint']);
+    expect(gateway.definitionQueries.map((lookup) => lookup.apiName)).to.deep.equal(['Flow_A', 'Flow_A']);
+    expect(gateway.versionQueries).to.deep.equal(['300000000000001', '300000000000001']);
+  });
+});

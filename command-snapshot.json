@@ -39,6 +39,27 @@
   },
   {
     "alias": [],
+    "command": "flow:bundle",
+    "flagAliases": [],
+    "flagChars": ["n", "o"],
+    "flags": [
+      "api-name",
+      "api-version",
+      "flags-dir",
+      "flow-version",
+      "json",
+      "max-depth",
+      "namespace",
+      "output-dir",
+      "overwrite",
+      "status",
+      "subflow-version",
+      "target-org"
+    ],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
     "command": "flow:check",
     "flagAliases": [],
     "flagChars": ["n", "o", "r"],

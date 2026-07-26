@@ -189,7 +189,7 @@ export class FlowCheckService {
         : { apiName: described.apiName, namespace: described.namespace, versionNumber: described.resolvedVersion };
     const descriptions = described?.flows ?? [];
     const [lintResults, dependencyFindings, versionFindings, metrics] = await Promise.all([
-      this.lintFlows(context, descriptions),
+      this.lintFlows(context, root, descriptions),
       this.checkDependencies(context),
       this.checkVersions(context),
       this.calculateMetrics(context),
@@ -212,14 +212,22 @@ export class FlowCheckService {
     });
   }
 
-  private async lintFlows(context: FlowCheckContext, flows: ReadonlyArray<FlowDescription>): Promise<FlowLintResult[]> {
+  private async lintFlows(
+    context: FlowCheckContext,
+    root: ResolvedCheckFlow,
+    flows: ReadonlyArray<FlowDescription>
+  ): Promise<FlowLintResult[]> {
     const { request, checks, progress } = context;
     if (!hasCheck(checks, 'lint') && !hasCheck(checks, 'subflows')) {
       return [];
     }
     const selection = lintRules(checks);
+    const lintTargets =
+      flows.length === 0
+        ? [{ apiName: root.apiName, namespace: root.namespace, versionNumber: root.versionNumber }]
+        : flows;
     return Promise.all(
-      flows.map(async (flow) =>
+      lintTargets.map(async (flow) =>
         new FlowLintService(this.gateway).lint(
           {
             apiName: flow.apiName,
@@ -246,6 +254,7 @@ export class FlowCheckService {
         recursive: request.recursive,
         maxDepth: request.maxDepth,
         types: [],
+        excludeTypes: [],
       },
       progress
     );

@@ -117,7 +117,7 @@ async function createBundle(context: BundleContext): Promise<FlowBundleArtifact>
   const described = await new FlowDescribeService(gateway).describe(describeRequest(request), progress);
   assertCompleteTraversal(described.warnings);
   const dependencies = await new FlowDependenciesService(gateway).getDependencies(
-    { ...request, direction: 'uses', recursive: true, maxDepth: request.maxDepth, types: [] },
+    { ...request, direction: 'uses', recursive: true, maxDepth: request.maxDepth, types: [], excludeTypes: [] },
     progress
   );
   if (dependencies.truncated) {

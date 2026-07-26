@@ -43,6 +43,7 @@ export interface FlowDefinitionFixture {
 export class FakeFlowGateway implements FlowDefinitionGateway {
   public readonly updates: ActiveVersionUpdate[] = [];
   public readonly deletes: string[] = [];
+  public readonly definitionQueries: FlowDefinitionLookup[] = [];
   public readonly dependencies: IndexedFlowDependency[] = [];
   public readonly dependenciesByDefinition = new Map<string, IndexedFlowDependency[]>();
   public readonly dependencyQueries: DependencyQuery[] = [];
@@ -77,6 +78,7 @@ export class FakeFlowGateway implements FlowDefinitionGateway {
 
   public async findDefinitions(lookup: FlowDefinitionLookup): Promise<ReadonlyArray<FlowDefinition>> {
     this.throwQueryError();
+    this.definitionQueries.push(lookup);
     return this.definitions.filter(
       (definition) =>
         definition.apiName === lookup.apiName &&
