@@ -127,6 +127,13 @@ describe('Flow report renderers', (): void => {
 });
 
 describe('Flow comparison renderer structure', (): void => {
+  it('uses the qualified Flow name in every report format', (): void => {
+    const managed: FlowCompareResult = { ...comparison, namespace: 'managed' };
+    expect(renderFlowComparison(managed, 'summary')).to.contain('Flow: managed__Order_Processing');
+    expect(renderFlowComparison(managed, 'unified')).to.contain('--- managed__Order_Processing@1');
+    expect(renderFlowComparison(managed, 'markdown')).to.contain('# Flow comparison: managed__Order_Processing');
+  });
+
   it('keeps multiline string values on their marked unified-diff lines', (): void => {
     const multiline: FlowCompareResult = {
       ...comparison,
