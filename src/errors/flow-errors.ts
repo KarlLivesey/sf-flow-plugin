@@ -72,6 +72,14 @@ export function flowActiveVersionMismatch(apiName: string, expected: number, act
   });
 }
 
+export function flowLatestVersionMismatch(apiName: string, expected: number, actual: number | null): SfError {
+  return createFlowError({
+    code: 'FlowLatestVersionMismatch',
+    message: `Flow "${apiName}" has latest version ${actual ?? 'none'}; expected version ${expected}.`,
+    action: 'Inspect the current Flow state and retry with the expected latest version.',
+  });
+}
+
 export function flowActivationFailed(message: string, cause?: unknown): SfError {
   return createFlowError({
     code: 'FlowActivationFailed',
@@ -217,5 +225,22 @@ export function flowPruneVerificationFailed(apiName: string): SfError {
     code: 'FlowPruneVerificationFailed',
     message: `Salesforce still reports one or more deleted versions for Flow "${apiName}".`,
     action: 'Query the Flow versions in Salesforce and retry the prune operation.',
+  });
+}
+
+export function flowDeleteVersionFailed(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowDeleteVersionFailed',
+    message,
+    action: 'Review the selected version and confirm that Salesforce permits deleting it.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
+export function flowDeleteVersionVerificationFailed(apiName: string, version: number): SfError {
+  return createFlowError({
+    code: 'FlowDeleteVersionVerificationFailed',
+    message: `Salesforce still reports Flow "${apiName}" version ${version} after deletion.`,
+    action: 'Query the Flow versions in Salesforce and retry the deletion.',
   });
 }

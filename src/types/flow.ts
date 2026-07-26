@@ -5,11 +5,8 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 export type FlowVersionNumber = number;
-
 export type FlowVersionSelector = 'latest' | FlowVersionNumber;
-
 export type FlowPruneOrder = 'created' | 'modified';
-
 export type FlowVersionStatusFilter = 'Active' | 'Draft' | 'InvalidDraft' | 'Obsolete';
 
 export type FlowVersionSort = 'version' | 'created' | 'modified';
@@ -25,6 +22,7 @@ export type FlowErrorCode =
   | 'FlowVersionNotFound'
   | 'FlowVersionNotActivatable'
   | 'FlowActiveVersionMismatch'
+  | 'FlowLatestVersionMismatch'
   | 'FlowQueryFailed'
   | 'FlowMutationFailed'
   | 'FlowMutationPermissionDenied'
@@ -40,7 +38,9 @@ export type FlowErrorCode =
   | 'FlowInspectionFailed'
   | 'FlowLintFailed'
   | 'FlowPruneFailed'
-  | 'FlowPruneVerificationFailed';
+  | 'FlowPruneVerificationFailed'
+  | 'FlowDeleteVersionFailed'
+  | 'FlowDeleteVersionVerificationFailed';
 
 export interface NamedFlowRequest {
   apiName: string;

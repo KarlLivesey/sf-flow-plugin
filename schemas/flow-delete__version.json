@@ -1,0 +1,117 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowDeleteVersionResult",
+  "definitions": {
+    "FlowDeleteVersionResult": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "definitionId": {
+          "type": "string"
+        },
+        "activeVersion": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowVersionNumber"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "latestVersion": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowVersionNumber"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expectedActiveVersion": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowVersionNumber"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expectedLatestVersion": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowVersionNumber"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "plan": {
+          "$ref": "#/definitions/FlowDeleteVersionPlan"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "targetOrg": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "apiName",
+        "namespace",
+        "definitionId",
+        "activeVersion",
+        "latestVersion",
+        "expectedActiveVersion",
+        "expectedLatestVersion",
+        "plan",
+        "changed",
+        "dryRun",
+        "targetOrg"
+      ],
+      "additionalProperties": false
+    },
+    "FlowVersionNumber": {
+      "type": "number"
+    },
+    "FlowDeleteVersionPlan": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "const": "delete-version"
+        },
+        "versionId": {
+          "type": "string"
+        },
+        "versionNumber": {
+          "$ref": "#/definitions/FlowVersionNumber"
+        },
+        "status": {
+          "type": "string"
+        },
+        "active": {
+          "type": "boolean",
+          "const": false
+        },
+        "latest": {
+          "type": "boolean",
+          "const": false
+        }
+      },
+      "required": ["action", "versionId", "versionNumber", "status", "active", "latest"],
+      "additionalProperties": false
+    }
+  }
+}
