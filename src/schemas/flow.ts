@@ -41,6 +41,8 @@ const FLOW_API_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
 const NAMESPACE_PATTERN = /^[A-Za-z][A-Za-z0-9]{0,14}$/;
 const SALESFORCE_ID_PATTERN = /^[A-Za-z0-9]{15}(?:[A-Za-z0-9]{3})?$/;
 const SALESFORCE_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:?\d{2})$/;
+const FLOW_VERSION_DATE_FILTER_PATTERN =
+  /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:?\d{2}))?$/;
 const HEX_COLOR_PATTERN = /^#[\dA-Fa-f]{3}(?:[\dA-Fa-f]{3})?$/;
 const FONT_FAMILY_PATTERN = /^[\w ,'-]+$/u;
 
@@ -58,9 +60,27 @@ export const salesforceDateTimeSchema = z
   .regex(SALESFORCE_DATETIME_PATTERN)
   .refine((value) => !Number.isNaN(Date.parse(value)));
 
+function isLeapYear(year: number): boolean {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+}
+
+function hasValidCalendarDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/u.exec(value);
+  if (match === null) {
+    return false;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const daysByMonth = [31, isLeapYear(year) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  const maximumDay = daysByMonth[month - 1];
+  return maximumDay !== undefined && day >= 1 && day <= maximumDay;
+}
+
 export const flowVersionDateFilterSchema = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:?\d{2}))?$/)
+  .regex(FLOW_VERSION_DATE_FILTER_PATTERN)
+  .refine(hasValidCalendarDate)
   .refine((value) => !Number.isNaN(Date.parse(value.length === 10 ? `${value}T00:00:00.000Z` : value)));
 
 export const positiveFlowVersionSchema = z.number().int().positive().safe();

@@ -119,3 +119,26 @@ describe('FlowVersionsService modification filters', (): void => {
     expect(result.versions.map((version) => version.versionNumber)).to.deep.equal([2, 3]);
   });
 });
+
+describe('FlowVersionsService date validation', (): void => {
+  const invalidFilters = [
+    { label: 'an invalid created-before day', filter: { createdBefore: '2026-02-30' } },
+    { label: 'an invalid created-after month', filter: { createdAfter: '2026-13-01' } },
+    { label: 'a non-leap modified-before day', filter: { modifiedBefore: '2025-02-29' } },
+    { label: 'an invalid modified-after day', filter: { modifiedAfter: '2026-04-31' } },
+  ];
+
+  for (const { label, filter } of invalidFilters) {
+    it(`rejects ${label}`, async (): Promise<void> => {
+      const promise = new FlowVersionsService(new FakeFlowGateway([], [])).getVersions({
+        apiName: 'Order_Processing',
+        targetOrg: 'admin@example.com',
+        statuses: [],
+        sort: 'version',
+        order: 'asc',
+        ...filter,
+      });
+      await expectErrorName(promise, 'FlowQueryFailed');
+    });
+  }
+});
