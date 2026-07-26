@@ -20,6 +20,7 @@ import type {
   FlowVersionsResult,
 } from '../../../src/types/flow.js';
 import type { FlowDescribeResult, FlowGraphResult } from '../../../src/types/flow-inspection.js';
+import type { FlowRunResult } from '../../../src/types/flow-invocation.js';
 import { verifyExportDeployment } from '../../helpers/flow-export-nut.js';
 
 interface OrgSafetyResult {
@@ -237,6 +238,12 @@ describe('Flow lifecycle command NUTs', (): void => {
 });
 
 describe('Flow inspection command NUTs', (): void => {
+  it('validates active Flow invocation access without executing', (): void => {
+    const output = runFlowCommand<FlowRunResult>('run', '--api-name Plugin_Test_Flow --dry-run');
+    expect(output.result).to.include({ apiName: 'Plugin_Test_Flow', dryRun: true, successful: true });
+    expect(output.result.invocations[0]).to.include({ executed: false });
+  });
+
   it('describes Flow resources and elements', (): void => {
     const output = runFlowCommand<FlowDescribeResult>('describe', '--api-name Plugin_Test_Flow');
     const flow = output.result.flows[0];

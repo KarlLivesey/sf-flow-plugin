@@ -214,6 +214,27 @@
   },
   {
     "alias": [],
+    "command": "flow:run",
+    "flagAliases": [],
+    "flagChars": ["n", "o"],
+    "flags": [
+      "api-name",
+      "api-version",
+      "confirm",
+      "dry-run",
+      "fail-on-flow-error",
+      "flags-dir",
+      "input",
+      "input-file",
+      "json",
+      "namespace",
+      "output-file",
+      "target-org"
+    ],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
     "command": "flow:versions",
     "flagAliases": [],
     "flagChars": ["n", "o"],
