@@ -10,6 +10,7 @@ import type { FlowComparisonVersionSelector, FlowMetadataGateway } from '../type
 import type { FlowDefinition, FlowDefinitionGateway, FlowDefinitionLookup, FlowVersion } from '../types/flow.js';
 import type { FlowLintFinding, FlowLintRequest, FlowLintResult } from '../types/flow-lint.js';
 import { analyseFlowLintMetadata } from '../utils/flow-lint-analysis.js';
+import { createFlowLintFingerprint } from '../utils/flow-lint-fingerprint.js';
 import { analyseFlowMetadata } from '../utils/flow-metadata-analysis.js';
 import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
 import { selectFlowDefinition } from '../utils/flow-state.js';
@@ -54,6 +55,7 @@ function selectVersion(
 function subflowFinding(rule: 'inactive-subflow' | 'missing-subflow', flowName: string): FlowLintFinding {
   const missing = rule === 'missing-subflow';
   return {
+    fingerprint: createFlowLintFingerprint({ rule, element: flowName }),
     rule,
     severity: missing ? 'error' : 'warning',
     message: missing
@@ -126,6 +128,24 @@ function filterFindings(request: FlowLintRequest, findings: ReadonlyArray<FlowLi
   return findings.filter((item) => (selected.size === 0 || selected.has(item.rule)) && !excluded.has(item.rule));
 }
 
+function ruleSelected(request: FlowLintRequest, rule: FlowLintFinding['rule']): boolean {
+  return (request.rules.length === 0 || request.rules.includes(rule)) && !request.excludedRules.includes(rule);
+}
+
+interface SubflowInspectionContext {
+  gateway: FlowDefinitionGateway;
+  request: FlowLintRequest;
+  flowNames: ReadonlyArray<string>;
+  progress: FlowProgressReporter;
+}
+
+async function inspectSelectedSubflows(context: SubflowInspectionContext): Promise<FlowLintFinding[]> {
+  const { gateway, request, flowNames, progress } = context;
+  return ruleSelected(request, 'inactive-subflow') || ruleSelected(request, 'missing-subflow')
+    ? inspectSubflows(gateway, flowNames, progress)
+    : [];
+}
+
 async function runLint(
   gateway: FlowDefinitionGateway & FlowMetadataGateway,
   request: FlowLintRequest,
@@ -141,11 +161,12 @@ async function runLint(
   progress('analysing-results', `${request.apiName} v${version.versionNumber}`);
   const findings = filterFindings(request, [
     ...analyseFlowLintMetadata(metadata, description),
-    ...(await inspectSubflows(
+    ...(await inspectSelectedSubflows({
       gateway,
-      description.subflows.map((subflow) => subflow.flowName),
-      progress
-    )),
+      request,
+      flowNames: description.subflows.map((subflow) => subflow.flowName),
+      progress,
+    })),
   ]);
   return createResult({ request, definition, version, findings });
 }

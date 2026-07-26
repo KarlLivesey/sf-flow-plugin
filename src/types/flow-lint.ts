@@ -25,6 +25,7 @@ export interface FlowLintRequest extends NamedFlowRequest {
 }
 
 export interface FlowLintFinding {
+  fingerprint: string;
   rule: FlowLintRule;
   severity: FlowLintSeverity;
   message: string;

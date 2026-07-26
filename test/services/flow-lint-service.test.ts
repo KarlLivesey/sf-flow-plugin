@@ -105,3 +105,40 @@ describe('FlowLintService rule selection', (): void => {
     expect(result.findings[0]?.rule).to.equal('unconnected-element');
   });
 });
+
+describe('FlowLintService subflow rule selection', (): void => {
+  it('does not inspect subflows when neither subflow rule is selected', async (): Promise<void> => {
+    const root = flowVersion(rootId, 1, 'Active');
+    const gateway = new FakeFlowGateway(
+      [
+        flowDefinition({
+          id: rootId,
+          apiName: 'Root_Flow',
+          activeVersionId: root.id,
+          latestVersionId: root.id,
+        }),
+        flowDefinition({
+          id: childId,
+          apiName: 'Ambiguous_Child',
+          activeVersionId: null,
+          latestVersionId: null,
+        }),
+        flowDefinition({
+          id: '300000000000003',
+          apiName: 'Ambiguous_Child',
+          activeVersionId: null,
+          latestVersionId: null,
+        }),
+      ],
+      [root]
+    );
+    gateway.metadata.set(root.id, {
+      subflows: [{ name: 'Call_Child', flowName: 'Ambiguous_Child' }],
+    });
+    const result = await new FlowLintService(gateway).lint({
+      ...lintRequest(),
+      rules: ['hard-coded-id'],
+    });
+    expect(result.findings).to.deep.equal([]);
+  });
+});
