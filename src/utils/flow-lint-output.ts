@@ -13,6 +13,15 @@ import { flowLintFailed } from '../errors/flow-errors.js';
 import type { FlowLintFinding, FlowLintResult } from '../types/flow-lint.js';
 import { legacyFlowLintFingerprint } from './flow-lint-fingerprint.js';
 
+interface BaselineFinding {
+  finding: FlowLintFinding;
+  legacyMessageKey: string | null;
+}
+
+function legacyMessageKey(finding: Omit<FlowLintFinding, 'fingerprint'>): string {
+  return JSON.stringify([finding.rule, finding.element, finding.path, finding.message]);
+}
+
 const findingSchema = z
   .object({
     fingerprint: z
@@ -33,12 +42,16 @@ const findingSchema = z
     element: z.string().nullable(),
     path: z.string().nullable(),
   })
-  .transform(
-    (finding): FlowLintFinding => ({
-      ...finding,
-      fingerprint: finding.fingerprint ?? legacyFlowLintFingerprint(finding),
-    })
-  );
+  .transform((finding): BaselineFinding => {
+    const legacy = finding.fingerprint === undefined;
+    return {
+      finding: {
+        ...finding,
+        fingerprint: finding.fingerprint ?? legacyFlowLintFingerprint(finding),
+      },
+      legacyMessageKey: legacy ? legacyMessageKey(finding) : null,
+    };
+  });
 
 const baselineSchema = z.union([
   z.array(findingSchema),
@@ -49,10 +62,15 @@ function findingKey(finding: FlowLintFinding): string {
   return finding.fingerprint;
 }
 
-function classifyFindings(result: FlowLintResult, baseline: ReadonlyArray<FlowLintFinding>): FlowLintResult {
-  const known = new Set(baseline.map(findingKey));
-  const baselineFindings = result.findings.filter((finding) => known.has(findingKey(finding)));
-  const newFindings = result.findings.filter((finding) => !known.has(findingKey(finding)));
+function classifyFindings(result: FlowLintResult, baseline: ReadonlyArray<BaselineFinding>): FlowLintResult {
+  const known = new Set(baseline.map((entry) => findingKey(entry.finding)));
+  const legacy = new Set(
+    baseline.flatMap((entry) => (entry.legacyMessageKey === null ? [] : [entry.legacyMessageKey]))
+  );
+  const isKnown = (finding: FlowLintFinding): boolean =>
+    known.has(findingKey(finding)) || legacy.has(legacyMessageKey(finding));
+  const baselineFindings = result.findings.filter(isKnown);
+  const newFindings = result.findings.filter((finding) => !isKnown(finding));
   return {
     ...result,
     newFindings,
@@ -62,7 +80,7 @@ function classifyFindings(result: FlowLintResult, baseline: ReadonlyArray<FlowLi
   };
 }
 
-async function readBaseline(file: string): Promise<FlowLintFinding[]> {
+async function readBaseline(file: string): Promise<BaselineFinding[]> {
   const resolved = resolve(file);
   try {
     const content = await readFile(resolved, 'utf8');

@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { expect } from 'chai';
 
 import type { FlowLintFinding, FlowLintResult } from '../../src/types/flow-lint.js';
+import { createFlowLintFingerprint } from '../../src/utils/flow-lint-fingerprint.js';
 import { applyFlowLintBaseline, formatFlowLintSarif } from '../../src/utils/flow-lint-output.js';
 
 const existing: FlowLintFinding = {
@@ -50,6 +51,12 @@ function lintResult(): FlowLintResult {
   };
 }
 
+function withoutFingerprint(finding: FlowLintFinding): Omit<FlowLintFinding, 'fingerprint'> {
+  const { fingerprint: _fingerprint, ...legacy } = finding;
+  void _fingerprint;
+  return legacy;
+}
+
 interface SarifOutput {
   runs: Array<{
     results: Array<{
@@ -82,6 +89,31 @@ describe('Flow lint output', (): void => {
       );
       const result = await applyFlowLintBaseline(lintResult(), baseline);
       assertSarifOutput(result);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('matches fingerprintless DML-loop findings by their legacy message when the loop label differs', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'flow-lint-legacy-'));
+    const baseline = join(directory, 'baseline.json');
+    const finding: FlowLintFinding = {
+      fingerprint: createFlowLintFingerprint({
+        rule: 'dml-inside-loop',
+        element: 'Create_Account',
+        evidence: ['Process_Accounts_Loop'],
+      }),
+      rule: 'dml-inside-loop',
+      severity: 'warning',
+      message: 'Record Create "Create Account" runs inside loop "Process Accounts".',
+      element: 'Create_Account',
+      path: null,
+    };
+    try {
+      await writeFile(baseline, JSON.stringify({ findings: [withoutFingerprint(finding)] }), 'utf8');
+      const result = await applyFlowLintBaseline({ ...lintResult(), findings: [finding] }, baseline);
+      expect(result.baselineFindings).to.deep.equal([finding]);
+      expect(result.newFindings).to.deep.equal([]);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
