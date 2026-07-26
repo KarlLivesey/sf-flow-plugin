@@ -138,3 +138,27 @@ describe('RestFlowInvocationGateway errors', (): void => {
     }
   });
 });
+
+describe('RestFlowInvocationGateway transport aliases', (): void => {
+  it('preserves a numeric permission status from an ordinary Error', async (): Promise<void> => {
+    const fake = connection({});
+    fake.request.rejects(Object.assign(new Error('forbidden'), { statusCode: 403 }));
+    await expectErrorName(
+      new RestFlowInvocationGateway(fake.connection).assertFlowActionAvailable('Calculate_Discount'),
+      'FlowInvocationPermissionDenied'
+    );
+  });
+
+  it('preserves a safe network code from an ordinary Error', async (): Promise<void> => {
+    const fake = connection({});
+    fake.request.rejects(Object.assign(new Error('sensitive network details'), { code: 'ECONNRESET' }));
+    try {
+      await new RestFlowInvocationGateway(fake.connection).invokeFlow('Calculate_Discount', [{}]);
+      expect.fail('Expected FlowInvocationFailed.');
+    } catch (error: unknown) {
+      expect(error).to.be.instanceOf(Error);
+      expect((error as Error).message).to.include('Status: ECONNRESET');
+      expect((error as Error).message).not.to.include('sensitive network details');
+    }
+  });
+});

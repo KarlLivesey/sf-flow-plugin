@@ -22,21 +22,14 @@ const actionErrorSchema = z.union([
 
 const transportErrorSchema = z
   .object({
-    code: z
-      .string()
-      .regex(/^[A-Z][A-Z0-9_]*$/u)
-      .optional(),
-    errorCode: z
-      .string()
-      .regex(/^[A-Z][A-Z0-9_]*$/u)
-      .optional(),
-    name: z
-      .string()
-      .regex(/^[A-Z][A-Z0-9_]*$/u)
-      .optional(),
-    statusCode: z.union([z.number().int().min(100).max(599), z.string().regex(/^[A-Z][A-Z0-9_]*$/u)]).optional(),
+    code: z.unknown().optional(),
+    errorCode: z.unknown().optional(),
+    name: z.unknown().optional(),
+    statusCode: z.unknown().optional(),
   })
   .passthrough();
+const transportCodeSchema = z.string().regex(/^[A-Z][A-Z0-9_]*$/u);
+const transportStatusSchema = z.union([z.number().int().min(100).max(599), z.string().regex(/^[A-Z][A-Z0-9_]*$/u)]);
 
 const permissionErrorCodes = new Set([
   'FORBIDDEN',
@@ -69,7 +62,17 @@ function transportCodes(error: unknown): Array<number | string> {
     return [];
   }
   const { code, errorCode, name, statusCode } = parsed.data;
-  return [errorCode, statusCode, code, name].filter((value): value is number | string => value !== undefined);
+  const safeCode = (candidate: unknown): string[] => {
+    const validated = transportCodeSchema.safeParse(candidate);
+    return validated.success ? [validated.data] : [];
+  };
+  const safeStatus = transportStatusSchema.safeParse(statusCode);
+  return [
+    ...safeCode(errorCode),
+    ...(safeStatus.success ? [safeStatus.data] : []),
+    ...safeCode(code),
+    ...safeCode(name),
+  ];
 }
 
 function safeTransportCode(error: unknown): string | null {
