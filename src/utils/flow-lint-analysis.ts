@@ -61,12 +61,27 @@ function canReach(source: string, context: ReachabilityContext): boolean {
   return (context.graph.get(source) ?? []).some((next) => canReach(next, { ...context, visited }));
 }
 
+function reachableElements(description: FlowDescription): ReadonlySet<string> {
+  const graph = adjacency(description);
+  const reachable = new Set<string>();
+  const pending = ['start'];
+  while (pending.length > 0) {
+    const element = pending.pop();
+    if (element === undefined || reachable.has(element)) {
+      continue;
+    }
+    reachable.add(element);
+    pending.push(...(graph.get(element) ?? []));
+  }
+  return reachable;
+}
+
 function unconnectedFindings(description: FlowDescription): FlowLintFinding[] {
-  const connectedTargets = new Set(description.connectors.map((connector) => connector.target));
+  const reachable = reachableElements(description);
   return description.elements
-    .filter((element) => element.name !== 'start' && !connectedTargets.has(element.name))
+    .filter((element) => element.name !== 'start' && !reachable.has(element.name))
     .map((element) =>
-      finding('unconnected-element', `${element.type} "${element.label ?? element.name}" has no incoming connector.`, {
+      finding('unconnected-element', `${element.type} "${element.label ?? element.name}" is unreachable from start.`, {
         element: element.name,
       })
     );

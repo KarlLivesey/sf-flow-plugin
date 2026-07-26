@@ -30,7 +30,10 @@ describe('analyseFlowLintMetadata structural rules', (): void => {
           inputReference: 'recordInput',
         },
       ],
-      assignments: [{ name: 'Never_Connected' }],
+      assignments: [
+        { name: 'Never_Connected', connector: { targetReference: 'Still_Unreachable' } },
+        { name: 'Still_Unreachable' },
+      ],
     };
     const description = analyseFlowMetadata({ definition, version, metadata, depth: 0 });
     const findings = analyseFlowLintMetadata(metadata, description);
@@ -38,6 +41,10 @@ describe('analyseFlowLintMetadata structural rules', (): void => {
       'unconnected-element',
       'missing-fault-path',
       'dml-inside-loop',
+    ]);
+    expect(findings.filter((item) => item.rule === 'unconnected-element').map((item) => item.element)).to.deep.equal([
+      'Never_Connected',
+      'Still_Unreachable',
     ]);
   });
 });
