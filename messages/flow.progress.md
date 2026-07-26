@@ -26,6 +26,10 @@ Describing Flow
 
 Generating Flow graph
 
+# actions.lint
+
+Linting Flow
+
 # actions.prune
 
 Pruning Flow versions

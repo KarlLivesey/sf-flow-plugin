@@ -168,6 +168,15 @@ export function flowInspectionFailed(message: string, cause?: unknown): SfError 
   });
 }
 
+export function flowLintFailed(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowLintFailed',
+    message,
+    action: 'Confirm the Flow metadata is accessible and valid, then run the command again.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
 export function flowGraphOptionsInvalid(message: string): SfError {
   return createFlowError({
     code: 'FlowInspectionFailed',

@@ -150,6 +150,14 @@
   },
   {
     "alias": [],
+    "command": "flow:lint",
+    "flagAliases": [],
+    "flagChars": ["n", "o"],
+    "flags": ["api-name", "api-version", "flags-dir", "flow-version", "json", "namespace", "target-org"],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
     "command": "flow:prune",
     "flagAliases": [],
     "flagChars": ["n", "o"],
