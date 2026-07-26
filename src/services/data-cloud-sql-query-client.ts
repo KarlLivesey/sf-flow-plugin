@@ -44,7 +44,11 @@ function parseResponse(response: unknown): QueryResponse {
 }
 
 function isComplete(response: QueryResponse): boolean {
-  return response.status.completionStatus === 'Finished' || response.progress === 1 || response.status.progress === 1;
+  return (
+    response.status.completionStatus.toLowerCase() === 'finished' ||
+    response.progress === 1 ||
+    response.status.progress === 1
+  );
 }
 
 function isFailed(response: QueryResponse): boolean {
