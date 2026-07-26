@@ -78,4 +78,4 @@ Indexed dependencies for Flow %s
 
 # warnings.truncated
 
-Dependency results for %s (%s) reached the %s-record query limit and may be incomplete.
+Dependency results for %s (%s, depth %s) reached the %s-record query limit and may be incomplete.

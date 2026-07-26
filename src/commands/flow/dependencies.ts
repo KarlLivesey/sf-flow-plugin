@@ -145,6 +145,7 @@ export default class FlowDependencies extends SfCommand<FlowDependenciesResult> 
           messages.getMessage('warnings.truncated', [
             qualifiedFlowName(truncation.apiName, truncation.namespace),
             truncation.direction,
+            truncation.depth,
             truncation.limit,
           ])
         );

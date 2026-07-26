@@ -12,7 +12,7 @@ import type { DependenciesFlagValues } from '../../../src/commands/flow/dependen
 import { FlowDependenciesService } from '../../../src/services/flow-dependencies-service.js';
 import type { FlowDependenciesResult } from '../../../src/types/flow-analysis.js';
 import { createCommandOrg } from '../../helpers/command-org.js';
-import { commandTestContext as $$ } from '../../helpers/command-test-context.js';
+import { commandTestContext as $$, commandUx } from '../../helpers/command-test-context.js';
 
 const result: FlowDependenciesResult = {
   apiName: 'Order_Processing',
@@ -54,7 +54,7 @@ function truncatedResult(): FlowDependenciesResult {
         apiName: result.apiName,
         namespace: null,
         direction: 'uses',
-        depth: 0,
+        depth: 3,
         limit: 2000,
       },
     ],
@@ -156,5 +156,12 @@ describe('flow dependencies truncation execution', (): void => {
     $$.SANDBOX.stub(FlowDependenciesService.prototype, 'getDependencies').resolves(truncatedResult());
     await FlowDependencies.run(['--json']);
     expect(process.exitCode).to.equal(undefined);
+  });
+
+  it('includes traversal depth in the human truncation warning', async (): Promise<void> => {
+    $$.SANDBOX.stub(FlowDependencies.prototype, 'parseFlags').resolves(truncationFlags(true));
+    $$.SANDBOX.stub(FlowDependenciesService.prototype, 'getDependencies').resolves(truncatedResult());
+    await FlowDependencies.run([]);
+    expect(commandUx.warn.firstCall.args[0]).to.include('(uses, depth 3)');
   });
 });
