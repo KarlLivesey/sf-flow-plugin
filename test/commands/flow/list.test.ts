@@ -9,12 +9,16 @@ import { expect } from 'chai';
 
 import FlowList from '../../../src/commands/flow/list.js';
 import { FlowListService } from '../../../src/services/flow-list-service.js';
-import type { FlowListResult } from '../../../src/types/flow.js';
+import type { FlowListResult } from '../../../src/types/flow-list.js';
 import { createCommandOrg } from '../../helpers/command-org.js';
 import { commandTestContext as $$ } from '../../helpers/command-test-context.js';
 
 const result: FlowListResult = {
   targetOrg: 'admin@example.com',
+  filters: { apiNames: [], types: [], namespaces: [], statuses: [] },
+  sort: 'api-name',
+  order: 'asc',
+  limit: null,
   definitions: [],
 };
 
@@ -27,12 +31,27 @@ describe('flow list command', (): void => {
   it('passes the authenticated username to the service', async (): Promise<void> => {
     const flags = {
       'target-org': createCommandOrg({} as Connection),
+      'api-name': undefined,
+      type: undefined,
+      namespace: undefined,
+      status: undefined,
+      sort: 'api-name' as const,
+      order: 'asc' as const,
+      limit: undefined,
       'api-version': '65.0',
     };
     $$.SANDBOX.stub(FlowList.prototype, 'parseFlags').resolves(flags);
     const list = $$.SANDBOX.stub(FlowListService.prototype, 'list').resolves(result);
     const actual = await FlowList.run(['--json']);
-    expect(list.firstCall.args[0]).to.deep.equal({ targetOrg: 'admin@example.com' });
+    expect(list.firstCall.args[0]).to.deep.equal({
+      targetOrg: 'admin@example.com',
+      apiNames: [],
+      types: [],
+      namespaces: [],
+      statuses: [],
+      sort: 'api-name',
+      order: 'asc',
+    });
     expect(list.firstCall.args[1]).to.be.a('function');
     expect(actual).to.equal(result);
   });

@@ -29,10 +29,28 @@
             "$ref": "#/definitions/FlowLintFinding"
           }
         },
+        "newFindings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowLintFinding"
+          }
+        },
+        "baselineFindings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowLintFinding"
+          }
+        },
         "errors": {
           "type": "number"
         },
         "warnings": {
+          "type": "number"
+        },
+        "newErrors": {
+          "type": "number"
+        },
+        "newWarnings": {
           "type": "number"
         },
         "targetOrg": {
@@ -47,8 +65,12 @@
         "resolvedVersion",
         "status",
         "findings",
+        "newFindings",
+        "baselineFindings",
         "errors",
         "warnings",
+        "newErrors",
+        "newWarnings",
         "targetOrg"
       ],
       "additionalProperties": false

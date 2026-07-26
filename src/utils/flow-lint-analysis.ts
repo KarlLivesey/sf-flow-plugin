@@ -5,7 +5,8 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import type { JsonObject, JsonValue } from '../types/flow-analysis.js';
-import type { FlowDescription, FlowElementSummary, FlowLintFinding } from '../types/flow-inspection.js';
+import type { FlowDescription, FlowElementSummary } from '../types/flow-inspection.js';
+import type { FlowLintFinding } from '../types/flow-lint.js';
 
 const SALESFORCE_ID_PATTERN = /(?<![A-Za-z0-9])[A-Za-z0-9]{15}(?:[A-Za-z0-9]{3})?(?![A-Za-z0-9])/gu;
 const DML_TYPES = new Set(['Record Create', 'Record Delete', 'Record Update']);

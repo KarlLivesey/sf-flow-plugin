@@ -8,7 +8,7 @@ import { flowDefinitionAmbiguous, flowLintFailed } from '../errors/flow-errors.j
 import { flowApiNameSchema, namespaceSchema } from '../schemas/flow.js';
 import type { FlowComparisonVersionSelector, FlowMetadataGateway } from '../types/flow-analysis.js';
 import type { FlowDefinition, FlowDefinitionGateway, FlowDefinitionLookup, FlowVersion } from '../types/flow.js';
-import type { FlowLintFinding, FlowLintRequest, FlowLintResult } from '../types/flow-inspection.js';
+import type { FlowLintFinding, FlowLintRequest, FlowLintResult } from '../types/flow-lint.js';
 import { analyseFlowLintMetadata } from '../utils/flow-lint-analysis.js';
 import { analyseFlowMetadata } from '../utils/flow-metadata-analysis.js';
 import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
@@ -110,10 +110,20 @@ function createResult(context: LintResultContext): FlowLintResult {
     resolvedVersion: version.versionNumber,
     status: version.status,
     findings,
+    newFindings: findings,
+    baselineFindings: [],
     errors: findings.filter((item) => item.severity === 'error').length,
     warnings: findings.filter((item) => item.severity === 'warning').length,
+    newErrors: findings.filter((item) => item.severity === 'error').length,
+    newWarnings: findings.filter((item) => item.severity === 'warning').length,
     targetOrg: request.targetOrg,
   };
+}
+
+function filterFindings(request: FlowLintRequest, findings: ReadonlyArray<FlowLintFinding>): FlowLintFinding[] {
+  const selected = new Set(request.rules);
+  const excluded = new Set(request.excludedRules);
+  return findings.filter((item) => (selected.size === 0 || selected.has(item.rule)) && !excluded.has(item.rule));
 }
 
 async function runLint(
@@ -129,14 +139,14 @@ async function runLint(
   const metadata = await gateway.getVersionMetadata(version.id);
   const description = analyseFlowMetadata({ definition, version, metadata, depth: 0 });
   progress('analysing-results', `${request.apiName} v${version.versionNumber}`);
-  const findings = [
+  const findings = filterFindings(request, [
     ...analyseFlowLintMetadata(metadata, description),
     ...(await inspectSubflows(
       gateway,
       description.subflows.map((subflow) => subflow.flowName),
       progress
     )),
-  ];
+  ]);
   return createResult({ request, definition, version, findings });
 }
 

@@ -101,42 +101,6 @@ export interface FlowDescribeRequest extends FlowTraversalRequest {
   sections?: FlowDescribeSection[];
 }
 
-export type FlowLintRule =
-  | 'dml-inside-loop'
-  | 'hard-coded-id'
-  | 'inactive-subflow'
-  | 'missing-fault-path'
-  | 'missing-subflow'
-  | 'unconnected-element'
-  | 'unused-resource';
-
-export type FlowLintSeverity = 'error' | 'warning';
-
-export interface FlowLintRequest extends NamedFlowRequest {
-  version: FlowComparisonVersionSelector;
-}
-
-export interface FlowLintFinding {
-  rule: FlowLintRule;
-  severity: FlowLintSeverity;
-  message: string;
-  element: string | null;
-  path: string | null;
-}
-
-export interface FlowLintResult {
-  apiName: string;
-  namespace: string | null;
-  definitionId: string;
-  requestedVersion: FlowComparisonVersionSelector;
-  resolvedVersion: FlowVersionNumber;
-  status: string;
-  findings: FlowLintFinding[];
-  errors: number;
-  warnings: number;
-  targetOrg: string;
-}
-
 export type FlowExportFormat = 'xml';
 
 export type FlowExportStatus = 'active' | 'draft';

@@ -9,7 +9,7 @@ import { expect } from 'chai';
 
 import FlowLint from '../../../src/commands/flow/lint.js';
 import { FlowLintService } from '../../../src/services/flow-lint-service.js';
-import type { FlowLintResult } from '../../../src/types/flow-inspection.js';
+import type { FlowLintResult } from '../../../src/types/flow-lint.js';
 import { createCommandOrg } from '../../helpers/command-org.js';
 import { commandTestContext as $$ } from '../../helpers/command-test-context.js';
 
@@ -21,8 +21,12 @@ const result: FlowLintResult = {
   resolvedVersion: 2,
   status: 'Draft',
   findings: [],
+  newFindings: [],
+  baselineFindings: [],
   errors: 0,
   warnings: 0,
+  newErrors: 0,
+  newWarnings: 0,
   targetOrg: 'admin@example.com',
 };
 
@@ -37,6 +41,12 @@ describe('flow lint command', (): void => {
       'api-name': 'Root_Flow',
       'target-org': createCommandOrg({} as Connection),
       'flow-version': 'latest' as const,
+      'fail-on': undefined,
+      rule: undefined,
+      'exclude-rule': undefined,
+      'result-format': 'human' as const,
+      'output-file': undefined,
+      baseline: undefined,
       namespace: undefined,
       'api-version': undefined,
     };
@@ -47,6 +57,8 @@ describe('flow lint command', (): void => {
       apiName: 'Root_Flow',
       targetOrg: 'admin@example.com',
       version: 'latest',
+      rules: [],
+      excludedRules: [],
     });
     expect(actual).to.equal(result);
   });
