@@ -2,7 +2,8 @@
 
 `sf-flow-plugin` adds Salesforce CLI commands for inspecting, validating, measuring, exporting, invoking and safely
 managing Flow versions through an authenticated org. It can also report indexed metadata dependencies and create
-deployable bundles containing recursively referenced subflows. The commands do not require a Salesforce DX project.
+complete Flow-source bundles containing recursively referenced subflows. The commands do not require a Salesforce DX
+project.
 
 The package is implemented in strict TypeScript using the current Salesforce external-plugin template, `@salesforce/core`, `@salesforce/sf-plugins-core`, oclif, and Zod runtime validation.
 
@@ -54,25 +55,25 @@ If `--target-org` is omitted, the command uses the Salesforce CLI `target-org` c
 
 ## Commands
 
-| Command                  | Purpose                                                                |
-| ------------------------ | ---------------------------------------------------------------------- |
-| `sf flow list`           | Inventory Flow definitions and their current version state.            |
-| `sf flow activate`       | Activate and verify a selected Flow version.                           |
-| `sf flow versions`       | List every version and identify the active and latest versions.        |
-| `sf flow compare`        | Compare Flow versions in one org or across two orgs.                   |
-| `sf flow dependencies`   | Show indexed incoming and outgoing dependencies.                       |
-| `sf flow describe`       | Summarise Flow resources, elements and referenced components.          |
-| `sf flow export`         | Export one Flow version as deployable source metadata.                 |
-| `sf flow bundle`         | Export a Flow and recursively referenced subflows as a deployable set. |
-| `sf flow graph`          | Render Flow connectors and recursive subflow calls.                    |
-| `sf flow lint`           | Run configurable static checks against a Flow version.                 |
-| `sf flow check`          | Aggregate read-only Flow checks for CI.                                |
-| `sf flow metrics`        | Report structural and optional Data Cloud runtime metrics.             |
-| `sf flow run`            | Invoke the active version of an autolaunched Flow.                     |
-| `sf flow deactivate`     | Deactivate a Flow and verify the resulting state.                      |
-| `sf flow delete-version` | Safely plan or delete one explicitly numbered inactive version.        |
-| `sf flow audit`          | Report Flow definitions with version-state issues.                     |
-| `sf flow prune`          | Safely plan or delete old inactive Flow versions.                      |
+| Command                  | Purpose                                                                 |
+| ------------------------ | ----------------------------------------------------------------------- |
+| `sf flow list`           | Inventory Flow definitions and their current version state.             |
+| `sf flow activate`       | Activate and verify a selected Flow version.                            |
+| `sf flow versions`       | List every version and identify the active and latest versions.         |
+| `sf flow compare`        | Compare Flow versions in one org or across two orgs.                    |
+| `sf flow dependencies`   | Show indexed incoming and outgoing dependencies.                        |
+| `sf flow describe`       | Summarise Flow resources, elements and referenced components.           |
+| `sf flow export`         | Export one Flow version as deployable source metadata.                  |
+| `sf flow bundle`         | Export a Flow and its complete recursively resolved subflow source set. |
+| `sf flow graph`          | Render Flow connectors and recursive subflow calls.                     |
+| `sf flow lint`           | Run configurable static checks against a Flow version.                  |
+| `sf flow check`          | Aggregate read-only Flow checks for CI.                                 |
+| `sf flow metrics`        | Report structural and optional Data Cloud runtime metrics.              |
+| `sf flow run`            | Invoke the active version of an autolaunched Flow.                      |
+| `sf flow deactivate`     | Deactivate a Flow and verify the resulting state.                       |
+| `sf flow delete-version` | Safely plan or delete one explicitly numbered inactive version.         |
+| `sf flow audit`          | Report Flow definitions with version-state issues.                      |
+| `sf flow prune`          | Safely plan or delete old inactive Flow versions.                       |
 
 Commands show an automatic Salesforce-style progress spinner while they query or mutate the org. Each stage identifies the Flow and relevant version or version scope. Progress output is suppressed automatically when `--json` is used.
 
@@ -137,8 +138,14 @@ dependency list and a manifest recording every selected Flow version. Source sta
 Active-or-latest subflow selection defaults to active with latest fallback. Visited-definition tracking and
 `--max-depth` prevent malformed or legacy metadata from causing unbounded traversal.
 
-Existing files are refused unless `--overwrite` is supplied. Apex classes, objects and other external dependencies
-are reported but are not exported automatically.
+The command refuses to create a bundle when traversal is incomplete because a subflow is missing, has no selectable
+version or exceeds `--max-depth`. A successful bundle therefore contains the complete selected Flow/subflow source
+set and can be deployed through the Metadata API. Apex classes, objects and other external dependencies are reported
+but are not exported; they must already exist in the destination org or be deployed separately.
+
+Existing files are refused unless `--overwrite` is supplied. Overwrite mode stages the complete bundle before
+replacing files, removes stale Flow files recorded by the previous validated manifest and restores the prior output
+if writing the replacement fails.
 
 ## `sf flow lint`
 
@@ -598,9 +605,11 @@ are available through the standard or legacy Flow Data Model Objects. It fails w
 when Data Cloud is not provisioned, Flow metrics collection has not produced those records, or the authenticated
 user cannot query them. An enabled Flow with no runs in the selected window returns zero executions.
 
-The plugin does not enable Flow metrics collection or exchange the Salesforce access token for a separate Data Cloud
-token. Collection must already be enabled for the Flow in Salesforce, and ingested records can be delayed. Data Cloud
-collection and query usage remains subject to the org's Salesforce entitlements.
+The plugin queries the Data Cloud Data Model Objects through the Data 360 Connect REST SQL Query API using the
+Salesforce CLI-authenticated target-org connection. It does not use ordinary SOQL or exchange the Salesforce access
+token for a separate Data Cloud Direct API token. The plugin does not enable Flow metrics collection: collection must
+already be enabled for the Flow in Salesforce, and ingested records can be delayed. Data Cloud collection and query
+usage remains subject to the org's Salesforce entitlements.
 
 ## `sf flow check`
 
@@ -626,7 +635,8 @@ sf flow check \
 
 This read-only CI command aggregates the existing lint, dependency, subflow, version-state and metrics analysis for
 one or more Flows. It reports missing or inactive subflows, dependency truncation, missing referenced components,
-active/latest state, accumulated inactive versions, input/output contract problems and complexity findings.
+active/latest state and accumulated inactive versions. Input/output contracts and structural metrics are returned as
+context; the command does not infer contract compatibility problems or apply complexity thresholds.
 
 The command fails on errors by default. Use `--fail-on warning` for a stricter CI gate, repeatable `--only` or
 `--exclude` flags to select checks, and SARIF output for code-scanning integrations.
@@ -651,12 +661,21 @@ sf flow run \
 `sf flow run` invokes the active version of an autolaunched Flow through Salesforce's supported Flow REST action.
 The command discovers declared inputs and validates scalar, record and collection values with Zod. Repeatable
 `--input NAME=VALUE` values perform one invocation; `--input-file` accepts one JSON object or an array of objects for
-multiple invocations.
+up to 200 invocations. All supplied invocations are sent in one REST action request. Salesforce does not guarantee
+that a multi-invocation request is all-or-none, so use the per-invocation results to determine which interviews
+succeeded.
 
 Flow execution can perform DML, callouts, emails and other side effects. Production execution requires `--confirm`.
 `--dry-run` validates eligibility, inputs, types and the authenticated user's ability to access the action without
-executing the Flow; it does not predict runtime success. Results include outputs, errors, duration and success for
-each invocation, and sensitive values are redacted from safe error output.
+executing the Flow; it does not predict runtime success. The active version is checked again immediately before the
+request, but activation can still change concurrently. The version reported by Salesforce in the invocation response
+is authoritative.
+
+Results include outputs, duration and success for each invocation. Salesforce error message text is deliberately
+withheld and replaced by a stable plugin error code. Input and output properties whose names look sensitive are
+redacted on a best-effort basis; arbitrary values under other property names can still appear in terminal, JSON and
+output-file results. A transport failure can leave execution outcome unknown, so the command does not automatically
+retry a potentially non-idempotent Flow.
 
 `sf flow debug` is intentionally not included because Salesforce does not expose a verified supported interface for
 the requested arbitrary-version tracing, rollback, run-as and record-trigger simulation contract. Flow tests are not
@@ -869,7 +888,7 @@ These checks are point-in-time preflights, not an atomic guarantee. Permissions 
 | `FlowDataCloudMetricsUnavailable`     | Data Cloud Flow metrics are not enabled, available or queryable.            |
 | `FlowDataCloudMetricsFailed`          | Data Cloud Flow runtime metrics could not be queried or validated.          |
 | `FlowCheckFailed`                     | The requested read-only Flow checks could not be completed.                 |
-| `FlowBundleFailed`                    | The deployable Flow bundle could not be created.                            |
+| `FlowBundleFailed`                    | The Flow bundle was incomplete or could not be written safely.              |
 
 ## Development
 
