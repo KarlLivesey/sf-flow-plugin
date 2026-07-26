@@ -3,7 +3,6 @@
   "description": "Salesforce CLI commands for managing Flow versions",
   "version": "1.4.0",
   "dependencies": {
-    "@js-temporal/polyfill": "^0.5.1",
     "@oclif/core": "^4",
     "@salesforce/core": "^8.2.7",
     "@salesforce/sf-plugins-core": "^12",

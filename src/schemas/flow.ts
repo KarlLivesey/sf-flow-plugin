@@ -36,7 +36,6 @@ import type {
   FlowVersionRecord,
   FlowVersionStatusFilter,
 } from '../types/flow.js';
-import { isFlowVersionDateFilter, isSalesforceDateTime } from '../utils/flow-date.js';
 
 const FLOW_API_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
 const NAMESPACE_PATTERN = /^[A-Za-z][A-Za-z0-9]{0,14}$/;
@@ -56,12 +55,33 @@ export const namespaceSchema = z.string().regex(NAMESPACE_PATTERN);
 
 export const salesforceIdSchema = z.string().regex(SALESFORCE_ID_PATTERN);
 
-export const salesforceDateTimeSchema = z.string().regex(SALESFORCE_DATETIME_PATTERN).refine(isSalesforceDateTime);
+export const salesforceDateTimeSchema = z
+  .string()
+  .regex(SALESFORCE_DATETIME_PATTERN)
+  .refine((value) => !Number.isNaN(Date.parse(value)));
+
+function isLeapYear(year: number): boolean {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+}
+
+function hasValidCalendarDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/u.exec(value);
+  if (match === null) {
+    return false;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const daysByMonth = [31, isLeapYear(year) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  const maximumDay = daysByMonth[month - 1];
+  return maximumDay !== undefined && day >= 1 && day <= maximumDay;
+}
 
 export const flowVersionDateFilterSchema = z
   .string()
   .regex(FLOW_VERSION_DATE_FILTER_PATTERN)
-  .refine(isFlowVersionDateFilter);
+  .refine(hasValidCalendarDate)
+  .refine((value) => !Number.isNaN(Date.parse(value.length === 10 ? `${value}T00:00:00.000Z` : value)));
 
 export const positiveFlowVersionSchema = z.number().int().positive().safe();
 

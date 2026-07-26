@@ -20,7 +20,6 @@ import type {
   FlowVersionsRequest,
   FlowVersionsResult,
 } from '../types/flow.js';
-import { parseFlowVersionDateFilter, parseSalesforceDateTime } from '../utils/flow-date.js';
 import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
 import { qualifiedFlowName, resolveVersionNumber, selectFlowDefinition } from '../utils/flow-state.js';
 
@@ -56,16 +55,16 @@ interface VersionDateBounds {
 
 function dateBounds(request: FlowVersionsRequest): VersionDateBounds {
   return {
-    createdBefore: request.createdBefore === undefined ? null : parseFlowVersionDateFilter(request.createdBefore),
-    createdAfter: request.createdAfter === undefined ? null : parseFlowVersionDateFilter(request.createdAfter),
-    modifiedBefore: request.modifiedBefore === undefined ? null : parseFlowVersionDateFilter(request.modifiedBefore),
-    modifiedAfter: request.modifiedAfter === undefined ? null : parseFlowVersionDateFilter(request.modifiedAfter),
+    createdBefore: request.createdBefore === undefined ? null : Date.parse(request.createdBefore),
+    createdAfter: request.createdAfter === undefined ? null : Date.parse(request.createdAfter),
+    modifiedBefore: request.modifiedBefore === undefined ? null : Date.parse(request.modifiedBefore),
+    modifiedAfter: request.modifiedAfter === undefined ? null : Date.parse(request.modifiedAfter),
   };
 }
 
 function withinDateBounds(version: FlowVersion, bounds: VersionDateBounds): boolean {
-  const created = parseSalesforceDateTime(version.createdDate);
-  const modified = parseSalesforceDateTime(version.lastModifiedDate);
+  const created = Date.parse(version.createdDate);
+  const modified = Date.parse(version.lastModifiedDate);
   return (
     (bounds.createdBefore === null || created < bounds.createdBefore) &&
     (bounds.createdAfter === null || created > bounds.createdAfter) &&
@@ -134,10 +133,10 @@ export class FlowVersionsService {
       (request.modifiedAfter !== undefined && !flowVersionDateFilterSchema.safeParse(request.modifiedAfter).success) ||
       (request.createdBefore !== undefined &&
         request.createdAfter !== undefined &&
-        parseFlowVersionDateFilter(request.createdAfter) >= parseFlowVersionDateFilter(request.createdBefore)) ||
+        Date.parse(request.createdAfter) >= Date.parse(request.createdBefore)) ||
       (request.modifiedBefore !== undefined &&
         request.modifiedAfter !== undefined &&
-        parseFlowVersionDateFilter(request.modifiedAfter) >= parseFlowVersionDateFilter(request.modifiedBefore)) ||
+        Date.parse(request.modifiedAfter) >= Date.parse(request.modifiedBefore)) ||
       !flowVersionSortSchema.safeParse(request.sort).success ||
       !flowSortOrderSchema.safeParse(request.order).success ||
       (request.limit !== undefined && !positiveFlowVersionSchema.safeParse(request.limit).success)
