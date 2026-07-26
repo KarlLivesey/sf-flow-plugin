@@ -14,6 +14,7 @@ import type { FlowLintFinding, FlowLintResult } from '../../src/types/flow-lint.
 import { applyFlowLintBaseline, formatFlowLintSarif } from '../../src/utils/flow-lint-output.js';
 
 const existing: FlowLintFinding = {
+  fingerprint: 'a'.repeat(64),
   rule: 'hard-coded-id',
   severity: 'warning',
   message: 'An ID is hard-coded.',
@@ -22,6 +23,7 @@ const existing: FlowLintFinding = {
 };
 
 const added: FlowLintFinding = {
+  fingerprint: 'b'.repeat(64),
   rule: 'unused-resource',
   severity: 'warning',
   message: 'A resource is unused.',
@@ -48,19 +50,38 @@ function lintResult(): FlowLintResult {
   };
 }
 
+interface SarifOutput {
+  runs: Array<{
+    results: Array<{
+      baselineState: string;
+      locations?: Array<{ logicalLocations: Array<{ name: string }>; physicalLocation?: unknown }>;
+      partialFingerprints: Record<string, string>;
+    }>;
+  }>;
+}
+
+function assertSarifOutput(result: FlowLintResult): void {
+  const sarif = JSON.parse(formatFlowLintSarif(result)) as SarifOutput;
+  expect(result.baselineFindings).to.deep.equal([existing]);
+  expect(result.newFindings).to.deep.equal([added]);
+  expect(sarif.runs[0]?.results.map((item) => item.baselineState)).to.deep.equal(['unchanged', 'new']);
+  expect(sarif.runs[0]?.results[0]?.locations?.[0]?.logicalLocations[0]?.name).to.equal('formulas[0].expression');
+  expect(sarif.runs[0]?.results[0]?.locations?.[0]?.physicalLocation).to.equal(undefined);
+  expect(sarif.runs[0]?.results[0]?.partialFingerprints['sf-flow-plugin/v1']).to.equal(existing.fingerprint);
+}
+
 describe('Flow lint output', (): void => {
   it('separates baseline findings from new findings and marks SARIF state', async (): Promise<void> => {
     const directory = await mkdtemp(join(tmpdir(), 'flow-lint-'));
     const baseline = join(directory, 'baseline.json');
     try {
-      await writeFile(baseline, JSON.stringify({ findings: [existing] }), 'utf8');
+      await writeFile(
+        baseline,
+        JSON.stringify({ findings: [{ ...existing, message: 'Previous harmless wording.' }] }),
+        'utf8'
+      );
       const result = await applyFlowLintBaseline(lintResult(), baseline);
-      const sarif = JSON.parse(formatFlowLintSarif(result)) as {
-        runs: Array<{ results: Array<{ baselineState: string }> }>;
-      };
-      expect(result.baselineFindings).to.deep.equal([existing]);
-      expect(result.newFindings).to.deep.equal([added]);
-      expect(sarif.runs[0]?.results.map((item) => item.baselineState)).to.deep.equal(['unchanged', 'new']);
+      assertSarifOutput(result);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

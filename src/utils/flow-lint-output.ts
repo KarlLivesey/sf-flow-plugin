@@ -11,22 +11,34 @@ import { z } from 'zod';
 
 import { flowLintFailed } from '../errors/flow-errors.js';
 import type { FlowLintFinding, FlowLintResult } from '../types/flow-lint.js';
+import { legacyFlowLintFingerprint } from './flow-lint-fingerprint.js';
 
-const findingSchema = z.object({
-  rule: z.enum([
-    'dml-inside-loop',
-    'hard-coded-id',
-    'inactive-subflow',
-    'missing-fault-path',
-    'missing-subflow',
-    'unconnected-element',
-    'unused-resource',
-  ]),
-  severity: z.enum(['error', 'warning']),
-  message: z.string(),
-  element: z.string().nullable(),
-  path: z.string().nullable(),
-});
+const findingSchema = z
+  .object({
+    fingerprint: z
+      .string()
+      .regex(/^[\da-f]{64}$/u)
+      .optional(),
+    rule: z.enum([
+      'dml-inside-loop',
+      'hard-coded-id',
+      'inactive-subflow',
+      'missing-fault-path',
+      'missing-subflow',
+      'unconnected-element',
+      'unused-resource',
+    ]),
+    severity: z.enum(['error', 'warning']),
+    message: z.string(),
+    element: z.string().nullable(),
+    path: z.string().nullable(),
+  })
+  .transform(
+    (finding): FlowLintFinding => ({
+      ...finding,
+      fingerprint: finding.fingerprint ?? legacyFlowLintFingerprint(finding),
+    })
+  );
 
 const baselineSchema = z.union([
   z.array(findingSchema),
@@ -34,7 +46,7 @@ const baselineSchema = z.union([
 ]);
 
 function findingKey(finding: FlowLintFinding): string {
-  return JSON.stringify([finding.rule, finding.message, finding.element, finding.path]);
+  return finding.fingerprint;
 }
 
 function classifyFindings(result: FlowLintResult, baseline: ReadonlyArray<FlowLintFinding>): FlowLintResult {
@@ -88,7 +100,12 @@ export function formatFlowLintHuman(result: FlowLintResult): string {
 }
 
 interface SarifLocation {
-  physicalLocation: { artifactLocation: { uri: string } };
+  logicalLocations: Array<{
+    name: string;
+    fullyQualifiedName: string;
+    kind: 'flowElement' | 'metadataPath';
+  }>;
+  properties?: { metadataPath: string };
 }
 
 interface SarifResult {
@@ -96,17 +113,36 @@ interface SarifResult {
   level: 'error' | 'warning';
   message: { text: string };
   baselineState: 'new' | 'unchanged';
+  partialFingerprints: { 'sf-flow-plugin/v1': string };
   locations?: SarifLocation[];
 }
 
-function sarifResult(finding: FlowLintFinding, baseline: ReadonlySet<string>): SarifResult {
+function sarifLocation(apiName: string, finding: FlowLintFinding): SarifLocation | null {
   const location = finding.path ?? finding.element;
+  if (location === null) {
+    return null;
+  }
+  return {
+    logicalLocations: [
+      {
+        name: location,
+        fullyQualifiedName: `${apiName}:${location}`,
+        kind: finding.path === null ? 'flowElement' : 'metadataPath',
+      },
+    ],
+    ...(finding.path === null ? {} : { properties: { metadataPath: finding.path } }),
+  };
+}
+
+function sarifResult(apiName: string, finding: FlowLintFinding, baseline: ReadonlySet<string>): SarifResult {
+  const location = sarifLocation(apiName, finding);
   return {
     ruleId: finding.rule,
     level: finding.severity,
     message: { text: finding.message },
     baselineState: baseline.has(findingKey(finding)) ? 'unchanged' : 'new',
-    ...(location === null ? {} : { locations: [{ physicalLocation: { artifactLocation: { uri: location } } }] }),
+    partialFingerprints: { 'sf-flow-plugin/v1': finding.fingerprint },
+    ...(location === null ? {} : { locations: [location] }),
   };
 }
 
@@ -125,7 +161,7 @@ export function formatFlowLintSarif(result: FlowLintResult): string {
               rules: [...new Set(result.findings.map((finding) => finding.rule))].sort().map((id) => ({ id })),
             },
           },
-          results: result.findings.map((finding) => sarifResult(finding, baseline)),
+          results: result.findings.map((finding) => sarifResult(result.apiName, finding, baseline)),
         },
       ],
     },

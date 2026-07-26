@@ -96,6 +96,9 @@
     "FlowLintFinding": {
       "type": "object",
       "properties": {
+        "fingerprint": {
+          "type": "string"
+        },
         "rule": {
           "$ref": "#/definitions/FlowLintRule"
         },
@@ -112,7 +115,7 @@
           "type": ["string", "null"]
         }
       },
-      "required": ["rule", "severity", "message", "element", "path"],
+      "required": ["fingerprint", "rule", "severity", "message", "element", "path"],
       "additionalProperties": false
     },
     "FlowLintRule": {
