@@ -22,8 +22,8 @@ All notable user-visible changes to this project will be documented in this file
   metadata, `package.xml`, selected-version manifest, dependency report and external dependency list. Incomplete
   traversal is refused, while overwrite uses per-root ownership checks, confined regular-file targets, staged writes,
   stale-file reconciliation and rollback.
-- Added lint rule selection, exclusions, severity-based CI failures, SARIF output, report files and baselines that
-  separate existing findings from new findings.
+- Added lint rule selection, exclusions, severity-based CI failures, SARIF output, report files and baselines scoped
+  to the qualified Flow identity that separate existing findings from new findings.
 - Added repeatable Flow list filters, configurable sorting and result limits.
 - Added latest-version optimistic concurrency guards to activation, deactivation and pruning.
 - Added last-modified date filters to Flow version listings.

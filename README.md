@@ -178,8 +178,10 @@ The result reports stable rule names, severities, affected elements and metadata
 `--rule` or `--exclude-rule` filters to select checks, `--result-format sarif` for code-scanning integrations and
 `--fail-on` to make new findings affect the process exit code.
 
-A baseline suppresses matching existing findings from the CI exit decision without hiding them. Baseline findings
-remain visible separately from new findings.
+A baseline suppresses matching existing findings from the CI exit decision without hiding them. The baseline must be
+a complete JSON lint result for the same qualified Flow: the plugin validates both `apiName` and `namespace` before
+matching fingerprints. Bare findings arrays and partial `{ "findings": [...] }` objects are rejected because they
+cannot establish which Flow they belong to. Baseline findings remain visible separately from new findings.
 
 ## `sf flow list`
 
