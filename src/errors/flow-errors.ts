@@ -6,7 +6,8 @@
  */
 import { SfError } from '@salesforce/core';
 
-import type { FlowErrorCode, FlowVersionSelector } from '../types/flow.js';
+import type { FlowErrorCode } from '../types/flow-errors.js';
+import type { FlowVersionSelector } from '../types/flow.js';
 
 interface FlowErrorOptions {
   code: FlowErrorCode;
@@ -217,5 +218,14 @@ export function flowPruneVerificationFailed(apiName: string): SfError {
     code: 'FlowPruneVerificationFailed',
     message: `Salesforce still reports one or more deleted versions for Flow "${apiName}".`,
     action: 'Query the Flow versions in Salesforce and retry the prune operation.',
+  });
+}
+
+export function flowBundleFailed(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowBundleFailed',
+    message,
+    action: 'Review the selected Flow versions, dependencies and output directory, then run the command again.',
+    ...(cause === undefined ? {} : { cause }),
   });
 }

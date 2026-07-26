@@ -6,6 +6,10 @@ Activating Flow
 
 Auditing Flows
 
+# actions.bundle
+
+Bundling Flow source
+
 # actions.compare
 
 Comparing Flow versions
@@ -81,6 +85,10 @@ Deleting Flow versions
 # stages.verifying-change
 
 Verifying result
+
+# stages.writing-files
+
+Writing files
 
 # stages.loading-dependencies
 
