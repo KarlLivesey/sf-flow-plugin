@@ -1,11 +1,9 @@
 name: release
 
 on:
-  pull_request_target:
+  push:
     branches:
       - main
-    types:
-      - closed
 
 concurrency:
   group: release-main
@@ -14,18 +12,17 @@ concurrency:
 permissions:
   contents: write
   id-token: write
+  pull-requests: read
 
 jobs:
   publish:
     name: npm and GitHub
-    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
       - name: Check out the merged commit
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
 
       - name: Use Node.js 24
         uses: actions/setup-node@v6
@@ -34,10 +31,41 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
+      - name: Resolve the merged release pull request
+        id: pull-request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_COMMIT: ${{ github.sha }}
+        shell: bash
+        run: |
+          pull_requests_file="${RUNNER_TEMP}/associated-pull-requests.json"
+          gh api \
+            --header 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/commits/${MERGE_COMMIT}/pulls" \
+            > "$pull_requests_file"
+
+          PULL_REQUESTS_FILE="$pull_requests_file" node <<'NODE'
+          const { appendFileSync, readFileSync } = require('node:fs');
+          const pullRequests = JSON.parse(readFileSync(process.env.PULL_REQUESTS_FILE, 'utf8'));
+          const releasePullRequest = pullRequests.find(
+            (pullRequest) =>
+              pullRequest.merged_at !== null &&
+              pullRequest.base?.ref === 'main' &&
+              pullRequest.merge_commit_sha === process.env.MERGE_COMMIT
+          );
+
+          if (!releasePullRequest) {
+            throw new Error(`Commit ${process.env.MERGE_COMMIT} is not a merged pull request into main.`);
+          }
+
+          appendFileSync(process.env.GITHUB_OUTPUT, `base-branch=${releasePullRequest.base.ref}\n`);
+          appendFileSync(process.env.GITHUB_OUTPUT, `head-branch=${releasePullRequest.head.ref}\n`);
+          NODE
+
       - name: Validate the release branch and package version
         env:
-          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
-          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          BASE_BRANCH: ${{ steps.pull-request.outputs.base-branch }}
+          HEAD_BRANCH: ${{ steps.pull-request.outputs.head-branch }}
         run: node .github/scripts/validate-release-version.mjs "$BASE_BRANCH" "$HEAD_BRANCH"
 
       - name: Resolve release metadata
@@ -85,27 +113,40 @@ jobs:
       - name: Inspect the release tag
         id: tag
         env:
-          PUBLISH_NEEDED: ${{ steps.publication.outputs.publish-needed }}
+          PACKAGE_VERSION: ${{ steps.release.outputs.package-version }}
           RELEASE_TAG: ${{ steps.release.outputs.release-tag }}
         shell: bash
         run: |
           if git rev-parse --verify --quiet "refs/tags/${RELEASE_TAG}" >/dev/null; then
             current_commit="$(git rev-parse HEAD)"
             tagged_commit="$(git rev-list -n 1 "$RELEASE_TAG")"
-            if [ "$tagged_commit" = "$current_commit" ]; then
-              echo "Release tag ${RELEASE_TAG} already points to this commit."
-              echo "tag-current=true" >> "$GITHUB_OUTPUT"
-            elif [ "$PUBLISH_NEEDED" = "true" ]; then
-              echo "Release tag ${RELEASE_TAG} points to ${tagged_commit}, not ${current_commit}." >&2
+            tagged_version="$(
+              git show "${RELEASE_TAG}:package.json" |
+                node -e 'let source = ""; process.stdin.setEncoding("utf8"); process.stdin.on("data", (chunk) => { source += chunk; }); process.stdin.on("end", () => { process.stdout.write(JSON.parse(source).version); });'
+            )"
+
+            if [ "$tagged_version" != "$PACKAGE_VERSION" ]; then
+              echo "Release tag ${RELEASE_TAG} contains package version ${tagged_version}." >&2
               exit 1
-            else
-              echo "Release tag ${RELEASE_TAG} belongs to an earlier published commit."
-              echo "tag-current=false" >> "$GITHUB_OUTPUT"
             fi
+
+            if ! git merge-base --is-ancestor "$tagged_commit" "$current_commit"; then
+              echo "Release tag ${RELEASE_TAG} does not belong to the current main history." >&2
+              exit 1
+            fi
+
+            echo "Release tag ${RELEASE_TAG} points to verified commit ${tagged_commit}."
+            echo "tag-exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "Release tag ${RELEASE_TAG} does not exist."
-            echo "tag-current=false" >> "$GITHUB_OUTPUT"
+            echo "tag-exists=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Check out the tagged release source
+        if: steps.publication.outputs.publish-needed == 'true' && steps.tag.outputs.tag-exists == 'true'
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.release-tag }}
+        run: git checkout --detach "$RELEASE_TAG"
 
       - name: Install pinned release tools
         if: steps.publication.outputs.publish-needed == 'true'
@@ -125,8 +166,8 @@ jobs:
           RELEASE_TAG: ${{ steps.release.outputs.release-tag }}
         shell: bash
         run: |
-          if [ "${{ steps.tag.outputs.tag-current }}" = "true" ]; then
-            echo "Release tag ${RELEASE_TAG} already points to this commit."
+          if [ "${{ steps.tag.outputs.tag-exists }}" = "true" ]; then
+            echo "Release tag ${RELEASE_TAG} already exists."
           else
             git config user.name github-actions[bot]
             git config user.email 41898282+github-actions[bot]@users.noreply.github.com
@@ -139,7 +180,7 @@ jobs:
         run: npm publish --access public --tag "${{ steps.release.outputs.dist-tag }}"
 
       - name: Create stable GitHub release
-        if: (steps.publication.outputs.publish-needed == 'true' || steps.tag.outputs.tag-current == 'true') && steps.release.outputs.prerelease == 'false'
+        if: (steps.publication.outputs.publish-needed == 'true' || steps.tag.outputs.tag-exists == 'true') && steps.release.outputs.prerelease == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.release.outputs.release-tag }}
@@ -148,7 +189,7 @@ jobs:
             gh release create "$RELEASE_TAG" --generate-notes --title "$RELEASE_TAG" --verify-tag
 
       - name: Create prerelease on GitHub
-        if: (steps.publication.outputs.publish-needed == 'true' || steps.tag.outputs.tag-current == 'true') && steps.release.outputs.prerelease == 'true'
+        if: (steps.publication.outputs.publish-needed == 'true' || steps.tag.outputs.tag-exists == 'true') && steps.release.outputs.prerelease == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.release.outputs.release-tag }}
