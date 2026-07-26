@@ -135,9 +135,9 @@ async function loadDefinitions(
 async function loadVersions(
   gateway: FlowDefinitionGateway,
   definitions: ReadonlyArray<FlowDefinition>,
-  filtered: boolean
+  selectedByApiName: boolean
 ): Promise<ReadonlyArray<FlowVersion>> {
-  if (!filtered) {
+  if (!selectedByApiName) {
     return gateway.findAllVersions();
   }
   return (await Promise.all(definitions.map((definition) => gateway.findVersions(definition.id)))).flat();
@@ -196,9 +196,7 @@ async function resolveAudit(context: AuditResolutionContext): Promise<FlowAuditR
   progress('loading-flows', scope);
   const definitions = await loadDefinitions(gateway, request);
   progress('loading-versions', `${scope} (all versions)`);
-  const versions = groupVersions(
-    await loadVersions(gateway, definitions, request.apiNames.length > 0 || request.namespace !== undefined)
-  );
+  const versions = groupVersions(await loadVersions(gateway, definitions, request.apiNames.length > 0));
   const filteredDefinitions = filterDefinitionsByType(definitions, versions, request.types);
   progress('analysing-results', `${filteredDefinitions.length} Flow definitions`);
   const flows = createAuditEntries({ definitions: filteredDefinitions, versions, request, now });

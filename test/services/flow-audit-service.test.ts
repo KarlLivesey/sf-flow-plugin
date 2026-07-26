@@ -7,7 +7,18 @@
 import { expect } from 'chai';
 
 import { FlowAuditService } from '../../src/services/flow-audit-service.js';
+import type { FlowAuditResult } from '../../src/types/flow.js';
 import { expectErrorName, FakeFlowGateway, flowDefinition, flowVersion } from '../helpers/fake-flow-gateway.js';
+
+function expectNamespaceAudit(result: FlowAuditResult, gateway: FakeFlowGateway): void {
+  expect(result).to.deep.include({
+    definitionsScanned: 1,
+    namespace: 'example',
+    types: ['AutoLaunchedFlow'],
+  });
+  expect(result.flows[0]?.apiName).to.equal('Matching_Flow');
+  expect([gateway.allVersionQueries, gateway.versionQueries]).to.deep.equal([1, []]);
+}
 
 describe('FlowAuditService', (): void => {
   it('reports inactive, behind, draft and obsolete Flow states', async (): Promise<void> => {
@@ -158,17 +169,14 @@ describe('FlowAuditService type and namespace filtering', (): void => {
       }),
       namespace: 'example',
     };
-    const result = await new FlowAuditService(
-      new FakeFlowGateway([matching, other], [matchingVersion, otherVersion])
-    ).audit({
+    const gateway = new FakeFlowGateway([matching, other], [matchingVersion, otherVersion]);
+    const result = await new FlowAuditService(gateway).audit({
       targetOrg: 'admin@example.com',
       apiNames: [],
       types: ['AutoLaunchedFlow'],
       namespace: 'example',
       maxInactiveVersions: 0,
     });
-    expect(result).to.include({ definitionsScanned: 1, namespace: 'example' });
-    expect(result.types).to.deep.equal(['AutoLaunchedFlow']);
-    expect(result.flows[0]?.apiName).to.equal('Matching_Flow');
+    expectNamespaceAudit(result, gateway);
   });
 });
