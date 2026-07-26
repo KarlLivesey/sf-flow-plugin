@@ -5,6 +5,7 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import type { FlowDependenciesResult, FlowDependency } from '../types/flow-analysis.js';
+import { qualifiedFlowName } from './flow-state.js';
 
 function target(dependency: FlowDependency): string {
   const name = dependency.name ?? dependency.componentId ?? 'unknown';
@@ -44,7 +45,7 @@ function renderTable(result: FlowDependenciesResult): string {
 
 function renderTree(result: FlowDependenciesResult): string {
   return [
-    result.apiName,
+    qualifiedFlowName(result.apiName, result.namespace),
     ...result.dependencies.map((dependency) => {
       const edge = dependency.direction === 'uses' ? 'uses ->' : '<- used by';
       return `  [depth ${dependency.depth}] ${source(dependency)} ${edge} ${target(dependency)}`;

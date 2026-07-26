@@ -159,6 +159,12 @@ describe('Flow comparison renderer structure', (): void => {
 });
 
 describe('Flow dependency renderer structure', (): void => {
+  it('uses the qualified root name when a managed Flow has no dependencies', (): void => {
+    expect(renderFlowDependencies({ ...dependencies, namespace: 'managed', dependencies: [] }, 'tree')).to.equal(
+      'managed__Order_Processing'
+    );
+  });
+
   it('identifies the source Flow on every tree edge', (): void => {
     const tree = renderFlowDependencies(dependencies, 'tree');
     expect(tree).to.contain('[depth 0] Order_Processing uses -> CustomObject:Account');
