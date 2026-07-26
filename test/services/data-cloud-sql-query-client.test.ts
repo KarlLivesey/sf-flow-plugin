@@ -114,6 +114,22 @@ describe('DataCloudSqlQueryClient pagination and completion', (): void => {
     expect(records).to.deep.equal([{ flowId: 'flow-1' }]);
     expect(connection.requests).to.have.length(2);
   });
+});
+
+describe('DataCloudSqlQueryClient terminal responses', (): void => {
+  it('accepts the uppercase finished status returned by Query Connect', async (): Promise<void> => {
+    const connection = new QueryConnectionDouble([
+      {
+        ...queryResponse('FINISHED', 1),
+        data: [['flow-1']],
+        metadata: [{ name: 'flowId' }],
+        returnedRows: 1,
+      },
+    ]);
+    const records = await new DataCloudSqlQueryClient(connection.asConnection()).query('SELECT flowId FROM Flow');
+    expect(records).to.deep.equal([{ flowId: 'flow-1' }]);
+    expect(connection.requests).to.have.length(1);
+  });
 
   it('rejects an initially failed query even when progress is complete', async (): Promise<void> => {
     await expectFailedQuery([queryResponse('FAILED', 0, 1)], 'failed');
