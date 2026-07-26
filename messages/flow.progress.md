@@ -22,6 +22,10 @@ Resolving Flow dependencies
 
 Describing Flow
 
+# actions.export
+
+Exporting Flow
+
 # actions.graph
 
 Generating Flow graph

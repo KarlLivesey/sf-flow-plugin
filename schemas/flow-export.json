@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowExportResult",
+  "definitions": {
+    "FlowExportResult": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "definitionId": {
+          "type": "string"
+        },
+        "requestedVersion": {
+          "$ref": "#/definitions/FlowComparisonVersionSelector"
+        },
+        "resolvedVersion": {
+          "$ref": "#/definitions/FlowVersionNumber"
+        },
+        "sourceStatus": {
+          "type": "string"
+        },
+        "exportedStatus": {
+          "type": "string",
+          "enum": ["Active", "Draft"]
+        },
+        "format": {
+          "$ref": "#/definitions/FlowExportFormat"
+        },
+        "outputFile": {
+          "type": "string"
+        },
+        "bytes": {
+          "type": "number"
+        },
+        "targetOrg": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "apiName",
+        "namespace",
+        "definitionId",
+        "requestedVersion",
+        "resolvedVersion",
+        "sourceStatus",
+        "exportedStatus",
+        "format",
+        "outputFile",
+        "bytes",
+        "targetOrg"
+      ],
+      "additionalProperties": false
+    },
+    "FlowComparisonVersionSelector": {
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "active"
+        },
+        {
+          "type": "string",
+          "const": "latest"
+        },
+        {
+          "$ref": "#/definitions/FlowVersionNumber"
+        }
+      ]
+    },
+    "FlowVersionNumber": {
+      "type": "number"
+    },
+    "FlowExportFormat": {
+      "type": "string",
+      "const": "xml"
+    }
+  }
+}

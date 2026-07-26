@@ -36,6 +36,7 @@ export type FlowErrorCode =
   | 'FlowListFailed'
   | 'FlowDependenciesFailed'
   | 'FlowComparisonFailed'
+  | 'FlowExportFailed'
   | 'FlowInspectionFailed'
   | 'FlowLintFailed'
   | 'FlowPruneFailed'

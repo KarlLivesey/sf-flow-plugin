@@ -59,6 +59,7 @@ If `--target-org` is omitted, the command uses the Salesforce CLI `target-org` c
 | `sf flow compare`      | Compare the structure of two Flow versions.                     |
 | `sf flow dependencies` | Show indexed incoming and outgoing dependencies.                |
 | `sf flow describe`     | Summarise Flow resources, elements and referenced components.   |
+| `sf flow export`       | Export a Flow version as deployable source metadata.            |
 | `sf flow graph`        | Render Flow connectors and recursive subflow calls.             |
 | `sf flow lint`         | Run static checks against a Flow version.                       |
 | `sf flow deactivate`   | Deactivate a Flow and verify the resulting state.               |
@@ -66,6 +67,44 @@ If `--target-org` is omitted, the command uses the Salesforce CLI `target-org` c
 | `sf flow prune`        | Safely plan or delete old inactive Flow versions.               |
 
 Commands show an automatic Salesforce-style progress spinner while they query or mutate the org. Each stage identifies the Flow and relevant version or version scope. Progress output is suppressed automatically when `--json` is used.
+
+## `sf flow export`
+
+```bash
+sf flow export \
+  --api-name My_Flow \
+  [--target-org ORG] \
+  [--flow-version active|latest|NUMBER] \
+  [--format xml] \
+  [--status draft|active] \
+  --output-file force-app/main/default/flows/My_Flow.flow-meta.xml \
+  [--namespace NAMESPACE] \
+  [--api-version VERSION] \
+  [--json]
+```
+
+Export a particular Flow version as deployable Salesforce source metadata:
+
+```bash
+sf flow export \
+  --api-name My_Flow \
+  --flow-version 7 \
+  --format xml \
+  --output-file force-app/main/default/flows/My_Flow.flow-meta.xml
+```
+
+The selected source version defaults to `active`, and the status written into the file defaults to `Draft`. Use
+`--status active` only when the destination should activate the Flow during deployment. Existing output files are
+replaced and missing parent directories are created.
+
+The resulting file can be deployed directly:
+
+```bash
+sf project deploy start \
+  --source-dir force-app/main/default/flows/My_Flow.flow-meta.xml
+```
+
+Dependencies such as Apex classes, objects and subflows are not bundled.
 
 ## `sf flow lint`
 

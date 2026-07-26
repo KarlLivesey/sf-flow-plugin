@@ -168,6 +168,15 @@ export function flowComparisonFailed(message: string, cause?: unknown): SfError 
   });
 }
 
+export function flowExportFailed(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowExportFailed',
+    message,
+    action: 'Check the Flow version, output path and metadata read permissions, then run the command again.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
 export function flowInspectionFailed(message: string, cause?: unknown): SfError {
   return createFlowError({
     code: 'FlowInspectionFailed',

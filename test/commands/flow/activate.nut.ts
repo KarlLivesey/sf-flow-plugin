@@ -20,6 +20,7 @@ import type {
   FlowVersionsResult,
 } from '../../../src/types/flow.js';
 import type { FlowDescribeResult, FlowGraphResult } from '../../../src/types/flow-inspection.js';
+import { verifyExportDeployment } from '../../helpers/flow-export-nut.js';
 
 interface OrgSafetyResult {
   records: Array<{ IsSandbox: boolean; OrganizationType: string }>;
@@ -254,6 +255,11 @@ describe('Flow inspection command NUTs', (): void => {
     expect(output.result.graph).to.include('Assignment: Set Output');
     expect(output.result.graph).to.include('Variable: Result');
     expect(output.result.graph).to.include('Resources');
+  });
+
+  it('exports Flow XML accepted by a Metadata API deployment dry run', async (): Promise<void> => {
+    const result = await verifyExportDeployment(requireTargetOrg());
+    expect(result).to.include({ apiName: 'Plugin_Test_Flow', exportedStatus: 'Draft' });
   });
 });
 
