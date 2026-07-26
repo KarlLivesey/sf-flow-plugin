@@ -76,8 +76,12 @@ function page(records: Array<Record<string, unknown>>): QueryResponse {
   };
 }
 
-function dmoNotFound(): Error & { statusCode: number } {
-  return Object.assign(new Error('Not found'), { statusCode: 404 });
+function dmoNotFound(): Error & { data: Record<string, never>; errorCode: string } {
+  return Object.assign(new Error('Not found'), {
+    data: {},
+    errorCode: 'ERROR_HTTP_404',
+    name: 'ERROR_HTTP_404',
+  });
 }
 
 function standardFlowRecord(): Record<string, unknown> {
