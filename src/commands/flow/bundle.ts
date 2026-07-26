@@ -119,7 +119,7 @@ export default class FlowBundle extends SfCommand<FlowBundleResult> {
       await withFlowProgressStage(progress, {
         stage: 'writing-files',
         detail: `${artifact.files.length} files to ${request.outputDir}`,
-        operation: async () => writeFlowBundleFiles(artifact.files, request.overwrite),
+        operation: async () => writeFlowBundleFiles(artifact.files, request.overwrite, request.outputDir),
       });
       return artifact.result;
     });
