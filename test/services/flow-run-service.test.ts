@@ -18,6 +18,7 @@ class FakeInvocationGateway implements FlowInvocationGateway {
   public readonly invoked: JsonObject[][] = [];
   public availabilityChecks: string[] = [];
   public production = false;
+  public onAvailabilityCheck: (() => Promise<void>) | undefined;
   public results: FlowActionResult[] = [
     { errors: [], invocationId: 'interview-1', isSuccess: true, outputValues: { discount: 10 }, version: 1 },
   ];
@@ -28,6 +29,7 @@ class FakeInvocationGateway implements FlowInvocationGateway {
 
   public async assertFlowActionAvailable(apiName: string): Promise<void> {
     this.availabilityChecks.push(apiName);
+    await this.onAvailabilityCheck?.();
   }
 
   public async invokeFlow(_apiName: string, inputs: ReadonlyArray<JsonObject>): Promise<FlowActionResult[]> {
@@ -121,13 +123,55 @@ describe('FlowRunService execution', (): void => {
     const result = await new FlowRunService(fake).run(request());
     expect(result.successful).to.equal(false);
     expect(result.invocations[0]?.errors).to.deep.equal([
-      { message: 'plain error', code: null },
-      { message: 'structured error', code: 'FLOW_ERROR' },
+      { message: 'Salesforce reported a Flow error; message redacted.', code: null },
+      { message: 'Salesforce reported a Flow error; message redacted.', code: 'FLOW_ERROR' },
     ]);
   });
 });
 
+describe('FlowRunService batch execution', (): void => {
+  it('submits multiple inputs in one action request and preserves result order', async (): Promise<void> => {
+    const fake = gateways();
+    fake.invocation.results = [
+      { errors: [], invocationId: 'first', isSuccess: true, outputValues: { discount: 10 }, version: 1 },
+      { errors: [], invocationId: 'second', isSuccess: true, outputValues: { discount: 20 }, version: 1 },
+    ];
+    const invocations = [{ percentage: '10' }, { percentage: '20' }];
+    const result = await new FlowRunService(fake).run(request({ invocations }));
+    expect(fake.invocation.invoked).to.deep.equal([[{ percentage: 10 }, { percentage: 20 }]]);
+    expect(result.invocations.map((invocation) => invocation.interviewId)).to.deep.equal(['first', 'second']);
+  });
+
+  it('rejects an invocation result count that does not match the submitted inputs', async (): Promise<void> => {
+    const fake = gateways();
+    fake.invocation.results = [];
+    await expectErrorName(new FlowRunService(fake).run(request()), 'FlowInvocationFailed');
+    expect(fake.invocation.invoked).to.have.length(1);
+  });
+
+  it('reports the active version returned by the action request consistently', async (): Promise<void> => {
+    const fake = gateways();
+    fake.invocation.results = [
+      { errors: [], invocationId: 'interview-2', isSuccess: true, outputValues: {}, version: 2 },
+      { errors: [], invocationId: 'interview-3', isSuccess: true, outputValues: {} },
+    ];
+    const result = await new FlowRunService(fake).run(
+      request({ invocations: [{ percentage: '10' }, { percentage: '20' }] })
+    );
+    expect(result.version).to.equal(2);
+    expect(result.invocations.map((invocation) => invocation.version)).to.deep.equal([2, 2]);
+  });
+});
+
 describe('FlowRunService safety', (): void => {
+  it('rejects more than the platform batch limit before querying or execution', async (): Promise<void> => {
+    const fake = gateways();
+    const invocations = Array.from({ length: 201 }, () => ({}));
+    await expectErrorName(new FlowRunService(fake).run(request({ invocations })), 'FlowInputInvalid');
+    expect(fake.definition.versionQueries).to.deep.equal([]);
+    expect(fake.invocation.invoked).to.deep.equal([]);
+  });
+
   it('performs permission preflight without execution during dry-run', async (): Promise<void> => {
     const fake = gateways();
     fake.invocation.production = true;
@@ -151,6 +195,44 @@ describe('FlowRunService safety', (): void => {
     const result = await new FlowRunService(fake).run(request({ confirm: true }));
     expect(result).to.include({ production: true, successful: true });
     expect(fake.invocation.invoked).to.have.length(1);
+  });
+});
+
+describe('FlowRunService active-version guard', (): void => {
+  it('refuses execution when the active version changes during preflight', async (): Promise<void> => {
+    const first = runnableVersion();
+    const second = { ...flowVersion(definitionId, 2, 'Active'), processType: 'AutoLaunchedFlow' };
+    const definition = new FakeFlowGateway(
+      [
+        flowDefinition({
+          id: definitionId,
+          apiName: 'Calculate_Discount',
+          activeVersionId: first.id,
+          latestVersionId: second.id,
+        }),
+      ],
+      [first, second]
+    );
+    definition.metadata.set(first.id, {
+      variables: [
+        {
+          name: 'percentage',
+          dataType: 'Number',
+          isCollection: false,
+          isInput: true,
+          isOutput: false,
+        },
+      ],
+    });
+    const invocation = new FakeInvocationGateway();
+    invocation.onAvailabilityCheck = async (): Promise<void> => {
+      await definition.setActiveVersion(definitionId, 2);
+    };
+    await expectErrorName(
+      new FlowRunService({ definition, invocation }).run(request({ invocations: [{ percentage: '10' }] })),
+      'FlowInvocationFailed'
+    );
+    expect(invocation.invoked).to.deep.equal([]);
   });
 });
 
