@@ -41,7 +41,7 @@ Write the human-readable or SARIF lint report to this file.
 
 # flags.baseline.summary
 
-JSON lint result or findings file whose matching findings are excluded from the CI exit decision.
+Complete JSON lint result for the same qualified Flow whose matching findings are excluded from the CI exit decision.
 
 # flags.namespace.summary
 

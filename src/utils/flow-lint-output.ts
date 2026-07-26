@@ -10,12 +10,20 @@ import { dirname, resolve } from 'node:path';
 import { z } from 'zod';
 
 import { flowLintFailed } from '../errors/flow-errors.js';
+import { flowApiNameSchema, namespaceSchema } from '../schemas/flow.js';
 import type { FlowLintFinding, FlowLintResult } from '../types/flow-lint.js';
 import { legacyFlowLintFingerprint } from './flow-lint-fingerprint.js';
+import { qualifiedFlowName } from './flow-state.js';
 
 interface BaselineFinding {
   finding: FlowLintFinding;
   legacyMessageKey: string | null;
+}
+
+interface FlowLintBaseline {
+  apiName: string;
+  namespace: string | null;
+  findings: BaselineFinding[];
 }
 
 function legacyMessageKey(finding: Omit<FlowLintFinding, 'fingerprint'>): string {
@@ -53,10 +61,12 @@ const findingSchema = z
     };
   });
 
-const baselineSchema = z.union([
-  z.array(findingSchema),
-  z.object({ findings: z.array(findingSchema) }).transform((value) => value.findings),
-]);
+// A complete result identity is required so a findings-only file cannot suppress another Flow's findings.
+const baselineSchema: z.ZodType<FlowLintBaseline> = z.object({
+  apiName: flowApiNameSchema,
+  namespace: namespaceSchema.nullable(),
+  findings: z.array(findingSchema),
+});
 
 function findingKey(finding: FlowLintFinding): string {
   return finding.fingerprint;
@@ -80,21 +90,36 @@ function classifyFindings(result: FlowLintResult, baseline: ReadonlyArray<Baseli
   };
 }
 
-async function readBaseline(file: string): Promise<BaselineFinding[]> {
+function assertBaselineScope(result: FlowLintResult, baseline: FlowLintBaseline, file: string): void {
+  if (baseline.apiName === result.apiName && baseline.namespace === result.namespace) {
+    return;
+  }
+  throw flowLintFailed(
+    `Flow lint baseline "${file}" is scoped to Flow "${qualifiedFlowName(
+      baseline.apiName,
+      baseline.namespace
+    )}", not "${qualifiedFlowName(result.apiName, result.namespace)}".`
+  );
+}
+
+async function readBaseline(file: string, result: FlowLintResult): Promise<BaselineFinding[]> {
   const resolved = resolve(file);
+  let baseline: FlowLintBaseline;
   try {
     const content = await readFile(resolved, 'utf8');
-    return baselineSchema.parse(JSON.parse(content) as unknown);
+    baseline = baselineSchema.parse(JSON.parse(content) as unknown);
   } catch (error: unknown) {
     throw flowLintFailed(`Could not read a valid Flow lint baseline from "${resolved}".`, error);
   }
+  assertBaselineScope(result, baseline, resolved);
+  return baseline.findings;
 }
 
 export async function applyFlowLintBaseline(
   result: FlowLintResult,
   baselineFile: string | undefined
 ): Promise<FlowLintResult> {
-  return baselineFile === undefined ? result : classifyFindings(result, await readBaseline(baselineFile));
+  return baselineFile === undefined ? result : classifyFindings(result, await readBaseline(baselineFile, result));
 }
 
 function findingLine(finding: FlowLintFinding): string {
