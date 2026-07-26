@@ -72,7 +72,7 @@ const baselineSchema: z.ZodType<FlowLintBaseline> = z.union([
   scopedBaselineSchema,
   z
     .object({
-      status: z.literal(0),
+      status: z.union([z.literal(0), z.literal(1)]),
       result: scopedBaselineSchema,
       warnings: z.array(z.unknown()),
     })
@@ -143,7 +143,7 @@ function section(title: string, findings: ReadonlyArray<FlowLintFinding>): strin
 }
 
 export function formatFlowLintHuman(result: FlowLintResult): string {
-  const heading = `Flow lint: ${result.apiName} v${result.resolvedVersion}`;
+  const heading = `Flow lint: ${qualifiedFlowName(result.apiName, result.namespace)} v${result.resolvedVersion}`;
   return [
     heading,
     '='.repeat(heading.length),
@@ -171,7 +171,7 @@ interface SarifResult {
   locations?: SarifLocation[];
 }
 
-function sarifLocation(apiName: string, finding: FlowLintFinding): SarifLocation | null {
+function sarifLocation(flowName: string, finding: FlowLintFinding): SarifLocation | null {
   const location = finding.path ?? finding.element;
   if (location === null) {
     return null;
@@ -180,7 +180,7 @@ function sarifLocation(apiName: string, finding: FlowLintFinding): SarifLocation
     logicalLocations: [
       {
         name: location,
-        fullyQualifiedName: `${apiName}:${location}`,
+        fullyQualifiedName: `${flowName}:${location}`,
         kind: finding.path === null ? 'flowElement' : 'metadataPath',
       },
     ],
@@ -188,8 +188,8 @@ function sarifLocation(apiName: string, finding: FlowLintFinding): SarifLocation
   };
 }
 
-function sarifResult(apiName: string, finding: FlowLintFinding, baseline: ReadonlySet<string>): SarifResult {
-  const location = sarifLocation(apiName, finding);
+function sarifResult(flowName: string, finding: FlowLintFinding, baseline: ReadonlySet<string>): SarifResult {
+  const location = sarifLocation(flowName, finding);
   return {
     ruleId: finding.rule,
     level: finding.severity,
@@ -202,6 +202,7 @@ function sarifResult(apiName: string, finding: FlowLintFinding, baseline: Readon
 
 export function formatFlowLintSarif(result: FlowLintResult): string {
   const baseline = new Set(result.baselineFindings.map(findingKey));
+  const flowName = qualifiedFlowName(result.apiName, result.namespace);
   return JSON.stringify(
     {
       $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
@@ -215,7 +216,7 @@ export function formatFlowLintSarif(result: FlowLintResult): string {
               rules: [...new Set(result.findings.map((finding) => finding.rule))].sort().map((id) => ({ id })),
             },
           },
-          results: result.findings.map((finding) => sarifResult(result.apiName, finding, baseline)),
+          results: result.findings.map((finding) => sarifResult(flowName, finding, baseline)),
         },
       ],
     },
