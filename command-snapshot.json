@@ -38,6 +38,31 @@
   },
   {
     "alias": [],
+    "command": "flow:check",
+    "flagAliases": [],
+    "flagChars": ["n", "o", "r"],
+    "flags": [
+      "allow-truncated",
+      "api-name",
+      "api-version",
+      "exclude",
+      "fail-on",
+      "flags-dir",
+      "flow-version",
+      "json",
+      "max-depth",
+      "namespace",
+      "only",
+      "output-file",
+      "recursive",
+      "result-format",
+      "subflow-version",
+      "target-org"
+    ],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
     "command": "flow:compare",
     "flagAliases": [],
     "flagChars": ["f", "n", "o", "t"],
@@ -187,6 +212,26 @@
     "flagAliases": [],
     "flagChars": ["o"],
     "flags": ["api-version", "flags-dir", "json", "target-org"],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
+    "command": "flow:metrics",
+    "flagAliases": [],
+    "flagChars": ["n", "o", "r"],
+    "flags": [
+      "api-name",
+      "api-version",
+      "flags-dir",
+      "flow-version",
+      "json",
+      "max-depth",
+      "namespace",
+      "output-file",
+      "recursive",
+      "subflow-version",
+      "target-org"
+    ],
     "plugin": "sf-flow-plugin"
   },
   {
