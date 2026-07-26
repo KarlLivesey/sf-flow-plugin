@@ -23,6 +23,7 @@ import {
   flowContracts,
   lintCheckFindings,
   selectedFlowChecks,
+  subflowCheckFindings,
   traversalCheckFindings,
   versionCheckFindings,
 } from '../utils/flow-check-analysis.js';
@@ -124,9 +125,7 @@ function lintRules(checks: ReadonlyArray<FlowCheckKind>): {
 function entryFindings(checks: ReadonlyArray<FlowCheckKind>, data: CheckData): FlowCheckFinding[] {
   return [
     ...(hasCheck(checks, 'lint') ? data.lintResults.flatMap((result) => lintCheckFindings(result, 'lint')) : []),
-    ...(hasCheck(checks, 'subflows')
-      ? [...data.lintResults.flatMap((result) => lintCheckFindings(result, 'subflows')), ...data.traversalFindings]
-      : []),
+    ...(hasCheck(checks, 'subflows') ? subflowCheckFindings(data.lintResults, data.traversalFindings) : []),
     ...(hasCheck(checks, 'dependencies') ? data.dependencyFindings : []),
     ...(hasCheck(checks, 'versions') ? data.versionFindings : []),
   ];

@@ -46,6 +46,18 @@ export function lintCheckFindings(result: FlowLintResult, check: 'lint' | 'subfl
     );
 }
 
+export function subflowCheckFindings(
+  lintResults: ReadonlyArray<FlowLintResult>,
+  traversalFindings: ReadonlyArray<FlowCheckFinding>
+): FlowCheckFinding[] {
+  const lintFindings = lintResults.flatMap((result) => lintCheckFindings(result, 'subflows'));
+  const traversalOwnsMissing = traversalFindings.some((item) => item.code === 'missing-subflow');
+  return [
+    ...lintFindings.filter((item) => item.code !== 'missing-subflow' || !traversalOwnsMissing),
+    ...traversalFindings,
+  ];
+}
+
 export function traversalCheckFindings(
   flow: { apiName: string; namespace: string | null; version: number },
   warnings: ReadonlyArray<FlowTraversalWarning>
