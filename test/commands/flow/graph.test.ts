@@ -30,7 +30,6 @@ const result: FlowGraphResult = {
   subflowVersion: 'latest',
   recursive: true,
   maxDepth: 4,
-  sections: [],
   flows: [],
   warnings: [],
   targetOrg: 'admin@example.com',

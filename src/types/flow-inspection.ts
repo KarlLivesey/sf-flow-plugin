@@ -192,7 +192,7 @@ export interface FlowTraversalWarning {
   path: string[];
 }
 
-export interface FlowDescribeResult {
+export interface FlowTraversalResult {
   apiName: string;
   namespace: string | null;
   requestedVersion: FlowComparisonVersionSelector;
@@ -200,13 +200,16 @@ export interface FlowDescribeResult {
   subflowVersion: FlowSubflowVersionSelector;
   recursive: boolean;
   maxDepth: number;
-  sections: FlowDescribeSection[];
   flows: FlowDescription[];
   warnings: FlowTraversalWarning[];
   targetOrg: string;
 }
 
-export interface FlowGraphResult extends FlowDescribeResult {
+export interface FlowDescribeResult extends FlowTraversalResult {
+  sections: FlowDescribeSection[];
+}
+
+export interface FlowGraphResult extends FlowTraversalResult {
   format: FlowGraphFormat;
   includeVariables: boolean;
   includeFormulas: boolean;
