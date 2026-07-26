@@ -19,6 +19,8 @@ export type FlowProgressAction =
   | 'describe'
   | 'export'
   | 'graph'
+  | 'lint'
+  | 'list'
   | 'prune'
   | 'versions';
 
@@ -50,6 +52,8 @@ const actionMessages: Record<FlowProgressAction, string> = {
   describe: messages.getMessage('actions.describe'),
   export: messages.getMessage('actions.export'),
   graph: messages.getMessage('actions.graph'),
+  lint: messages.getMessage('actions.lint'),
+  list: messages.getMessage('actions.list'),
   prune: messages.getMessage('actions.prune'),
   versions: messages.getMessage('actions.versions'),
 };

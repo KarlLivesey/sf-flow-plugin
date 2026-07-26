@@ -20,6 +20,7 @@ import {
 } from '../schemas/flow.js';
 import type {
   FlowDependencyQueryDirection,
+  FlowDependencyQueryResult,
   IndexedFlowDependency,
   JsonObject,
   MetadataComponentDependencyRecord,
@@ -208,13 +209,17 @@ export class ToolingFlowDefinitionGateway implements FlowDefinitionGateway {
     definitionId: string,
     direction: FlowDependencyQueryDirection,
     types: ReadonlyArray<string>
-  ): Promise<ReadonlyArray<IndexedFlowDependency>> {
+  ): Promise<FlowDependencyQueryResult> {
     validateSalesforceId(definitionId, 'Flow definition ID');
     if (!types.every((type) => flowDependencyTypeSchema.safeParse(type).success)) {
       throw flowQueryFailed('The metadata dependency type filter is invalid.');
     }
     const records = await this.queryAll(buildDependencyQuery(definitionId, direction, types));
-    return records.map((record) => parseDependency(record, direction));
+    return {
+      dependencies: records.map((record) => parseDependency(record, direction)),
+      reachedLimit: records.length === DEPENDENCY_QUERY_LIMIT,
+      limit: DEPENDENCY_QUERY_LIMIT,
+    };
   }
 
   public async getVersionMetadata(versionId: string): Promise<JsonObject> {

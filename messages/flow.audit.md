@@ -14,6 +14,14 @@ Username or alias of the target Salesforce org. Uses the configured default `tar
 
 API name of a Flow to audit. Repeat the flag to audit multiple named Flows instead of the whole org.
 
+# flags.type.summary
+
+Flow process type to audit. Repeat the flag to include multiple types.
+
+# flags.namespace.summary
+
+Namespace of the Flows to audit.
+
 # flags.fail-on-findings.summary
 
 Exit with status 1 when the audit reports one or more Flows with findings.
@@ -43,6 +51,10 @@ Salesforce API version to use for the Tooling API requests.
 - Audit two named Flows and fail CI when findings are present:
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --api-name Case_Routing --fail-on-findings
+
+- Audit only namespaced autolaunched Flows:
+
+  <%= config.bin %> <%= command.id %> --type AutoLaunchedFlow --namespace example
 
 - Report inactive-version accumulation only when more than five versions are at least 90 days old:
 

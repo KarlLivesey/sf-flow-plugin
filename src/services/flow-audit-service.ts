@@ -5,7 +5,12 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import { flowAuditFailed } from '../errors/flow-errors.js';
-import { nonnegativeIntegerSchema, positiveFlowVersionSchema } from '../schemas/flow.js';
+import {
+  flowProcessTypeSchema,
+  namespaceSchema,
+  nonnegativeIntegerSchema,
+  positiveFlowVersionSchema,
+} from '../schemas/flow.js';
 import type {
   FlowAuditEntry,
   FlowAuditIssueCode,
@@ -34,6 +39,13 @@ interface AuditResolutionContext {
   gateway: FlowDefinitionGateway;
   request: FlowAuditRequest;
   progress: FlowProgressReporter;
+  now: Date;
+}
+
+interface AuditEntryContext {
+  definitions: ReadonlyArray<FlowDefinition>;
+  versions: ReadonlyMap<string, ReadonlyArray<FlowVersion>>;
+  request: FlowAuditRequest;
   now: Date;
 }
 
@@ -100,21 +112,32 @@ function groupVersions(versions: ReadonlyArray<FlowVersion>): ReadonlyMap<string
 
 async function loadDefinitions(
   gateway: FlowDefinitionGateway,
-  apiNames: ReadonlyArray<string>
+  request: FlowAuditRequest
 ): Promise<ReadonlyArray<FlowDefinition>> {
-  if (apiNames.length === 0) {
-    return gateway.findAllDefinitions();
+  if (request.apiNames.length === 0) {
+    const definitions = await gateway.findAllDefinitions();
+    return request.namespace === undefined
+      ? definitions
+      : definitions.filter((definition) => definition.namespace === request.namespace);
   }
-  const uniqueNames = [...new Set(apiNames)];
-  return (await Promise.all(uniqueNames.map((apiName) => gateway.findDefinitions({ apiName })))).flat();
+  const uniqueNames = [...new Set(request.apiNames)];
+  return (
+    await Promise.all(
+      uniqueNames.map((apiName) =>
+        gateway.findDefinitions(
+          request.namespace === undefined ? { apiName } : { apiName, namespace: request.namespace }
+        )
+      )
+    )
+  ).flat();
 }
 
 async function loadVersions(
   gateway: FlowDefinitionGateway,
   definitions: ReadonlyArray<FlowDefinition>,
-  filtered: boolean
+  selectedByApiName: boolean
 ): Promise<ReadonlyArray<FlowVersion>> {
-  if (!filtered) {
+  if (!selectedByApiName) {
     return gateway.findAllVersions();
   }
   return (await Promise.all(definitions.map((definition) => gateway.findVersions(definition.id)))).flat();
@@ -123,23 +146,41 @@ async function loadVersions(
 function validateAuditRequest(request: FlowAuditRequest): void {
   if (
     !nonnegativeIntegerSchema.safeParse(request.maxInactiveVersions).success ||
-    (request.olderThanDays !== undefined && !positiveFlowVersionSchema.safeParse(request.olderThanDays).success)
+    (request.olderThanDays !== undefined && !positiveFlowVersionSchema.safeParse(request.olderThanDays).success) ||
+    !request.types.every((type) => flowProcessTypeSchema.safeParse(type).success) ||
+    (request.namespace !== undefined && !namespaceSchema.safeParse(request.namespace).success)
   ) {
-    throw flowAuditFailed('The Flow audit thresholds are invalid.');
+    throw flowAuditFailed('The Flow audit filters or thresholds are invalid.');
   }
 }
 
-async function resolveAudit(context: AuditResolutionContext): Promise<FlowAuditResult> {
-  const { gateway, request, progress, now } = context;
-  const scope = request.apiNames.length === 0 ? 'all Flow definitions' : request.apiNames.join(', ');
-  progress('loading-flows', scope);
-  const definitions = await loadDefinitions(gateway, request.apiNames);
-  progress('loading-versions', `${scope} (all versions)`);
-  const versions = groupVersions(await loadVersions(gateway, definitions, request.apiNames.length > 0));
-  progress('analysing-results', `${definitions.length} Flow definitions`);
+function filterDefinitionsByType(
+  definitions: ReadonlyArray<FlowDefinition>,
+  versions: ReadonlyMap<string, ReadonlyArray<FlowVersion>>,
+  types: ReadonlyArray<string>
+): ReadonlyArray<FlowDefinition> {
+  if (types.length === 0) {
+    return definitions;
+  }
+  const accepted = new Set(types);
+  return definitions.filter((definition) => {
+    const latest = (versions.get(definition.id) ?? []).find((version) => version.id === definition.latestVersionId);
+    return latest !== undefined && accepted.has(latest.processType);
+  });
+}
+
+function auditScope(request: FlowAuditRequest): string {
+  const names = request.apiNames.length === 0 ? 'all Flow definitions' : request.apiNames.join(', ');
+  const namespace = request.namespace === undefined ? '' : `; namespace ${request.namespace}`;
+  const types = request.types.length === 0 ? '' : `; types ${request.types.join(', ')}`;
+  return `${names}${namespace}${types}`;
+}
+
+function createAuditEntries(context: AuditEntryContext): FlowAuditEntry[] {
+  const { definitions, versions, request, now } = context;
   const inactiveCutoff =
     request.olderThanDays === undefined ? null : now.getTime() - request.olderThanDays * MILLISECONDS_PER_DAY;
-  const flows = definitions
+  return definitions
     .map((definition) =>
       createEntry(definition, versions.get(definition.id) ?? [], {
         maxInactiveVersions: request.maxInactiveVersions,
@@ -147,12 +188,26 @@ async function resolveAudit(context: AuditResolutionContext): Promise<FlowAuditR
       })
     )
     .filter((entry) => entry.issues.length > 0);
+}
+
+async function resolveAudit(context: AuditResolutionContext): Promise<FlowAuditResult> {
+  const { gateway, request, progress, now } = context;
+  const scope = auditScope(request);
+  progress('loading-flows', scope);
+  const definitions = await loadDefinitions(gateway, request);
+  progress('loading-versions', `${scope} (all versions)`);
+  const versions = groupVersions(await loadVersions(gateway, definitions, request.apiNames.length > 0));
+  const filteredDefinitions = filterDefinitionsByType(definitions, versions, request.types);
+  progress('analysing-results', `${filteredDefinitions.length} Flow definitions`);
+  const flows = createAuditEntries({ definitions: filteredDefinitions, versions, request, now });
   return {
     targetOrg: request.targetOrg,
-    definitionsScanned: definitions.length,
+    definitionsScanned: filteredDefinitions.length,
     flowsWithIssues: flows.length,
     maxInactiveVersions: request.maxInactiveVersions,
     olderThanDays: request.olderThanDays ?? null,
+    types: request.types,
+    namespace: request.namespace ?? null,
     flows,
   };
 }

@@ -33,10 +33,12 @@ export type FlowErrorCode =
   | 'FlowDeactivationFailed'
   | 'FlowDeactivationVerificationFailed'
   | 'FlowAuditFailed'
+  | 'FlowListFailed'
   | 'FlowDependenciesFailed'
   | 'FlowComparisonFailed'
   | 'FlowExportFailed'
   | 'FlowInspectionFailed'
+  | 'FlowLintFailed'
   | 'FlowPruneFailed'
   | 'FlowPruneVerificationFailed';
 
@@ -157,6 +159,27 @@ export interface FlowVersionSummary {
   latest: boolean;
 }
 
+export interface FlowListRequest {
+  targetOrg: string;
+}
+
+export interface FlowListEntry {
+  apiName: string;
+  namespace: string | null;
+  definitionId: string;
+  label: string | null;
+  processType: string | null;
+  activeVersion: FlowVersionNumber | null;
+  latestVersion: FlowVersionNumber | null;
+  status: string | null;
+  lastModifiedDate: string | null;
+}
+
+export interface FlowListResult {
+  targetOrg: string;
+  definitions: FlowListEntry[];
+}
+
 export interface FlowVersionsResult {
   apiName: string;
   namespace: string | null;
@@ -220,12 +243,16 @@ export interface FlowAuditResult {
   flowsWithIssues: number;
   maxInactiveVersions: number;
   olderThanDays: number | null;
+  types: string[];
+  namespace: string | null;
   flows: FlowAuditEntry[];
 }
 
 export interface FlowAuditRequest {
   targetOrg: string;
   apiNames: string[];
+  types: string[];
+  namespace?: string;
   maxInactiveVersions: number;
   olderThanDays?: number;
 }

@@ -17,6 +17,8 @@ function request(overrides: Partial<FlowCompareRequest> = {}): FlowCompareReques
   return {
     apiName: 'Order_Processing',
     targetOrg: 'admin@example.com',
+    fromOrg: 'admin@example.com',
+    toOrg: 'admin@example.com',
     from: 'active',
     to: 'latest',
     scopes: [],
@@ -57,5 +59,40 @@ describe('FlowComparisonService', (): void => {
 
   it('fails when an explicit version does not exist', async (): Promise<void> => {
     await expectErrorName(new FlowComparisonService(gateway()).compare(request({ from: 99 })), 'FlowVersionNotFound');
+  });
+});
+
+describe('FlowComparisonService cross-org comparisons', (): void => {
+  it('resolves and compares the Flow independently in each org', async (): Promise<void> => {
+    const source = gateway();
+    const targetDefinitionId = '300000000000101';
+    const targetVersion = flowVersion(targetDefinitionId, 4, 'Active');
+    const target = new FakeFlowGateway(
+      [
+        flowDefinition({
+          id: targetDefinitionId,
+          apiName: 'Order_Processing',
+          activeVersionId: targetVersion.id,
+          latestVersionId: targetVersion.id,
+        }),
+      ],
+      [targetVersion]
+    );
+    target.metadata.set(targetVersion.id, { status: 'Active', label: 'Target' });
+    const result = await new FlowComparisonService(source, target).compare(
+      request({
+        from: 'latest',
+        to: 'active',
+        fromOrg: 'developer@example.com',
+        toOrg: 'preprod@example.com',
+      })
+    );
+    expect(result).to.include({
+      fromDefinitionId: definitionId,
+      toDefinitionId: targetDefinitionId,
+      fromVersion: 2,
+      toVersion: 4,
+      crossOrg: true,
+    });
   });
 });

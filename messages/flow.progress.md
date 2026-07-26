@@ -30,6 +30,14 @@ Exporting Flow
 
 Generating Flow graph
 
+# actions.lint
+
+Linting Flow
+
+# actions.list
+
+Listing Flows
+
 # actions.prune
 
 Pruning Flow versions
