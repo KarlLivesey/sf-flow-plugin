@@ -6,6 +6,7 @@
     "@oclif/core": "^4",
     "@salesforce/core": "^8.2.7",
     "@salesforce/sf-plugins-core": "^12",
+    "filelist": "1.0.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -24,9 +25,6 @@
     "node": ">=22.19.0"
   },
   "packageManager": "yarn@1.22.22",
-  "resolutions": {
-    "filelist": "1.0.5"
-  },
   "files": [
     "/lib",
     "/messages",
