@@ -12,7 +12,7 @@ import { expect } from 'chai';
 
 import type { FlowLintFinding, FlowLintResult } from '../../src/types/flow-lint.js';
 import { createFlowLintFingerprint } from '../../src/utils/flow-lint-fingerprint.js';
-import { applyFlowLintBaseline, formatFlowLintSarif } from '../../src/utils/flow-lint-output.js';
+import { applyFlowLintBaseline, formatFlowLintHuman, formatFlowLintSarif } from '../../src/utils/flow-lint-output.js';
 
 const existing: FlowLintFinding = {
   fingerprint: 'a'.repeat(64),
@@ -82,7 +82,10 @@ interface SarifOutput {
   runs: Array<{
     results: Array<{
       baselineState: string;
-      locations?: Array<{ logicalLocations: Array<{ name: string }>; physicalLocation?: unknown }>;
+      locations?: Array<{
+        logicalLocations: Array<{ name: string; fullyQualifiedName: string }>;
+        physicalLocation?: unknown;
+      }>;
       partialFingerprints: Record<string, string>;
     }>;
   }>;
@@ -142,25 +145,27 @@ describe('Flow lint output', (): void => {
 });
 
 describe('Flow lint baseline scope', (): void => {
-  it('accepts the Salesforce CLI JSON success envelope as a scoped baseline', async (): Promise<void> => {
-    const directory = await mkdtemp(join(tmpdir(), 'flow-lint-envelope-'));
-    const baseline = join(directory, 'baseline.json');
-    try {
-      await writeFile(
-        baseline,
-        JSON.stringify({
-          status: 0,
-          result: baselineDocument([{ ...existing, message: 'Previous harmless wording.' }]),
-          warnings: [],
-        }),
-        'utf8'
-      );
-      const result = await applyFlowLintBaseline(lintResult(), baseline);
-      assertSarifOutput(result);
-    } finally {
-      await rm(directory, { recursive: true, force: true });
-    }
-  });
+  for (const status of [0, 1] as const) {
+    it(`accepts a scoped Salesforce CLI JSON envelope with status ${status}`, async (): Promise<void> => {
+      const directory = await mkdtemp(join(tmpdir(), 'flow-lint-envelope-'));
+      const baseline = join(directory, 'baseline.json');
+      try {
+        await writeFile(
+          baseline,
+          JSON.stringify({
+            status,
+            result: baselineDocument([{ ...existing, message: 'Previous harmless wording.' }]),
+            warnings: [],
+          }),
+          'utf8'
+        );
+        const result = await applyFlowLintBaseline(lintResult(), baseline);
+        assertSarifOutput(result);
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    });
+  }
 
   it('rejects a full-result baseline belonging to another Flow', async (): Promise<void> => {
     await expectBaselineRejected(
@@ -182,5 +187,16 @@ describe('Flow lint baseline scope', (): void => {
 
   it('rejects partial result objects because they have no Flow scope', async (): Promise<void> => {
     await expectBaselineRejected({ findings: [existing] }, 'Could not read a valid Flow lint baseline');
+  });
+});
+
+describe('Flow lint qualified report identity', (): void => {
+  it('includes the namespace in human and SARIF output', (): void => {
+    const result = { ...lintResult(), namespace: 'managed' };
+    const sarif = JSON.parse(formatFlowLintSarif(result)) as SarifOutput;
+    expect(formatFlowLintHuman(result)).to.contain('Flow lint: managed__Root_Flow v1');
+    expect(sarif.runs[0]?.results[0]?.locations?.[0]?.logicalLocations[0]?.fullyQualifiedName).to.equal(
+      'managed__Root_Flow:formulas[0].expression'
+    );
   });
 });
