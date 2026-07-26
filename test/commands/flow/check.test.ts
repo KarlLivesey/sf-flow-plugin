@@ -11,7 +11,7 @@ import FlowCheck from '../../../src/commands/flow/check.js';
 import { FlowCheckService } from '../../../src/services/flow-check-service.js';
 import type { FlowCheckResult } from '../../../src/types/flow-check.js';
 import { createCommandOrg } from '../../helpers/command-org.js';
-import { commandTestContext as $$ } from '../../helpers/command-test-context.js';
+import { commandTestContext as $$, commandUx } from '../../helpers/command-test-context.js';
 
 const result: FlowCheckResult = {
   apiNames: ['Flow_A', 'Flow_B'],
@@ -71,5 +71,44 @@ describe('flow check command', (): void => {
       allowTruncated: false,
     });
     expect(actual).to.equal(result);
+  });
+});
+
+describe('flow check command qualified output', (): void => {
+  it('qualifies Flow names in the interactive findings table', async (): Promise<void> => {
+    const flags = {
+      'api-name': ['Flow_A'],
+      'target-org': createCommandOrg({} as Connection),
+      'flow-version': 'latest' as const,
+      only: undefined,
+      exclude: undefined,
+      recursive: false,
+      'subflow-version': 'active' as const,
+      'max-depth': 5,
+      'allow-truncated': false,
+      'fail-on': 'error' as const,
+      'result-format': 'human' as const,
+      'output-file': undefined,
+      namespace: undefined,
+      'api-version': undefined,
+    };
+    const finding = {
+      apiName: 'Flow_A',
+      namespace: 'managed',
+      version: 1,
+      check: 'versions' as const,
+      code: 'no-active-version',
+      severity: 'warning' as const,
+      message: 'No Flow version is active.',
+      path: null,
+    };
+    $$.SANDBOX.stub(FlowCheck.prototype, 'parseFlags').resolves(flags);
+    $$.SANDBOX.stub(FlowCheckService.prototype, 'check').resolves({
+      ...result,
+      findings: [finding],
+      warnings: 1,
+    });
+    await FlowCheck.run([]);
+    expect(commandUx.table.firstCall.args[0].data[0]?.apiName).to.equal('managed__Flow_A');
   });
 });

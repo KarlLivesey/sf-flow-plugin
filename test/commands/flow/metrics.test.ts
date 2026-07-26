@@ -11,7 +11,7 @@ import FlowMetrics from '../../../src/commands/flow/metrics.js';
 import { FlowMetricsService } from '../../../src/services/flow-metrics-service.js';
 import type { FlowMetricsCommandResult } from '../../../src/types/flow-metrics.js';
 import { createCommandOrg } from '../../helpers/command-org.js';
-import { commandTestContext as $$ } from '../../helpers/command-test-context.js';
+import { commandTestContext as $$, commandUx } from '../../helpers/command-test-context.js';
 
 const zeroCounts = {
   executableElements: 0,
@@ -87,5 +87,45 @@ describe('flow metrics command', (): void => {
       dataCloudDays: 7,
     });
     expect(actual).to.equal(result);
+  });
+});
+
+describe('flow metrics command qualified output', (): void => {
+  it('qualifies the root title and every Flow table row', async (): Promise<void> => {
+    const flags = {
+      'api-name': 'Flow_A',
+      'target-org': createCommandOrg({} as Connection),
+      'flow-version': 'latest' as const,
+      recursive: true,
+      'subflow-version': 'active' as const,
+      'max-depth': 4,
+      'data-cloud': false,
+      'data-cloud-days': 30,
+      'output-file': undefined,
+      namespace: undefined,
+      'api-version': undefined,
+    };
+    const flow = {
+      ...zeroCounts,
+      apiName: 'Flow_A',
+      namespace: 'managed',
+      version: 1,
+      depth: 0,
+      faultPathCoverage: null,
+      referencedObjects: [],
+      unusedResourceNames: [],
+      unreachableElementNames: [],
+    };
+    $$.SANDBOX.stub(FlowMetrics.prototype, 'parseFlags').resolves(flags);
+    $$.SANDBOX.stub(FlowMetricsService.prototype, 'calculate').resolves({
+      ...result,
+      namespace: 'managed',
+      recursive: true,
+      flows: [flow, { ...flow, apiName: 'Flow_B', namespace: 'package', depth: 1 }],
+    });
+    await FlowMetrics.run([]);
+    const table = commandUx.table.firstCall.args[0];
+    expect(table.title).to.contain('managed__Flow_A v1');
+    expect(table.data.map((row) => row.apiName)).to.deep.equal(['managed__Flow_A', 'package__Flow_B']);
   });
 });
