@@ -6,7 +6,8 @@
  */
 import { SfError } from '@salesforce/core';
 
-import type { FlowErrorCode, FlowVersionSelector } from '../types/flow.js';
+import type { FlowErrorCode } from '../types/flow-errors.js';
+import type { FlowVersionSelector } from '../types/flow.js';
 
 interface FlowErrorOptions {
   code: FlowErrorCode;
@@ -245,10 +246,28 @@ export function flowDeleteVersionFailed(message: string, cause?: unknown): SfErr
   });
 }
 
+export function flowMetricsFailed(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowMetricsFailed',
+    message,
+    action: 'Check the requested Flow version and confirm that your user can read its metadata.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
 export function flowDeleteVersionVerificationFailed(apiName: string, version: number): SfError {
   return createFlowError({
     code: 'FlowDeleteVersionVerificationFailed',
     message: `Salesforce still reports Flow "${apiName}" version ${version} after deletion.`,
     action: 'Query the Flow versions in Salesforce and retry the deletion.',
+  });
+}
+
+export function flowCheckFailed(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowCheckFailed',
+    message,
+    action: 'Review the selected checks and confirm that the Flow metadata is accessible.',
+    ...(cause === undefined ? {} : { cause }),
   });
 }

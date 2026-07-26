@@ -10,9 +10,9 @@ import type { FlowLintFinding } from '../types/flow-lint.js';
 import { createFlowLintFingerprint } from './flow-lint-fingerprint.js';
 
 const SALESFORCE_ID_PATTERN = /(?<![A-Za-z0-9])[A-Za-z0-9]{15}(?:[A-Za-z0-9]{3})?(?![A-Za-z0-9])/gu;
-const DML_TYPES = new Set(['Record Create', 'Record Delete', 'Record Update']);
+export const FLOW_DML_TYPES: ReadonlySet<string> = new Set(['Record Create', 'Record Delete', 'Record Update']);
 const RESOURCE_KEYS = new Set(['formulas', 'variables']);
-const FAULT_PATH_COLLECTIONS: Readonly<Record<string, string>> = {
+export const FLOW_FAULT_PATH_COLLECTIONS: Readonly<Record<string, string>> = {
   Action: 'actionCalls',
   'Apex Plugin': 'apexPluginCalls',
   'Orchestrated Stage': 'orchestratedStages',
@@ -108,7 +108,7 @@ function containsTargetReference(value: JsonValue): boolean {
 }
 
 function metadataElement(metadata: JsonObject, element: FlowElementSummary): JsonObject | undefined {
-  const key = FAULT_PATH_COLLECTIONS[element.type];
+  const key = FLOW_FAULT_PATH_COLLECTIONS[element.type];
   const values = key === undefined ? undefined : metadata[key];
   if (!Array.isArray(values)) {
     return undefined;
@@ -125,7 +125,7 @@ function metadataElement(metadata: JsonObject, element: FlowElementSummary): Jso
 
 function missingFaultPathFindings(metadata: JsonObject, description: FlowDescription): FlowLintFinding[] {
   return description.elements
-    .filter((element) => FAULT_PATH_COLLECTIONS[element.type] !== undefined)
+    .filter((element) => FLOW_FAULT_PATH_COLLECTIONS[element.type] !== undefined)
     .filter((element) => {
       const value = metadataElement(metadata, element);
       return value === undefined || !containsTargetReference(value.faultConnector ?? null);
@@ -143,7 +143,7 @@ function dmlInsideLoopFindings(description: FlowDescription): FlowLintFinding[] 
   const graph = adjacency(description);
   const loops = description.elements.filter((element) => element.type === 'Loop');
   return description.elements
-    .filter((element) => DML_TYPES.has(element.type))
+    .filter((element) => FLOW_DML_TYPES.has(element.type))
     .flatMap((element) =>
       loops
         .filter(

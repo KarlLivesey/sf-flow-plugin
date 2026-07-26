@@ -14,6 +14,7 @@ export type FlowProgressAction =
   | 'activate'
   | 'audit'
   | 'compare'
+  | 'check'
   | 'deactivate'
   | 'delete-version'
   | 'dependencies'
@@ -22,6 +23,7 @@ export type FlowProgressAction =
   | 'graph'
   | 'lint'
   | 'list'
+  | 'metrics'
   | 'prune'
   | 'versions';
 
@@ -48,6 +50,7 @@ const actionMessages: Record<FlowProgressAction, string> = {
   activate: messages.getMessage('actions.activate'),
   audit: messages.getMessage('actions.audit'),
   compare: messages.getMessage('actions.compare'),
+  check: messages.getMessage('actions.check'),
   deactivate: messages.getMessage('actions.deactivate'),
   'delete-version': messages.getMessage('actions.delete-version'),
   dependencies: messages.getMessage('actions.dependencies'),
@@ -56,6 +59,7 @@ const actionMessages: Record<FlowProgressAction, string> = {
   graph: messages.getMessage('actions.graph'),
   lint: messages.getMessage('actions.lint'),
   list: messages.getMessage('actions.list'),
+  metrics: messages.getMessage('actions.metrics'),
   prune: messages.getMessage('actions.prune'),
   versions: messages.getMessage('actions.versions'),
 };

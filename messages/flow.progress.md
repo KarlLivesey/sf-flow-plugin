@@ -10,6 +10,10 @@ Auditing Flows
 
 Comparing Flow versions
 
+# actions.check
+
+Checking Flows
+
 # actions.deactivate
 
 Deactivating Flow
@@ -41,6 +45,10 @@ Linting Flow
 # actions.list
 
 Listing Flows
+
+# actions.metrics
+
+Calculating Flow metrics
 
 # actions.prune
 

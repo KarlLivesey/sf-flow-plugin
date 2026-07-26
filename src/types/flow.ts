@@ -15,33 +15,6 @@ export type FlowSortOrder = 'asc' | 'desc';
 
 export type FlowMutationOperation = 'update-definition' | 'delete-version';
 
-export type FlowErrorCode =
-  | 'FlowDefinitionNotFound'
-  | 'FlowDefinitionAmbiguous'
-  | 'FlowVersionInvalid'
-  | 'FlowVersionNotFound'
-  | 'FlowVersionNotActivatable'
-  | 'FlowActiveVersionMismatch'
-  | 'FlowLatestVersionMismatch'
-  | 'FlowQueryFailed'
-  | 'FlowMutationFailed'
-  | 'FlowMutationPermissionDenied'
-  | 'FlowActivationFailed'
-  | 'FlowActivationVerificationFailed'
-  | 'FlowDeactivationFailed'
-  | 'FlowDeactivationVerificationFailed'
-  | 'FlowAuditFailed'
-  | 'FlowListFailed'
-  | 'FlowDependenciesFailed'
-  | 'FlowComparisonFailed'
-  | 'FlowExportFailed'
-  | 'FlowInspectionFailed'
-  | 'FlowLintFailed'
-  | 'FlowPruneFailed'
-  | 'FlowPruneVerificationFailed'
-  | 'FlowDeleteVersionFailed'
-  | 'FlowDeleteVersionVerificationFailed';
-
 export interface NamedFlowRequest {
   apiName: string;
   targetOrg: string;
