@@ -53,4 +53,20 @@ describe('FlowCheckService', (): void => {
     expect(blocked.findings[0]?.severity).to.equal('error');
     expect(allowed.findings[0]?.severity).to.equal('warning');
   });
+
+  it('runs version checks without loading Flow metadata', async (): Promise<void> => {
+    const gateway = nestedFlowGateway();
+    gateway.metadata.clear();
+    const result = await new FlowCheckService(gateway).check(request({ checks: ['versions'] }));
+    expect(result.flows[0]).to.include({ apiName: 'Flow_A', resolvedVersion: 1 });
+    expect(result.flows[0]?.contracts).to.deep.equal([]);
+  });
+
+  it('runs dependency checks without loading Flow metadata', async (): Promise<void> => {
+    const gateway = nestedFlowGateway();
+    gateway.metadata.clear();
+    const result = await new FlowCheckService(gateway).check(request({ checks: ['dependencies'] }));
+    expect(result.flows[0]).to.include({ apiName: 'Flow_A', resolvedVersion: 1 });
+    expect(result.flows[0]?.contracts).to.deep.equal([]);
+  });
 });
