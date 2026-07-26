@@ -25,7 +25,6 @@ export interface FlowInvocation {
   inputs: JsonObject;
   outputs: Record<string, JsonValue>;
   errors: FlowInvocationError[];
-  durationMilliseconds: number;
   executed: boolean;
 }
 
@@ -37,6 +36,7 @@ export interface FlowRunResult {
   processType: string;
   production: boolean;
   dryRun: boolean;
+  durationMilliseconds: number;
   successful: boolean;
   invocations: FlowInvocation[];
   targetOrg: string;

@@ -20,9 +20,22 @@ const actionErrorSchema = z.union([
   z.object({ message: z.string().optional(), statusCode: z.string().optional() }).passthrough(),
 ]);
 
+const transportErrorSchema = z
+  .object({
+    code: z
+      .string()
+      .regex(/^[A-Z][A-Z0-9_]*$/u)
+      .optional(),
+    statusCode: z.union([z.number().int().min(100).max(599), z.string().regex(/^[A-Z][A-Z0-9_]*$/u)]).optional(),
+  })
+  .passthrough();
+
 const actionResultSchema: z.ZodType<FlowActionResult> = z.object({
   actionName: z.string().optional(),
-  errors: z.array(actionErrorSchema).default([]),
+  errors: z
+    .array(actionErrorSchema)
+    .nullish()
+    .transform((errors) => errors ?? []),
   invocationId: z.string().nullable().optional(),
   isSuccess: z.boolean(),
   outputValues: z.record(z.string(), z.json()).default({}),
@@ -30,6 +43,20 @@ const actionResultSchema: z.ZodType<FlowActionResult> = z.object({
 });
 
 const actionResultsSchema = z.array(actionResultSchema);
+
+function safeTransportCode(error: unknown): string | null {
+  const parsed = transportErrorSchema.safeParse(error);
+  if (!parsed.success) {
+    return null;
+  }
+  const code = parsed.data.statusCode ?? parsed.data.code;
+  return code === undefined ? null : String(code);
+}
+
+function invocationFailureMessage(apiName: string, error: unknown): string {
+  const code = safeTransportCode(error);
+  return `Salesforce could not invoke Flow "${apiName}".${code === null ? '' : ` Status: ${code}.`}`;
+}
 
 export class RestFlowInvocationGateway implements FlowInvocationGateway {
   public constructor(private readonly connection: Connection) {}
@@ -48,8 +75,8 @@ export class RestFlowInvocationGateway implements FlowInvocationGateway {
   public async assertFlowActionAvailable(apiName: string): Promise<void> {
     try {
       await this.connection.request(this.actionUrl(apiName));
-    } catch (error: unknown) {
-      throw flowInvocationPermissionDenied(apiName, error);
+    } catch {
+      throw flowInvocationPermissionDenied(apiName);
     }
   }
 
@@ -62,10 +89,7 @@ export class RestFlowInvocationGateway implements FlowInvocationGateway {
       });
       return actionResultsSchema.parse(response);
     } catch (error: unknown) {
-      if (error instanceof Error && error.name === 'FlowInvocationPermissionDenied') {
-        throw error;
-      }
-      throw flowInvocationFailed(`Salesforce could not invoke Flow "${apiName}".`, error);
+      throw flowInvocationFailed(invocationFailureMessage(apiName, error));
     }
   }
 

@@ -21,6 +21,7 @@ const result: FlowRunResult = {
   processType: 'AutoLaunchedFlow',
   production: false,
   dryRun: false,
+  durationMilliseconds: 25,
   successful: true,
   invocations: [
     {
@@ -30,7 +31,6 @@ const result: FlowRunResult = {
       inputs: { percentage: 10 },
       outputs: { discount: 10 },
       errors: [],
-      durationMilliseconds: 25,
       executed: true,
     },
   ],

@@ -154,7 +154,6 @@ export default class FlowRun extends SfCommand<FlowRunResult> {
         interviewId: invocation.interviewId ?? '',
         success: invocation.success,
         executed: invocation.executed,
-        durationMilliseconds: invocation.durationMilliseconds,
         outputs: JSON.stringify(invocation.outputs),
         errors: invocation.errors.map((error) => error.message).join('; '),
       })),
@@ -163,13 +162,14 @@ export default class FlowRun extends SfCommand<FlowRunResult> {
         { key: 'interviewId', name: 'Interview ID' },
         { key: 'success', name: 'Success' },
         { key: 'executed', name: 'Executed' },
-        { key: 'durationMilliseconds', name: 'Duration (ms)' },
         { key: 'outputs', name: 'Outputs' },
         { key: 'errors', name: 'Errors' },
       ],
     });
     if (result.dryRun && !this.jsonEnabled()) {
       this.log(messages.getMessage('info.dry-run'));
+    } else if (!this.jsonEnabled()) {
+      this.log(messages.getMessage('info.request-duration', [result.durationMilliseconds]));
     }
   }
 }

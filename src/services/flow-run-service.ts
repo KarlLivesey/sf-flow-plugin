@@ -37,7 +37,6 @@ interface InvocationResultContext {
   input: JsonObject;
   action: FlowActionResult;
   version: number;
-  durationMilliseconds: number;
 }
 
 interface RunResultContext {
@@ -45,6 +44,7 @@ interface RunResultContext {
   flow: ResolvedRunnableFlow;
   version: number;
   production: boolean;
+  durationMilliseconds: number;
   invocations: FlowInvocation[];
 }
 
@@ -57,6 +57,7 @@ interface ExecuteInputsContext {
 }
 
 interface ExecutedInputs {
+  durationMilliseconds: number;
   version: number;
   invocations: FlowInvocation[];
 }
@@ -107,7 +108,7 @@ function normaliseErrors(result: FlowActionResult): FlowInvocationError[] {
 }
 
 function invocationResult(context: InvocationResultContext): FlowInvocation {
-  const { input, action, version, durationMilliseconds } = context;
+  const { input, action, version } = context;
   return {
     interviewId: action.invocationId ?? null,
     version,
@@ -115,7 +116,6 @@ function invocationResult(context: InvocationResultContext): FlowInvocation {
     inputs: redactFlowObject(input),
     outputs: redactFlowObject(action.outputValues),
     errors: normaliseErrors(action),
-    durationMilliseconds,
     executed: true,
   };
 }
@@ -128,7 +128,6 @@ function dryRunInvocation(flow: ResolvedRunnableFlow, input: JsonObject): FlowIn
     inputs: redactFlowObject(input),
     outputs: {},
     errors: [],
-    durationMilliseconds: 0,
     executed: false,
   };
 }
@@ -184,15 +183,14 @@ async function executeInputs(context: ExecuteInputsContext): Promise<ExecutedInp
   assertResultCount(flow, inputs, actions);
   const version = executionVersion(flow, actions);
   return {
+    durationMilliseconds,
     version,
-    invocations: actions.map((action, index) =>
-      invocationResult({ input: inputs[index] ?? {}, action, version, durationMilliseconds })
-    ),
+    invocations: actions.map((action, index) => invocationResult({ input: inputs[index] ?? {}, action, version })),
   };
 }
 
 function createResult(context: RunResultContext): FlowRunResult {
-  const { request, flow, version, production, invocations } = context;
+  const { request, flow, version, production, durationMilliseconds, invocations } = context;
   return {
     apiName: flow.definition.apiName,
     namespace: flow.definition.namespace,
@@ -201,6 +199,7 @@ function createResult(context: RunResultContext): FlowRunResult {
     processType: flow.version.processType,
     production,
     dryRun: request.dryRun,
+    durationMilliseconds,
     successful: invocations.every((invocation) => invocation.success),
     invocations,
     targetOrg: request.targetOrg,
@@ -220,7 +219,11 @@ export class FlowRunService {
     progress('checking-org', request.targetOrg);
     const production = await this.gateExecution(request, flow, progress);
     const executed: ExecutedInputs = request.dryRun
-      ? { version: flow.version.versionNumber, invocations: inputs.map((input) => dryRunInvocation(flow, input)) }
+      ? {
+          durationMilliseconds: 0,
+          version: flow.version.versionNumber,
+          invocations: inputs.map((input) => dryRunInvocation(flow, input)),
+        }
       : await executeInputs({
           gateway: this.gateways.invocation,
           definitionGateway: this.gateways.definition,
@@ -228,7 +231,14 @@ export class FlowRunService {
           inputs,
           progress,
         });
-    return createResult({ request, flow, version: executed.version, production, invocations: executed.invocations });
+    return createResult({
+      request,
+      flow,
+      version: executed.version,
+      production,
+      durationMilliseconds: executed.durationMilliseconds,
+      invocations: executed.invocations,
+    });
   }
 
   private async resolveFlow(request: FlowRunRequest, progress: FlowProgressReporter): Promise<ResolvedRunnableFlow> {
