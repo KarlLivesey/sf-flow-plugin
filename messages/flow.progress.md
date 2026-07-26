@@ -58,6 +58,10 @@ Calculating Flow metrics
 
 Pruning Flow versions
 
+# actions.run
+
+Running Flow
+
 # actions.versions
 
 Loading Flow versions
@@ -121,3 +125,15 @@ Comparing metadata
 # stages.rendering-graph
 
 Rendering graph
+
+# stages.validating-inputs
+
+Validating Flow inputs
+
+# stages.checking-org
+
+Checking target org safety
+
+# stages.invoking-flow
+
+Invoking Flow

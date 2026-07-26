@@ -34,4 +34,8 @@ export type FlowErrorCode =
   | 'FlowDataCloudMetricsUnavailable'
   | 'FlowDataCloudMetricsFailed'
   | 'FlowCheckFailed'
-  | 'FlowBundleFailed';
+  | 'FlowBundleFailed'
+  | 'FlowInputInvalid'
+  | 'FlowInvocationFailed'
+  | 'FlowInvocationPermissionDenied'
+  | 'FlowProductionConfirmationRequired';

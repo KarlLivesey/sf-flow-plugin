@@ -5,7 +5,6 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import { fileURLToPath } from 'node:url';
-
 import { execCmd } from '@salesforce/cli-plugins-testkit';
 import type { JsonOutput } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
@@ -20,9 +19,9 @@ import type {
   FlowVersionsResult,
 } from '../../../src/types/flow.js';
 import type { FlowDescribeResult, FlowGraphResult } from '../../../src/types/flow-inspection.js';
+import type { FlowRunResult } from '../../../src/types/flow-invocation.js';
 import { verifyBundleDeployment } from '../../helpers/flow-bundle-nut.js';
 import { verifyExportDeployment } from '../../helpers/flow-export-nut.js';
-
 interface OrgSafetyResult {
   records: Array<{ IsSandbox: boolean; OrganizationType: string }>;
 }
@@ -42,7 +41,6 @@ const targetOrgSchema = z
   .min(1)
   .regex(/^[A-Za-z0-9._@+-]+$/);
 let fixtureDeployed = false;
-
 function requireTargetOrg(): string {
   const result = targetOrgSchema.safeParse(targetOrg);
   if (!result.success) {
@@ -238,6 +236,12 @@ describe('Flow lifecycle command NUTs', (): void => {
 });
 
 describe('Flow inspection command NUTs', (): void => {
+  it('validates active Flow invocation access without executing', (): void => {
+    const output = runFlowCommand<FlowRunResult>('run', '--api-name Plugin_Test_Flow --dry-run');
+    expect(output.result).to.include({ apiName: 'Plugin_Test_Flow', dryRun: true, successful: true });
+    expect(output.result.invocations[0]).to.include({ executed: false });
+  });
+
   it('describes Flow resources and elements', (): void => {
     const output = runFlowCommand<FlowDescribeResult>('describe', '--api-name Plugin_Test_Flow');
     const flow = output.result.flows[0];

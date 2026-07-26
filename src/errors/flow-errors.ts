@@ -246,3 +246,38 @@ export {
   flowDeleteVersionVerificationFailed,
   flowMetricsFailed,
 } from './flow-release-errors.js';
+
+export function flowInputInvalid(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowInputInvalid',
+    message,
+    action: 'Check the Flow input variables and provide values using NAME=VALUE or a JSON input file.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
+export function flowInvocationFailed(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowInvocationFailed',
+    message,
+    action: 'Review the Flow errors and authenticated user permissions, then run the command again.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
+export function flowInvocationPermissionDenied(apiName: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowInvocationPermissionDenied',
+    message: `The authenticated user cannot invoke active Flow "${apiName}" through the REST API.`,
+    action: 'Grant the user access to the Flow and its referenced data, then run the command again.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
+export function flowProductionConfirmationRequired(apiName: string): SfError {
+  return createFlowError({
+    code: 'FlowProductionConfirmationRequired',
+    message: `Flow "${apiName}" can perform irreversible side effects in a production org.`,
+    action: 'Review the Flow and rerun with --confirm to execute it in production.',
+  });
+}

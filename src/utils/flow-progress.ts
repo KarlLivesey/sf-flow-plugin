@@ -26,6 +26,7 @@ export type FlowProgressAction =
   | 'list'
   | 'metrics'
   | 'prune'
+  | 'run'
   | 'versions';
 
 export type FlowProgressStage =
@@ -43,7 +44,10 @@ export type FlowProgressStage =
   | 'loading-data-cloud-metrics'
   | 'analysing-results'
   | 'comparing-metadata'
-  | 'rendering-graph';
+  | 'rendering-graph'
+  | 'validating-inputs'
+  | 'checking-org'
+  | 'invoking-flow';
 
 export type FlowProgressReporter = (stage: FlowProgressStage, detail?: string) => void;
 
@@ -65,6 +69,7 @@ const actionMessages: Record<FlowProgressAction, string> = {
   list: messages.getMessage('actions.list'),
   metrics: messages.getMessage('actions.metrics'),
   prune: messages.getMessage('actions.prune'),
+  run: messages.getMessage('actions.run'),
   versions: messages.getMessage('actions.versions'),
 };
 
@@ -84,6 +89,9 @@ const stageMessages: Record<FlowProgressStage, string> = {
   'resolving-flow': messages.getMessage('stages.resolving-flow'),
   'verifying-change': messages.getMessage('stages.verifying-change'),
   'writing-files': messages.getMessage('stages.writing-files'),
+  'validating-inputs': messages.getMessage('stages.validating-inputs'),
+  'checking-org': messages.getMessage('stages.checking-org'),
+  'invoking-flow': messages.getMessage('stages.invoking-flow'),
 };
 
 interface FlowProgressWork<Result> {
