@@ -140,6 +140,8 @@ describe('FlowRunService batch execution', (): void => {
     const result = await new FlowRunService(fake).run(request({ invocations }));
     expect(fake.invocation.invoked).to.deep.equal([[{ percentage: 10 }, { percentage: 20 }]]);
     expect(result.invocations.map((invocation) => invocation.interviewId)).to.deep.equal(['first', 'second']);
+    expect(result.durationMilliseconds).to.be.at.least(0);
+    expect(result.invocations.every((invocation) => !('durationMilliseconds' in invocation))).to.equal(true);
   });
 
   it('rejects an invocation result count that does not match the submitted inputs', async (): Promise<void> => {
@@ -179,7 +181,8 @@ describe('FlowRunService safety', (): void => {
     expect(fake.invocation.availabilityChecks).to.deep.equal(['Calculate_Discount']);
     expect(fake.invocation.invoked).to.deep.equal([]);
     expect(result).to.include({ production: true, dryRun: true, successful: true });
-    expect(result.invocations[0]).to.include({ executed: false, durationMilliseconds: 0 });
+    expect(result).to.include({ durationMilliseconds: 0 });
+    expect(result.invocations[0]).to.include({ executed: false });
   });
 
   it('requires explicit confirmation before production execution', async (): Promise<void> => {

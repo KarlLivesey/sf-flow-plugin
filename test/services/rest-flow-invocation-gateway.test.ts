@@ -45,7 +45,7 @@ describe('RestFlowInvocationGateway', (): void => {
     const response = [
       {
         actionName: 'Calculate_Discount',
-        errors: [],
+        errors: null,
         invocationId: 'interview-1',
         isSuccess: true,
         outputValues: { discount: 10 },
@@ -56,7 +56,7 @@ describe('RestFlowInvocationGateway', (): void => {
     const result = await new RestFlowInvocationGateway(fake.connection).invokeFlow('Calculate_Discount', [
       { percentage: 10 },
     ]);
-    expect(result).to.deep.equal(response);
+    expect(result).to.deep.equal([{ ...response[0], errors: [] }]);
     expect(fake.request.firstCall.args[0]).to.deep.equal({
       method: 'POST',
       url: '/services/data/v65.0/actions/custom/flow/Calculate_Discount',
@@ -84,5 +84,19 @@ describe('RestFlowInvocationGateway errors', (): void => {
       new RestFlowInvocationGateway(fake.connection).assertFlowActionAvailable('Calculate_Discount'),
       'FlowInvocationPermissionDenied'
     );
+  });
+
+  it('does not retain raw Salesforce transport errors as causes', async (): Promise<void> => {
+    const fake = connection({});
+    fake.request.rejects(Object.assign(new Error('sensitive Salesforce response'), { statusCode: 503 }));
+    try {
+      await new RestFlowInvocationGateway(fake.connection).invokeFlow('Calculate_Discount', [{}]);
+      expect.fail('Expected FlowInvocationFailed.');
+    } catch (error: unknown) {
+      expect(error).to.be.instanceOf(Error);
+      expect((error as Error).message).to.include('Status: 503');
+      expect((error as Error).message).not.to.include('sensitive Salesforce response');
+      expect((error as Error & { cause?: unknown }).cause).to.equal(undefined);
+    }
   });
 });

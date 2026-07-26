@@ -8,6 +8,7 @@ Validate declared Flow inputs and invoke an active, directly invocable autolaunc
 
 Up to 200 input objects are sent together in one Flow action request. The command rechecks the active version immediately before
 the request and reports the version returned by Salesforce. Another activation can still occur between that check and execution.
+The reported duration measures that complete REST action request, not each individual Flow interview.
 
 Input and output properties with names that look sensitive are redacted on a best-effort basis. Salesforce error message text is
 always withheld, while its stable status code is retained when available. Arbitrary values under other property names remain visible
@@ -80,3 +81,7 @@ Flow %s version %s invocations
 # info.dry-run
 
 Dry run only: eligibility, declared inputs, production safety and REST action access were checked. Runtime success was not predicted.
+
+# info.request-duration
+
+REST action request duration: %s ms

@@ -26,6 +26,9 @@
         "dryRun": {
           "type": "boolean"
         },
+        "durationMilliseconds": {
+          "type": "number"
+        },
         "successful": {
           "type": "boolean"
         },
@@ -47,6 +50,7 @@
         "processType",
         "production",
         "dryRun",
+        "durationMilliseconds",
         "successful",
         "invocations",
         "targetOrg"
@@ -83,23 +87,11 @@
             "$ref": "#/definitions/FlowInvocationError"
           }
         },
-        "durationMilliseconds": {
-          "type": "number"
-        },
         "executed": {
           "type": "boolean"
         }
       },
-      "required": [
-        "interviewId",
-        "version",
-        "success",
-        "inputs",
-        "outputs",
-        "errors",
-        "durationMilliseconds",
-        "executed"
-      ],
+      "required": ["interviewId", "version", "success", "inputs", "outputs", "errors", "executed"],
       "additionalProperties": false
     },
     "JsonObject": {
