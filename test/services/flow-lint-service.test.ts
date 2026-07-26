@@ -7,7 +7,7 @@
 import { expect } from 'chai';
 
 import { FlowLintService } from '../../src/services/flow-lint-service.js';
-import type { FlowLintRequest } from '../../src/types/flow-inspection.js';
+import type { FlowLintRequest } from '../../src/types/flow-lint.js';
 import { FakeFlowGateway, flowDefinition, flowVersion } from '../helpers/fake-flow-gateway.js';
 
 const rootId = '300000000000001';
@@ -18,6 +18,8 @@ function lintRequest(): FlowLintRequest {
     apiName: 'Root_Flow',
     targetOrg: 'admin@example.com',
     version: 'latest',
+    rules: [],
+    excludedRules: [],
   };
 }
 
@@ -73,5 +75,33 @@ describe('FlowLintService subflow rules', (): void => {
     const result = await new FlowLintService(gateway).lint(lintRequest());
     expect(result.findings.map((item) => item.rule)).to.include.members(['inactive-subflow', 'missing-subflow']);
     expect(result.errors).to.equal(1);
+  });
+});
+
+describe('FlowLintService rule selection', (): void => {
+  it('applies inclusive rules before exclusions', async (): Promise<void> => {
+    const root = flowVersion(rootId, 1, 'Active');
+    const gateway = new FakeFlowGateway(
+      [
+        flowDefinition({
+          id: rootId,
+          apiName: 'Root_Flow',
+          activeVersionId: root.id,
+          latestVersionId: root.id,
+        }),
+      ],
+      [root]
+    );
+    gateway.metadata.set(root.id, {
+      assignments: [{ name: 'Unreachable', label: 'Unreachable' }],
+      formulas: [{ name: 'UnusedFormula', dataType: 'String', expression: '"unused"' }],
+    });
+    const result = await new FlowLintService(gateway).lint({
+      ...lintRequest(),
+      rules: ['unconnected-element', 'unused-resource'],
+      excludedRules: ['unused-resource'],
+    });
+    expect(result.findings).to.have.length(1);
+    expect(result.findings[0]?.rule).to.equal('unconnected-element');
   });
 });

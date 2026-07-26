@@ -178,15 +178,41 @@
     "command": "flow:lint",
     "flagAliases": [],
     "flagChars": ["n", "o"],
-    "flags": ["api-name", "api-version", "flags-dir", "flow-version", "json", "namespace", "target-org"],
+    "flags": [
+      "api-name",
+      "api-version",
+      "baseline",
+      "exclude-rule",
+      "fail-on",
+      "flags-dir",
+      "flow-version",
+      "json",
+      "namespace",
+      "output-file",
+      "result-format",
+      "rule",
+      "target-org"
+    ],
     "plugin": "sf-flow-plugin"
   },
   {
     "alias": [],
     "command": "flow:list",
     "flagAliases": [],
-    "flagChars": ["o"],
-    "flags": ["api-version", "flags-dir", "json", "target-org"],
+    "flagChars": ["n", "o"],
+    "flags": [
+      "api-name",
+      "api-version",
+      "flags-dir",
+      "json",
+      "limit",
+      "namespace",
+      "order",
+      "sort",
+      "status",
+      "target-org",
+      "type"
+    ],
     "plugin": "sf-flow-plugin"
   },
   {
