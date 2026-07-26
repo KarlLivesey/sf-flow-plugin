@@ -32,4 +32,5 @@ export type FlowErrorCode =
   | 'FlowMetricsFailed'
   | 'FlowDataCloudMetricsUnavailable'
   | 'FlowDataCloudMetricsFailed'
-  | 'FlowCheckFailed';
+  | 'FlowCheckFailed'
+  | 'FlowBundleFailed';

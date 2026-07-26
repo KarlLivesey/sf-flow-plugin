@@ -13,6 +13,7 @@ const messages = Messages.loadMessages('sf-flow-plugin', 'flow.progress');
 export type FlowProgressAction =
   | 'activate'
   | 'audit'
+  | 'bundle'
   | 'compare'
   | 'check'
   | 'deactivate'
@@ -37,6 +38,7 @@ export type FlowProgressStage =
   | 'applying-change'
   | 'deleting-versions'
   | 'verifying-change'
+  | 'writing-files'
   | 'loading-dependencies'
   | 'loading-data-cloud-metrics'
   | 'analysing-results'
@@ -50,6 +52,7 @@ export const noFlowProgress: FlowProgressReporter = () => undefined;
 const actionMessages: Record<FlowProgressAction, string> = {
   activate: messages.getMessage('actions.activate'),
   audit: messages.getMessage('actions.audit'),
+  bundle: messages.getMessage('actions.bundle'),
   compare: messages.getMessage('actions.compare'),
   check: messages.getMessage('actions.check'),
   deactivate: messages.getMessage('actions.deactivate'),
@@ -80,6 +83,7 @@ const stageMessages: Record<FlowProgressStage, string> = {
   'rendering-graph': messages.getMessage('stages.rendering-graph'),
   'resolving-flow': messages.getMessage('stages.resolving-flow'),
   'verifying-change': messages.getMessage('stages.verifying-change'),
+  'writing-files': messages.getMessage('stages.writing-files'),
 };
 
 interface FlowProgressWork<Result> {
