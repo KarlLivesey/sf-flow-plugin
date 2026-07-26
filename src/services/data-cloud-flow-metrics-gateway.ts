@@ -47,6 +47,14 @@ type DataCloudRecord = Record<string, unknown>;
 
 const httpErrorSchema = z
   .object({
+    errorCode: z
+      .string()
+      .regex(/^[A-Z][A-Z0-9_]*$/u)
+      .optional(),
+    name: z
+      .string()
+      .regex(/^[A-Z][A-Z0-9_]*$/u)
+      .optional(),
     status: z.number().int().optional(),
     statusCode: z.number().int().optional(),
   })
@@ -139,9 +147,20 @@ function isFlowMetricsError(error: unknown): boolean {
   return error instanceof Error && error.name.startsWith('FlowDataCloud');
 }
 
-function httpStatus(error: unknown): number | null {
+function isDmoNotFound(error: unknown): boolean {
   const parsed = httpErrorSchema.safeParse(error);
-  return parsed.success ? parsed.data.statusCode ?? parsed.data.status ?? null : null;
+  if (!parsed.success) {
+    return false;
+  }
+  const { errorCode, name, status, statusCode } = parsed.data;
+  return (
+    statusCode === 404 ||
+    status === 404 ||
+    errorCode === 'NOT_FOUND' ||
+    errorCode === 'ERROR_HTTP_404' ||
+    name === 'NOT_FOUND' ||
+    name === 'ERROR_HTTP_404'
+  );
 }
 
 function requireVersion(
@@ -222,7 +241,7 @@ export class DataCloudFlowMetricsGateway implements FlowRuntimeMetricsGateway {
       await this.connection.request(`${this.dmoBaseUrl}/${encodeURIComponent(objectName)}`);
       return true;
     } catch (error: unknown) {
-      if (httpStatus(error) === 404) {
+      if (isDmoNotFound(error)) {
         return false;
       }
       throw error;
