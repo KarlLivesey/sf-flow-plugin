@@ -12,6 +12,7 @@ import type {
   FlowDependency,
   FlowDependencyGateway,
   FlowDependencyQueryDirection,
+  FlowDependencyTruncation,
   IndexedFlowDependency,
 } from '../types/flow-analysis.js';
 import type { FlowDefinition, FlowDefinitionGateway, FlowDefinitionLookup } from '../types/flow.js';
@@ -63,6 +64,8 @@ function createResult(
     types: request.types,
     definitionsScanned: traversal.definitionsScanned,
     dependencies: uniqueDependencies(traversal.dependencies),
+    truncated: traversal.truncations.length > 0,
+    truncations: traversal.truncations,
     targetOrg: request.targetOrg,
   };
 }
@@ -76,15 +79,30 @@ function shouldRethrow(error: unknown): boolean {
 
 async function queryDependencies(
   gateway: FlowDefinitionGateway & FlowDependencyGateway,
-  definition: FlowDefinition,
+  scope: DependencyScope,
   request: FlowDependenciesRequest
-): Promise<IndexedFlowDependency[]> {
+): Promise<{ indexed: IndexedFlowDependency[]; truncations: FlowDependencyTruncation[] }> {
   const types =
     request.recursive && request.types.length > 0 ? [...new Set([...request.types, 'Flow'])] : request.types;
-  const queries = requestedDirections(request).map((direction) =>
-    gateway.findDependencies(definition.id, direction, types)
+  const results = await Promise.all(
+    requestedDirections(request).map(async (direction) => ({
+      direction,
+      result: await gateway.findDependencies(scope.definition.id, direction, types),
+    }))
   );
-  return (await Promise.all(queries)).flat();
+  return {
+    indexed: results.flatMap(({ result }) => result.dependencies),
+    truncations: results
+      .filter(({ result }) => result.reachedLimit)
+      .map(({ direction, result }) => ({
+        definitionId: scope.definition.id,
+        apiName: scope.definition.apiName,
+        namespace: scope.definition.namespace,
+        direction,
+        depth: scope.depth,
+        limit: result.limit,
+      })),
+  };
 }
 
 interface DependencyScope {
@@ -94,11 +112,13 @@ interface DependencyScope {
 
 interface DependencyTraversal {
   dependencies: FlowDependency[];
+  truncations: FlowDependencyTruncation[];
   definitionsScanned: number;
 }
 
 interface DependencyTraversalState {
   dependencies: FlowDependency[];
+  truncations: FlowDependencyTruncation[];
   visited: Set<string>;
 }
 
@@ -111,6 +131,7 @@ interface DependencyTraversalContext {
 interface DependencyBatch {
   scope: DependencyScope;
   indexed: IndexedFlowDependency[];
+  truncations: FlowDependencyTruncation[];
 }
 
 function scopeDepth(scopes: ReadonlyArray<DependencyScope>): number {
@@ -166,8 +187,23 @@ async function resolveReferencedFlows(
 async function queryScope(context: DependencyTraversalContext, scope: DependencyScope): Promise<DependencyBatch> {
   const name = qualifiedFlowName(scope.definition.apiName, scope.definition.namespace);
   context.progress('loading-dependencies', `${name} (${context.request.direction}, depth ${scope.depth})`);
-  const indexed = await queryDependencies(context.gateway, scope.definition, context.request);
-  return { scope, indexed };
+  const queried = await queryDependencies(context.gateway, scope, context.request);
+  return { scope, ...queried };
+}
+
+function appendBatches(
+  state: DependencyTraversalState,
+  batches: ReadonlyArray<DependencyBatch>,
+  request: FlowDependenciesRequest
+): void {
+  state.truncations.push(...batches.flatMap((batch) => batch.truncations));
+  state.dependencies.push(
+    ...batches.flatMap(({ scope, indexed }) =>
+      indexed
+        .filter((dependency) => requestedDependency(request, dependency))
+        .map((dependency) => decorateDependency(scope, dependency))
+    )
+  );
 }
 
 async function traverseLevel(
@@ -181,13 +217,7 @@ async function traverseLevel(
   }
   current.forEach((scope) => state.visited.add(scope.definition.id));
   const batches = await Promise.all(current.map((scope) => queryScope(context, scope)));
-  state.dependencies.push(
-    ...batches.flatMap(({ scope, indexed }) =>
-      indexed
-        .filter((dependency) => requestedDependency(context.request, dependency))
-        .map((dependency) => decorateDependency(scope, dependency))
-    )
-  );
+  appendBatches(state, batches, context.request);
   if (!context.request.recursive || scopeDepth(current) >= context.request.maxDepth) {
     return;
   }
@@ -205,9 +235,13 @@ async function traverseDependencies(
   context: DependencyTraversalContext,
   root: FlowDefinition
 ): Promise<DependencyTraversal> {
-  const state: DependencyTraversalState = { dependencies: [], visited: new Set() };
+  const state: DependencyTraversalState = { dependencies: [], truncations: [], visited: new Set() };
   await traverseLevel(context, [{ definition: root, depth: 0 }], state);
-  return { dependencies: state.dependencies, definitionsScanned: state.visited.size };
+  return {
+    dependencies: state.dependencies,
+    truncations: state.truncations,
+    definitionsScanned: state.visited.size,
+  };
 }
 
 async function resolveDependencies(

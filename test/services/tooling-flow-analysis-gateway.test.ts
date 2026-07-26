@@ -84,13 +84,14 @@ describe('ToolingFlowDefinitionGateway dependency queries', (): void => {
     const dependencies = await gateway.findDependencies('300000000000001', 'uses', []);
     expect(connection.queries[0]).to.contain("WHERE MetadataComponentId = '300000000000001'");
     expect(connection.queries[0]).to.match(/LIMIT 2000$/);
-    expect(dependencies[0]).to.deep.equal({
+    expect(dependencies.dependencies[0]).to.deep.equal({
       direction: 'uses',
       componentId: '01I000000000001',
       name: 'Account',
       namespace: null,
       type: 'CustomObject',
     });
+    expect(dependencies).to.include({ reachedLimit: false, limit: 2000 });
   });
 
   it('maps incoming dependencies from the referencing component fields', async (): Promise<void> => {
@@ -99,7 +100,11 @@ describe('ToolingFlowDefinitionGateway dependency queries', (): void => {
     const dependencies = await gateway.findDependencies('300000000000001', 'used-by', []);
     expect(connection.queries[0]).to.contain("WHERE RefMetadataComponentId = '300000000000001'");
     expect(connection.queries[0]).to.match(/LIMIT 2000$/);
-    expect(dependencies[0]).to.include({ direction: 'used-by', name: 'Order_Processing', type: 'Flow' });
+    expect(dependencies.dependencies[0]).to.include({
+      direction: 'used-by',
+      name: 'Order_Processing',
+      type: 'Flow',
+    });
   });
 
   it('filters component types inside the capped dependency query', async (): Promise<void> => {
@@ -109,5 +114,16 @@ describe('ToolingFlowDefinitionGateway dependency queries', (): void => {
     expect(connection.queries[0]).to.contain(
       "AND RefMetadataComponentType IN ('ApexClass', 'CustomObject') LIMIT 2000"
     );
+  });
+
+  it('marks exactly 2,000 dependency records as potentially truncated', async (): Promise<void> => {
+    const connection = new QueryConnectionDouble(page(Array.from({ length: 2000 }, dependencyRecord)));
+    const result = await new ToolingFlowDefinitionGateway(connection.asConnection()).findDependencies(
+      '300000000000001',
+      'uses',
+      []
+    );
+    expect(result.dependencies).to.have.length(2000);
+    expect(result).to.include({ reachedLimit: true, limit: 2000 });
   });
 });

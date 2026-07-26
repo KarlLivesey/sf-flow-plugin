@@ -34,6 +34,10 @@ Metadata component type to include. Repeat the flag to include multiple types.
 
 Exit with status 1 when matching dependencies are found.
 
+# flags.allow-truncated.summary
+
+Allow success when a dependency query reaches Salesforce's 2,000-record limit and may be incomplete.
+
 # flags.namespace.summary
 
 Namespace that identifies a packaged Flow.
@@ -64,6 +68,14 @@ Salesforce API version to use for the Tooling API requests.
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --type ApexClass --type CustomObject --fail-on-dependencies
 
+- Accept potentially incomplete results after explicitly reviewing the truncation warning:
+
+  <%= config.bin %> <%= command.id %> --api-name Order_Processing --allow-truncated
+
 # info.title
 
 Indexed dependencies for Flow %s
+
+# warnings.truncated
+
+Dependency results for %s (%s) reached the %s-record query limit and may be incomplete.
