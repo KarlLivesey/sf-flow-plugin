@@ -25,6 +25,14 @@ function connection(response: unknown): { connection: Connection; query: sinon.S
   };
 }
 
+function httpApiError(errorCode: string, message: string): Error & { data: Record<string, never>; errorCode: string } {
+  return Object.assign(new Error(message), {
+    data: {},
+    errorCode,
+    name: errorCode,
+  });
+}
+
 describe('RestFlowInvocationGateway', (): void => {
   it('detects production and sandbox orgs', async (): Promise<void> => {
     const production = connection({});
@@ -95,7 +103,7 @@ describe('RestFlowInvocationGateway errors', (): void => {
 
   it('reports recognised action authorisation failures as permission failures', async (): Promise<void> => {
     const fake = connection({});
-    fake.request.rejects(Object.assign(new Error('forbidden'), { statusCode: 403 }));
+    fake.request.rejects(httpApiError('INSUFFICIENT_ACCESS', 'forbidden'));
     await expectErrorName(
       new RestFlowInvocationGateway(fake.connection).assertFlowActionAvailable('Calculate_Discount'),
       'FlowInvocationPermissionDenied'
@@ -104,27 +112,27 @@ describe('RestFlowInvocationGateway errors', (): void => {
 
   it('reports other action discovery failures as redacted invocation failures', async (): Promise<void> => {
     const fake = connection({});
-    fake.request.rejects(Object.assign(new Error('sensitive service response'), { statusCode: 503 }));
+    fake.request.rejects(httpApiError('ERROR_HTTP_503', 'sensitive service response'));
     try {
       await new RestFlowInvocationGateway(fake.connection).assertFlowActionAvailable('Calculate_Discount');
       expect.fail('Expected FlowInvocationFailed.');
     } catch (error: unknown) {
       expect(error).to.be.instanceOf(Error);
       expect((error as Error).name).to.equal('FlowInvocationFailed');
-      expect((error as Error).message).to.include('Status: 503');
+      expect((error as Error).message).to.include('Status: ERROR_HTTP_503');
       expect((error as Error).message).not.to.include('sensitive service response');
     }
   });
 
   it('does not retain raw Salesforce transport errors as causes', async (): Promise<void> => {
     const fake = connection({});
-    fake.request.rejects(Object.assign(new Error('sensitive Salesforce response'), { statusCode: 503 }));
+    fake.request.rejects(httpApiError('ERROR_HTTP_503', 'sensitive Salesforce response'));
     try {
       await new RestFlowInvocationGateway(fake.connection).invokeFlow('Calculate_Discount', [{}]);
       expect.fail('Expected FlowInvocationFailed.');
     } catch (error: unknown) {
       expect(error).to.be.instanceOf(Error);
-      expect((error as Error).message).to.include('Status: 503');
+      expect((error as Error).message).to.include('Status: ERROR_HTTP_503');
       expect((error as Error).message).not.to.include('sensitive Salesforce response');
       expect((error as Error & { cause?: unknown }).cause).to.equal(undefined);
     }

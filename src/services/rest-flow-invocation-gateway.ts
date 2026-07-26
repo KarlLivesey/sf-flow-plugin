@@ -26,9 +26,25 @@ const transportErrorSchema = z
       .string()
       .regex(/^[A-Z][A-Z0-9_]*$/u)
       .optional(),
+    errorCode: z
+      .string()
+      .regex(/^[A-Z][A-Z0-9_]*$/u)
+      .optional(),
+    name: z
+      .string()
+      .regex(/^[A-Z][A-Z0-9_]*$/u)
+      .optional(),
     statusCode: z.union([z.number().int().min(100).max(599), z.string().regex(/^[A-Z][A-Z0-9_]*$/u)]).optional(),
   })
   .passthrough();
+
+const permissionErrorCodes = new Set([
+  'FORBIDDEN',
+  'INSUFFICIENT_ACCESS',
+  'INSUFFICIENT_ACCESS_OR_READONLY',
+  'INVALID_SESSION_ID',
+  'UNAUTHORIZED',
+]);
 
 const actionResultSchema: z.ZodType<FlowActionResult> = z.object({
   actionName: z.string().optional(),
@@ -47,12 +63,17 @@ const actionResultSchema: z.ZodType<FlowActionResult> = z.object({
 
 const actionResultsSchema = z.array(actionResultSchema);
 
-function safeTransportCode(error: unknown): string | null {
+function transportCodes(error: unknown): Array<number | string> {
   const parsed = transportErrorSchema.safeParse(error);
   if (!parsed.success) {
-    return null;
+    return [];
   }
-  const code = parsed.data.statusCode ?? parsed.data.code;
+  const { code, errorCode, name, statusCode } = parsed.data;
+  return [errorCode, statusCode, code, name].filter((value): value is number | string => value !== undefined);
+}
+
+function safeTransportCode(error: unknown): string | null {
+  const code = transportCodes(error)[0];
   return code === undefined ? null : String(code);
 }
 
@@ -62,23 +83,8 @@ function invocationFailureMessage(apiName: string, error: unknown): string {
 }
 
 function isPermissionFailure(error: unknown): boolean {
-  const parsed = transportErrorSchema.safeParse(error);
-  if (!parsed.success) {
-    return false;
-  }
-  const code = parsed.data.statusCode ?? parsed.data.code;
-  if (code === 401 || code === 403) {
-    return true;
-  }
-  return (
-    typeof code === 'string' &&
-    new Set([
-      'FORBIDDEN',
-      'INSUFFICIENT_ACCESS',
-      'INSUFFICIENT_ACCESS_OR_READONLY',
-      'INVALID_SESSION_ID',
-      'UNAUTHORIZED',
-    ]).has(code)
+  return transportCodes(error).some(
+    (code) => code === 401 || code === 403 || (typeof code === 'string' && permissionErrorCodes.has(code))
   );
 }
 
