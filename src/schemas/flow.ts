@@ -26,6 +26,7 @@ import type {
   FlowGraphLayoutSelection,
   FlowGraphStyle,
   FlowSubflowVersionSelector,
+  FlowDescribeSection,
 } from '../types/flow-inspection.js';
 import type {
   FlowDefinitionRecord,
@@ -93,6 +94,14 @@ export const flowVersionSortSchema: z.ZodType<FlowVersionSort> = z.enum(['versio
 export const flowSortOrderSchema: z.ZodType<FlowSortOrder> = z.enum(['asc', 'desc']);
 
 export const flowSubflowVersionSelectorSchema: z.ZodType<FlowSubflowVersionSelector> = z.enum(['active', 'latest']);
+
+export const flowDescribeSectionSchema: z.ZodType<FlowDescribeSection> = z.enum([
+  'elements',
+  'inputs',
+  'outputs',
+  'references',
+  'resources',
+]);
 
 export const flowGraphDirectionSchema: z.ZodType<FlowGraphDirection> = z.enum(['auto', 'left-right', 'top-down']);
 

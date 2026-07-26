@@ -16,7 +16,12 @@ import {
   flowGraphStyleSchema,
 } from '../schemas/flow.js';
 import type { FlowDefinitionGateway } from '../types/flow.js';
-import type { FlowGraphRequest, FlowGraphResult } from '../types/flow-inspection.js';
+import type {
+  FlowDescribeResult,
+  FlowGraphRequest,
+  FlowGraphResult,
+  FlowTraversalResult,
+} from '../types/flow-inspection.js';
 import { renderFlowGraph } from '../utils/flow-graph-renderer.js';
 import {
   resolveGraphCurve,
@@ -33,6 +38,21 @@ function summariseRequestedLayout(layout: FlowGraphRequest['layout']): FlowGraph
     return layout;
   }
   return layout.length === 1 ? layout[0] ?? 'auto' : 'auto';
+}
+
+function traversalResult(result: FlowDescribeResult): FlowTraversalResult {
+  return {
+    apiName: result.apiName,
+    namespace: result.namespace,
+    requestedVersion: result.requestedVersion,
+    resolvedVersion: result.resolvedVersion,
+    subflowVersion: result.subflowVersion,
+    recursive: result.recursive,
+    maxDepth: result.maxDepth,
+    flows: result.flows,
+    warnings: result.warnings,
+    targetOrg: result.targetOrg,
+  };
 }
 
 function validateGraphOptions(
@@ -76,7 +96,7 @@ export class FlowGraphService {
     progress: FlowProgressReporter = noFlowProgress
   ): Promise<FlowGraphResult> {
     const validated = validateGraphOptions(request);
-    const described = await new FlowDescribeService(this.gateway).describe(request, progress);
+    const described = traversalResult(await new FlowDescribeService(this.gateway).describe(request, progress));
     const resolvedDirection = resolveGraphDirection(described.flows, validated.direction);
     const layoutCandidates = resolveGraphLayoutCandidates(validated.layout);
     const resolvedLayout = resolveGraphLayout(described.flows, validated.layout, validated.elk);

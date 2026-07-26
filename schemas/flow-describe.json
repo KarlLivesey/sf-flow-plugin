@@ -40,19 +40,26 @@
         },
         "targetOrg": {
           "type": "string"
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowDescribeSection"
+          }
         }
       },
       "required": [
         "apiName",
+        "flows",
+        "maxDepth",
         "namespace",
+        "recursive",
         "requestedVersion",
         "resolvedVersion",
+        "sections",
         "subflowVersion",
-        "recursive",
-        "maxDepth",
-        "flows",
-        "warnings",
-        "targetOrg"
+        "targetOrg",
+        "warnings"
       ],
       "additionalProperties": false
     },
@@ -318,6 +325,10 @@
     "FlowTraversalWarningKind": {
       "type": "string",
       "enum": ["depth-limit", "missing-subflow", "subflow-version-fallback", "missing-subflow-version"]
+    },
+    "FlowDescribeSection": {
+      "type": "string",
+      "enum": ["elements", "inputs", "outputs", "references", "resources"]
     }
   }
 }
