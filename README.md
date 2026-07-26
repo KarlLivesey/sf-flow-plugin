@@ -7,7 +7,7 @@ The package is implemented in strict TypeScript using the current Salesforce ext
 ## Requirements
 
 - Node.js 22.19 or later.
-- A current Salesforce CLI installation. The packaged plugin is verified with `@salesforce/cli` 2.144.6.
+- A current Salesforce CLI installation.
 - An authenticated Salesforce org whose user can read Flow Tooling API records.
 - Tooling API update or deletion access for commands that mutate `FlowDefinition` or `Flow` records.
 

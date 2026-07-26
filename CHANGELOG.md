@@ -4,6 +4,8 @@ All notable user-visible changes to this project will be documented in this file
 
 ## Unreleased
 
+## 1.2.0 - 2026-07-26
+
 ### Added
 
 - Added `sf flow describe` for Flow resources, elements, Apex actions, subflows and referenced objects.
@@ -16,6 +18,12 @@ All notable user-visible changes to this project will be documented in this file
 - Added safe Mermaid and DOT source-file output with `sf flow graph --output-file`.
 - Added automatic Salesforce-style progress output to every Flow command, with contextual Flow and version details and suppression in JSON mode.
 - Added point-in-time Tooling API permission preflights for real and dry-run Flow mutations.
+- Added definition-level recursive dependency traversal, component-type filtering and CI failure controls.
+- Added scoped Flow comparisons, order-insensitive comparison and CI failure controls.
+- Added Flow audit name filtering, inactive-version thresholds, age filtering and CI failure controls.
+- Added Flow version status, date, limit, sort and order filters.
+- Added prune age and status filters with explicit keep and ignore protections.
+- Added active-version concurrency guards to activation, deactivation and pruning.
 
 ## 1.1.0 - 2026-07-25
 
