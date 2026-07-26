@@ -584,10 +584,12 @@ sf flow metrics \
   [--json]
 ```
 
-Metrics include executable elements, decisions and outcomes, loops and maximum loop nesting, DML, DML inside loops,
-Apex actions, subflows, maximum connector-path depth, fault-path coverage, variables, formulas, unused resources,
-referenced objects, fan-in, fan-out and unreachable elements. Recursive analysis defaults to active subflows with
-latest fallback. The command reports facts only; policy thresholds belong in `sf flow check`.
+Metrics include executable elements, decisions and outcomes, loops, DML, DML inside loops, Apex actions, subflows,
+fault-path coverage, variables, formulas, unused resources, referenced objects, fan-in, fan-out and unreachable
+elements. `maximumPathDepthUpperBound` and `maximumLoopNestingUpperBound` are upper bounds derived by condensing
+strongly connected components; they can exceed any individual non-repeating path through a cyclic component.
+Recursive analysis defaults to active subflows with latest fallback. The command reports facts only; policy
+thresholds belong in `sf flow check`.
 
 Static analysis is the default and does not query Data Cloud. Add `--data-cloud` to query runtime telemetry for the
 selected root Flow version, using the authenticated target org and a 30-day window by default:
@@ -601,10 +603,12 @@ sf flow metrics \
 ```
 
 Runtime output includes execution, successful and failed counts; average, minimum and maximum duration; first and
-last execution times; and status/error breakdowns. `--data-cloud` first verifies that the selected Flow and version
-are available through the standard or legacy Flow Data Model Objects. Missing Flow DMOs or no matching Flow/version
-records produce `FlowDataCloudMetricsUnavailable`. Permission failures, query failures and malformed responses
-produce `FlowDataCloudMetricsFailed`. An enabled Flow with no runs in the selected window returns zero executions.
+last execution times; and status/error breakdowns. `--data-cloud` first checks all required Flow, Flow Version and
+Flow Run Data Model Objects in the standard or legacy schema. If every required DMO is accessible but the selected
+Flow/version record is absent, the command produces `FlowDataCloudMetricsUnavailable`. DMO capability or access
+failures, permission failures, query failures and malformed responses produce `FlowDataCloudMetricsFailed`; an
+endpoint `404` is not treated as proof that metrics are merely unavailable. An enabled Flow with no runs in the
+selected window returns zero executions.
 
 The plugin queries the Data Cloud Data Model Objects through the Data 360 Connect REST SQL Query API using the
 Salesforce CLI-authenticated target-org connection. It does not use ordinary SOQL or exchange the Salesforce access
@@ -636,8 +640,11 @@ sf flow check \
 
 This read-only CI command aggregates the existing lint, dependency, subflow, version-state and metrics analysis for
 one or more Flows. It reports missing or inactive subflows, dependency truncation, missing referenced components,
-active/latest state and accumulated inactive versions. Input/output contracts and structural metrics are returned as
-context; the command does not infer contract compatibility problems or apply complexity thresholds.
+active/latest state and accumulated inactive versions. Input/output `contracts` are populated whenever lint, subflow
+or metrics checks load Flow metadata. A lint-only check preserves the selected root Flow contract without recursively
+loading subflows; dependencies/versions-only checks return `contracts: []`. `metrics` is populated only when the
+metrics check is selected and is otherwise `null`. These fields provide context only: the command does not infer
+contract compatibility problems or apply complexity thresholds.
 
 The command fails on errors by default. Use `--fail-on warning` for a stricter CI gate, repeatable `--only` or
 `--exclude` flags to select checks, and SARIF output for code-scanning integrations.
@@ -856,42 +863,42 @@ These checks are point-in-time preflights, not an atomic guarantee. Permissions 
 
 ## Error codes
 
-| Code                                  | Meaning                                                                     |
-| ------------------------------------- | --------------------------------------------------------------------------- |
-| `FlowDefinitionNotFound`              | No definition matched the API name and namespace.                           |
-| `FlowDefinitionAmbiguous`             | Multiple definitions matched; specify a namespace.                          |
-| `FlowVersionInvalid`                  | The version flag was neither `latest` nor a positive integer.               |
-| `FlowVersionNotFound`                 | The requested version does not exist.                                       |
-| `FlowVersionNotActivatable`           | The selected version has an ineligible Salesforce status.                   |
-| `FlowActiveVersionMismatch`           | The active version did not match the supplied concurrency guard.            |
-| `FlowLatestVersionMismatch`           | The latest version did not match the supplied concurrency guard.            |
-| `FlowActivationFailed`                | A validated Tooling API query or update failed.                             |
-| `FlowActivationVerificationFailed`    | Salesforce did not report the requested version as active after the update. |
-| `FlowQueryFailed`                     | A validated Tooling API query or response failed.                           |
-| `FlowMutationFailed`                  | Salesforce rejected a validated Flow mutation.                              |
-| `FlowMutationPermissionDenied`        | Tooling API reports that the user cannot perform the planned mutation.      |
-| `FlowDeactivationFailed`              | Flow deactivation could not be completed.                                   |
-| `FlowDeactivationVerificationFailed`  | Salesforce still reported an active version after deactivation.             |
-| `FlowAuditFailed`                     | The org-wide Flow audit could not be completed.                             |
-| `FlowListFailed`                      | Flow definitions could not be listed.                                       |
-| `FlowDependenciesFailed`              | Indexed Flow dependencies could not be queried.                             |
-| `FlowComparisonFailed`                | The requested versions or their Flow metadata could not be compared.        |
-| `FlowExportFailed`                    | Flow source metadata could not be exported.                                 |
-| `FlowInspectionFailed`                | Flow metadata could not be described or rendered.                           |
-| `FlowLintFailed`                      | Static Flow analysis or report output failed.                               |
-| `FlowPruneFailed`                     | Flow prune planning or deletion failed.                                     |
-| `FlowPruneVerificationFailed`         | Salesforce still returned a deleted version after pruning.                  |
-| `FlowDeleteVersionFailed`             | Explicit version deletion planning or mutation failed.                      |
-| `FlowDeleteVersionVerificationFailed` | Salesforce still returned an explicitly deleted version.                    |
-| `FlowInputInvalid`                    | Supplied Flow inputs did not match the declared input contract.             |
-| `FlowInvocationFailed`                | Salesforce could not execute or report the Flow invocation.                 |
-| `FlowInvocationPermissionDenied`      | The authenticated user cannot invoke the Flow action.                       |
-| `FlowProductionConfirmationRequired`  | Production Flow execution requires explicit confirmation.                   |
-| `FlowMetricsFailed`                   | Flow complexity metrics could not be calculated.                            |
-| `FlowDataCloudMetricsUnavailable`     | Data Cloud Flow metrics are not enabled, available or queryable.            |
-| `FlowDataCloudMetricsFailed`          | Data Cloud Flow runtime metrics could not be queried or validated.          |
-| `FlowCheckFailed`                     | The requested read-only Flow checks could not be completed.                 |
-| `FlowBundleFailed`                    | The Flow bundle was incomplete or could not be written safely.              |
+| Code                                  | Meaning                                                                         |
+| ------------------------------------- | ------------------------------------------------------------------------------- |
+| `FlowDefinitionNotFound`              | No definition matched the API name and namespace.                               |
+| `FlowDefinitionAmbiguous`             | Multiple definitions matched; specify a namespace.                              |
+| `FlowVersionInvalid`                  | The version flag was neither `latest` nor a positive integer.                   |
+| `FlowVersionNotFound`                 | The requested version does not exist.                                           |
+| `FlowVersionNotActivatable`           | The selected version has an ineligible Salesforce status.                       |
+| `FlowActiveVersionMismatch`           | The active version did not match the supplied concurrency guard.                |
+| `FlowLatestVersionMismatch`           | The latest version did not match the supplied concurrency guard.                |
+| `FlowActivationFailed`                | A validated Tooling API query or update failed.                                 |
+| `FlowActivationVerificationFailed`    | Salesforce did not report the requested version as active after the update.     |
+| `FlowQueryFailed`                     | A validated Tooling API query or response failed.                               |
+| `FlowMutationFailed`                  | Salesforce rejected a validated Flow mutation.                                  |
+| `FlowMutationPermissionDenied`        | Tooling API reports that the user cannot perform the planned mutation.          |
+| `FlowDeactivationFailed`              | Flow deactivation could not be completed.                                       |
+| `FlowDeactivationVerificationFailed`  | Salesforce still reported an active version after deactivation.                 |
+| `FlowAuditFailed`                     | The org-wide Flow audit could not be completed.                                 |
+| `FlowListFailed`                      | Flow definitions could not be listed.                                           |
+| `FlowDependenciesFailed`              | Indexed Flow dependencies could not be queried.                                 |
+| `FlowComparisonFailed`                | The requested versions or their Flow metadata could not be compared.            |
+| `FlowExportFailed`                    | Flow source metadata could not be exported.                                     |
+| `FlowInspectionFailed`                | Flow metadata could not be described or rendered.                               |
+| `FlowLintFailed`                      | Static Flow analysis or report output failed.                                   |
+| `FlowPruneFailed`                     | Flow prune planning or deletion failed.                                         |
+| `FlowPruneVerificationFailed`         | Salesforce still returned a deleted version after pruning.                      |
+| `FlowDeleteVersionFailed`             | Explicit version deletion planning or mutation failed.                          |
+| `FlowDeleteVersionVerificationFailed` | Salesforce still returned an explicitly deleted version.                        |
+| `FlowInputInvalid`                    | Supplied Flow inputs did not match the declared input contract.                 |
+| `FlowInvocationFailed`                | Salesforce could not execute or report the Flow invocation.                     |
+| `FlowInvocationPermissionDenied`      | The authenticated user cannot invoke the Flow action.                           |
+| `FlowProductionConfirmationRequired`  | Production Flow execution requires explicit confirmation.                       |
+| `FlowMetricsFailed`                   | Flow complexity metrics could not be calculated.                                |
+| `FlowDataCloudMetricsUnavailable`     | Required DMOs were accessible, but the selected Flow/version record was absent. |
+| `FlowDataCloudMetricsFailed`          | Data Cloud DMO access, capability, query or response validation failed.         |
+| `FlowCheckFailed`                     | The requested read-only Flow checks could not be completed.                     |
+| `FlowBundleFailed`                    | The Flow bundle was incomplete or could not be written safely.                  |
 
 ## Development
 

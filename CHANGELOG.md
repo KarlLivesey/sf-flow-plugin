@@ -14,9 +14,10 @@ All notable user-visible changes to this project will be documented in this file
   concurrency guards and post-deletion verification.
 - Added `sf flow check` to aggregate lint, dependency, subflow, version-state and metrics findings for CI, with
   selectable checks, recursive traversal, severity thresholds, human and SARIF output.
-- Added `sf flow metrics` for factual complexity measurements including elements, paths, loops, DML, fault coverage,
-  resources, references, fan-in, fan-out and reachability, plus optional runtime telemetry queried through the Data
-  360 Connect REST SQL Query API with an availability preflight and configurable reporting window.
+- Added `sf flow metrics` for factual complexity measurements including elements, SCC-derived path-depth and
+  loop-nesting upper bounds, DML, fault coverage, resources, references, fan-in, fan-out and reachability, plus
+  optional runtime telemetry queried through the Data 360 Connect REST SQL Query API with an availability preflight
+  and configurable reporting window.
 - Added `sf flow bundle` to export a Flow and its complete recursively resolved subflow source set with deployable
   metadata, `package.xml`, selected-version manifest, dependency report and external dependency list. Incomplete
   traversal is refused, while overwrite uses per-root ownership checks, confined regular-file targets, staged writes,
@@ -37,8 +38,9 @@ All notable user-visible changes to this project will be documented in this file
 - `sf flow run --dry-run` validates eligibility, inputs, types and action access without claiming to predict runtime
   success. The active version is rechecked immediately before invocation, while Salesforce's returned version remains
   authoritative.
-- Data Cloud capability checks distinguish unavailable Flow DMOs and records from permission, query and response
-  failures, and runtime records are scoped to the authenticated source organisation.
+- Data Cloud preflight checks every required Flow, Flow Version and Flow Run DMO. An absent selected Flow/version
+  record after successful DMO access is reported as unavailable; DMO capability/access, permission, query and
+  response failures are reported as failed. Runtime records are scoped to the authenticated source organisation.
 - `sf flow debug` is not included because the requested trace, rollback, run-as and record-trigger behaviour does not
   have a verified supported Salesforce interface.
 - Salesforce CLI's existing `sf flow run test` and `sf flow get test` commands remain the supported Flow test runner;
