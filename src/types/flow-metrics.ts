@@ -22,12 +22,14 @@ export interface FlowMetricCounts {
   decisions: number;
   decisionOutcomes: number;
   loops: number;
-  maximumLoopNesting: number;
+  /** Upper bound derived after condensing each strongly connected component into one graph node. */
+  maximumLoopNestingUpperBound: number;
   dmlElements: number;
   dmlInsideLoops: number;
   apexActions: number;
   subflows: number;
-  maximumPathDepth: number;
+  /** Upper bound derived after condensing each strongly connected component into one graph node. */
+  maximumPathDepthUpperBound: number;
   faultCapableElements: number;
   faultConnectedElements: number;
   variables: number;

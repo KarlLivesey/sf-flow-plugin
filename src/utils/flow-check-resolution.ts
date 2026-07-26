@@ -23,7 +23,7 @@ interface ResolveFlowCheckContext {
 }
 
 export function requiresFlowDescription(checks: ReadonlyArray<FlowCheckKind>): boolean {
-  return checks.some((check) => ['metrics', 'subflows'].includes(check));
+  return checks.some((check) => ['lint', 'metrics', 'subflows'].includes(check));
 }
 
 function referencedVersion(

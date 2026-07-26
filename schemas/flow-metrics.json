@@ -115,8 +115,9 @@
         "loops": {
           "type": "number"
         },
-        "maximumLoopNesting": {
-          "type": "number"
+        "maximumLoopNestingUpperBound": {
+          "type": "number",
+          "description": "Upper bound derived after condensing each strongly connected component into one graph node."
         },
         "dmlElements": {
           "type": "number"
@@ -130,8 +131,9 @@
         "subflows": {
           "type": "number"
         },
-        "maximumPathDepth": {
-          "type": "number"
+        "maximumPathDepthUpperBound": {
+          "type": "number",
+          "description": "Upper bound derived after condensing each strongly connected component into one graph node."
         },
         "faultCapableElements": {
           "type": "number"
@@ -163,12 +165,12 @@
         "decisions",
         "decisionOutcomes",
         "loops",
-        "maximumLoopNesting",
+        "maximumLoopNestingUpperBound",
         "dmlElements",
         "dmlInsideLoops",
         "apexActions",
         "subflows",
-        "maximumPathDepth",
+        "maximumPathDepthUpperBound",
         "faultCapableElements",
         "faultConnectedElements",
         "variables",
@@ -195,8 +197,9 @@
         "loops": {
           "type": "number"
         },
-        "maximumLoopNesting": {
-          "type": "number"
+        "maximumLoopNestingUpperBound": {
+          "type": "number",
+          "description": "Upper bound derived after condensing each strongly connected component into one graph node."
         },
         "dmlElements": {
           "type": "number"
@@ -210,8 +213,9 @@
         "subflows": {
           "type": "number"
         },
-        "maximumPathDepth": {
-          "type": "number"
+        "maximumPathDepthUpperBound": {
+          "type": "number",
+          "description": "Upper bound derived after condensing each strongly connected component into one graph node."
         },
         "faultCapableElements": {
           "type": "number"
@@ -287,8 +291,8 @@
         "loops",
         "maximumFanIn",
         "maximumFanOut",
-        "maximumLoopNesting",
-        "maximumPathDepth",
+        "maximumLoopNestingUpperBound",
+        "maximumPathDepthUpperBound",
         "namespace",
         "referencedObjects",
         "subflows",

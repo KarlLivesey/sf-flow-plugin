@@ -76,6 +76,7 @@ describe('FlowCheckService query selection', (): void => {
     const gateway = nestedFlowGateway();
     const result = await new FlowCheckService(gateway).check(request({ checks: ['lint'], recursive: true }));
     expect(result.checks).to.deep.equal(['lint']);
+    expect(result.flows[0]?.contracts[0]?.inputs.map((input) => input.name)).to.deep.equal(['InputValue']);
     expect(gateway.definitionQueries.map((lookup) => lookup.apiName)).to.deep.equal(['Flow_A', 'Flow_A']);
     expect(gateway.versionQueries).to.deep.equal(['300000000000001', '300000000000001']);
   });

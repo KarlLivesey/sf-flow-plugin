@@ -181,7 +181,13 @@ export class FlowCheckService {
   private async checkFlow(context: FlowCheckContext): Promise<FlowCheckEntry> {
     const { request, apiName, checks, progress } = context;
     const described = requiresFlowDescription(checks)
-      ? await new FlowDescribeService(this.gateway).describe(describeRequest(request, apiName), progress)
+      ? await new FlowDescribeService(this.gateway).describe(
+          {
+            ...describeRequest(request, apiName),
+            recursive: request.recursive && (hasCheck(checks, 'metrics') || hasCheck(checks, 'subflows')),
+          },
+          progress
+        )
       : null;
     const root =
       described === null

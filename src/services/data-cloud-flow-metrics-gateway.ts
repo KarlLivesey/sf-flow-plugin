@@ -191,14 +191,14 @@ export class DataCloudFlowMetricsGateway implements FlowRuntimeMetricsGateway {
   ): Promise<ResolvedDataCloudVersion> {
     const name = qualifiedFlowName(request.apiName, request.namespace);
     const lookup = { name, organizationId, version: request.version };
-    if (await this.hasDmo(FLOW_DMO_SCHEMAS[0])) {
+    if (await this.hasRequiredDmos(FLOW_DMO_SCHEMAS[0])) {
       return requireVersion(await this.findVersion(FLOW_DMO_SCHEMAS[0], lookup), name, request.version);
     }
-    if (await this.hasDmo(FLOW_DMO_SCHEMAS[1])) {
+    if (await this.hasRequiredDmos(FLOW_DMO_SCHEMAS[1])) {
       return requireVersion(await this.findVersion(FLOW_DMO_SCHEMAS[1], lookup), name, request.version);
     }
-    throw flowDataCloudMetricsUnavailable(
-      `Data Cloud Flow metrics are not available for "${name}" version ${request.version}.`
+    throw flowDataCloudMetricsFailed(
+      'Data Cloud did not confirm access to every required Flow, Flow Version and Flow Run DMO.'
     );
   }
 
@@ -217,9 +217,9 @@ export class DataCloudFlowMetricsGateway implements FlowRuntimeMetricsGateway {
     return versionId === null ? null : { schema, versionId };
   }
 
-  private async hasDmo(schema: FlowDmoSchema): Promise<boolean> {
+  private async hasDmo(objectName: string): Promise<boolean> {
     try {
-      await this.connection.request(`${this.dmoBaseUrl}/${encodeURIComponent(schema.flowObject)}`);
+      await this.connection.request(`${this.dmoBaseUrl}/${encodeURIComponent(objectName)}`);
       return true;
     } catch (error: unknown) {
       if (httpStatus(error) === 404) {
@@ -227,6 +227,14 @@ export class DataCloudFlowMetricsGateway implements FlowRuntimeMetricsGateway {
       }
       throw error;
     }
+  }
+
+  private async hasRequiredDmos(schema: FlowDmoSchema): Promise<boolean> {
+    const availability = await [schema.flowObject, schema.versionObject, schema.runObject].reduce(
+      async (previous, objectName) => [...(await previous), await this.hasDmo(objectName)],
+      Promise.resolve([] as boolean[])
+    );
+    return availability.every(Boolean);
   }
 
   private async loadBreakdowns(

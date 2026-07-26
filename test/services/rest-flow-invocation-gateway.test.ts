@@ -65,6 +65,22 @@ describe('RestFlowInvocationGateway', (): void => {
   });
 });
 
+describe('RestFlowInvocationGateway result normalisation', (): void => {
+  it('normalises null output values for an unsuccessful invocation', async (): Promise<void> => {
+    const fake = connection([
+      {
+        errors: [{ statusCode: 'FLOW_EXCEPTION' }],
+        invocationId: null,
+        isSuccess: false,
+        outputValues: null,
+      },
+    ]);
+    const result = await new RestFlowInvocationGateway(fake.connection).invokeFlow('Calculate_Discount', [{}]);
+    expect(result[0]).to.include({ isSuccess: false });
+    expect(result[0]?.outputValues).to.deep.equal({});
+  });
+});
+
 describe('RestFlowInvocationGateway errors', (): void => {
   it('wraps malformed org and action responses', async (): Promise<void> => {
     const invalidOrg = connection({});
@@ -77,13 +93,27 @@ describe('RestFlowInvocationGateway errors', (): void => {
     );
   });
 
-  it('reports action discovery failures as permission failures', async (): Promise<void> => {
+  it('reports recognised action authorisation failures as permission failures', async (): Promise<void> => {
     const fake = connection({});
-    fake.request.rejects(new Error('forbidden'));
+    fake.request.rejects(Object.assign(new Error('forbidden'), { statusCode: 403 }));
     await expectErrorName(
       new RestFlowInvocationGateway(fake.connection).assertFlowActionAvailable('Calculate_Discount'),
       'FlowInvocationPermissionDenied'
     );
+  });
+
+  it('reports other action discovery failures as redacted invocation failures', async (): Promise<void> => {
+    const fake = connection({});
+    fake.request.rejects(Object.assign(new Error('sensitive service response'), { statusCode: 503 }));
+    try {
+      await new RestFlowInvocationGateway(fake.connection).assertFlowActionAvailable('Calculate_Discount');
+      expect.fail('Expected FlowInvocationFailed.');
+    } catch (error: unknown) {
+      expect(error).to.be.instanceOf(Error);
+      expect((error as Error).name).to.equal('FlowInvocationFailed');
+      expect((error as Error).message).to.include('Status: 503');
+      expect((error as Error).message).not.to.include('sensitive service response');
+    }
   });
 
   it('does not retain raw Salesforce transport errors as causes', async (): Promise<void> => {

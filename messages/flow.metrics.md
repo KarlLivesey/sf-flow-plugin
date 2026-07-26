@@ -6,7 +6,9 @@ Calculate factual Salesforce Flow complexity metrics.
 
 Report structural counts for one Flow version, optionally including recursively referenced subflows. Use `--data-cloud`
 to include historical runtime telemetry when Flow metrics collection is enabled in Data Cloud. Static metrics describe
-the selected metadata; policy thresholds belong in `sf flow check`.
+the selected metadata; policy thresholds belong in `sf flow check`. Maximum path depth and loop nesting are explicitly
+reported as upper bounds: each strongly connected component is condensed and all of its elements are counted, so the
+bound can exceed any non-repeating connector path through a cyclic component.
 
 # flags.api-name.summary
 
