@@ -181,6 +181,7 @@ Creation filters accept ISO 8601 dates or date-times and use strict before/after
 sf flow compare \
   --api-name Order_Processing \
   [--target-org ORG] \
+  [--from-org ORG --to-org ORG] \
   [--from active|latest|NUMBER] \
   [--to active|latest|NUMBER] \
   [--fail-on-difference] \
@@ -199,6 +200,20 @@ sf flow compare \
   --from 4 \
   --to 7
 ```
+
+Compare the same Flow across two authenticated orgs:
+
+```bash
+sf flow compare \
+  --api-name Order_Processing \
+  --from-org Development \
+  --to-org Preprod \
+  --from latest \
+  --to active
+```
+
+`--from-org` and `--to-org` must be supplied together. Without them, both sides use `--target-org` or the configured
+default target org. The Flow definition and selected version are resolved independently in each org.
 
 The command retrieves each version's validated `Flow.Metadata` value and reports `added`, `removed` and `changed` paths. Named Flow elements are matched by name so array reordering does not produce false changes. Top-level lifecycle `status` is excluded because `sf flow versions` already reports version state.
 

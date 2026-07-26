@@ -45,12 +45,14 @@
       "fail-on-difference",
       "flags-dir",
       "from",
+      "from-org",
       "ignore-order",
       "json",
       "namespace",
       "only",
       "target-org",
-      "to"
+      "to",
+      "to-org"
     ],
     "plugin": "sf-flow-plugin"
   },

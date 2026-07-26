@@ -6,12 +6,12 @@
  */
 import type { Connection, Org } from '@salesforce/core';
 
-export function createCommandOrg(connection: Connection): Org {
+export function createCommandOrg(connection: Connection, username = 'admin@example.com'): Org {
   return {
     getConnection: (_apiVersion?: string): Connection => {
       void _apiVersion;
       return connection;
     },
-    getUsername: (): string => 'admin@example.com',
+    getUsername: (): string => username,
   } as unknown as Org;
 }

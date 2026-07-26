@@ -90,6 +90,8 @@ export interface FlowDependenciesResult {
 export interface FlowCompareRequest extends NamedFlowRequest {
   from: FlowComparisonVersionSelector;
   to: FlowComparisonVersionSelector;
+  fromOrg: string;
+  toOrg: string;
   scopes: FlowComparisonScope[];
   ignoreOrder: boolean;
 }
@@ -107,6 +109,8 @@ export interface FlowCompareResult {
   apiName: string;
   namespace: string | null;
   definitionId: string;
+  fromDefinitionId: string;
+  toDefinitionId: string;
   requestedFrom: FlowComparisonVersionSelector;
   requestedTo: FlowComparisonVersionSelector;
   scopes: FlowComparisonScope[];
@@ -119,4 +123,7 @@ export interface FlowCompareResult {
   changed: number;
   different: boolean;
   targetOrg: string;
+  fromOrg: string;
+  toOrg: string;
+  crossOrg: boolean;
 }
