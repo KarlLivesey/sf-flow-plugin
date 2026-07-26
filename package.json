@@ -24,6 +24,9 @@
     "node": ">=22.19.0"
   },
   "packageManager": "yarn@1.22.22",
+  "resolutions": {
+    "filelist": "1.0.5"
+  },
   "files": [
     "/lib",
     "/messages",
