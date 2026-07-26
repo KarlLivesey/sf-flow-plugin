@@ -33,11 +33,16 @@ class DataCloudConnectionDouble {
   public readonly requests: Array<string | RequestDetails> = [];
   public readonly sqlQueries: string[] = [];
   public readonly version = '65.0';
+  private readonly organizationId = '00D000000000001';
 
   public constructor(private readonly responses: unknown[]) {}
 
   public asConnection(): Connection {
     return this as unknown as Connection;
+  }
+
+  public getAuthInfoFields(): { orgId: string } {
+    return { orgId: this.organizationId };
   }
 
   public async request(request: string | RequestDetails): Promise<unknown> {
@@ -64,11 +69,15 @@ function page(records: Array<Record<string, unknown>>): QueryResponse {
     metadata: names.map((name) => ({ name })),
     returnedRows: records.length,
     status: {
-      completionStatus: 'ResultsProduced',
+      completionStatus: 'Finished',
       queryId: 'query-1',
       rowCount: records.length,
     },
   };
+}
+
+function dmoNotFound(): Error & { statusCode: number } {
+  return Object.assign(new Error('Not found'), { statusCode: 404 });
 }
 
 function standardFlowRecord(): Record<string, unknown> {
@@ -109,6 +118,7 @@ function metricsRequest(): {
 describe('DataCloudFlowMetricsGateway aggregation', (): void => {
   it('uses Connect SQL and aggregates runtime telemetry', async (): Promise<void> => {
     const connection = new DataCloudConnectionDouble([
+      {},
       page([standardFlowRecord()]),
       page([standardVersionRecord()]),
       page([
@@ -144,11 +154,13 @@ describe('DataCloudFlowMetricsGateway aggregation', (): void => {
       maximumDurationMilliseconds: 20,
     });
     expect(result.averageDurationMilliseconds).to.be.closeTo(14.67, 0.01);
-    expect(connection.requests[0]).to.include({
+    expect(connection.requests[0]).to.equal('/services/data/v65.0/ssot/data-model-objects/std__FlowDmo__dlm');
+    expect(connection.requests[1]).to.include({
       method: 'POST',
       url: '/services/data/v65.0/ssot/query-sql',
     });
     expect(connection.sqlQueries[0]).to.contain('FROM std__FlowDmo__dlm');
+    expect(connection.sqlQueries[0]).to.contain("std__InternalOrganizationId__c = '00D000000000001'");
     expect(connection.sqlQueries[1]).to.contain('std__VersionNumber__c = 7');
     expect(connection.sqlQueries[2]).to.match(/timestamp with time zone '\d{4}-\d{2}-\d{2}T/u);
   });
@@ -156,7 +168,7 @@ describe('DataCloudFlowMetricsGateway aggregation', (): void => {
 
 describe('DataCloudFlowMetricsGateway availability', (): void => {
   it('does not try a legacy schema when the standard DMO lacks the selected Flow', async (): Promise<void> => {
-    const connection = new DataCloudConnectionDouble([page([])]);
+    const connection = new DataCloudConnectionDouble([{}, page([])]);
     await expectError(
       new DataCloudFlowMetricsGateway(connection.asConnection()).getMetrics(metricsRequest()),
       'FlowDataCloudMetricsUnavailable'
@@ -165,21 +177,21 @@ describe('DataCloudFlowMetricsGateway availability', (): void => {
   });
 
   it('does not try a legacy schema for a malformed response', async (): Promise<void> => {
-    const connection = new DataCloudConnectionDouble([{ records: [] }]);
+    const connection = new DataCloudConnectionDouble([{}, { records: [] }]);
     await expectError(
       new DataCloudFlowMetricsGateway(connection.asConnection()).getMetrics(metricsRequest()),
       'FlowDataCloudMetricsFailed'
     );
-    expect(connection.requests).to.have.length(1);
+    expect(connection.requests).to.have.length(2);
   });
 
   it('does not try a legacy schema for duplicate Flow records', async (): Promise<void> => {
-    const connection = new DataCloudConnectionDouble([page([standardFlowRecord(), standardFlowRecord()])]);
+    const connection = new DataCloudConnectionDouble([{}, page([standardFlowRecord(), standardFlowRecord()])]);
     await expectError(
       new DataCloudFlowMetricsGateway(connection.asConnection()).getMetrics(metricsRequest()),
       'FlowDataCloudMetricsFailed'
     );
-    expect(connection.requests).to.have.length(1);
+    expect(connection.requests).to.have.length(2);
   });
 
   it('rejects an invalid runtime metrics request before querying Data Cloud', async (): Promise<void> => {
@@ -198,7 +210,8 @@ describe('DataCloudFlowMetricsGateway availability', (): void => {
 describe('DataCloudFlowMetricsGateway compatibility', (): void => {
   it('falls back only when the standard Flow metrics DMO is unavailable', async (): Promise<void> => {
     const connection = new DataCloudConnectionDouble([
-      new Error('Table std__FlowDmo__dlm was not found'),
+      dmoNotFound(),
+      {},
       page([legacyFlowRecord()]),
       page([legacyVersionRecord()]),
       page([{ ['ssot__FlowRunStatus__c']: 'Complete', ['ssot__ErrorReason__c']: null, executions: '1' }]),
@@ -206,6 +219,15 @@ describe('DataCloudFlowMetricsGateway compatibility', (): void => {
     const result = await new DataCloudFlowMetricsGateway(connection.asConnection()).getMetrics(metricsRequest());
     expect(result.executions).to.equal(1);
     expect(result.averageDurationMilliseconds).to.equal(null);
-    expect(connection.sqlQueries[1]).to.contain('FROM ssot__Flow__dlm');
+    expect(connection.sqlQueries[0]).to.contain('FROM ssot__Flow__dlm');
+  });
+
+  it('does not treat permission failures as unavailable DMOs', async (): Promise<void> => {
+    const connection = new DataCloudConnectionDouble([Object.assign(new Error('Forbidden'), { statusCode: 403 })]);
+    await expectError(
+      new DataCloudFlowMetricsGateway(connection.asConnection()).getMetrics(metricsRequest()),
+      'FlowDataCloudMetricsFailed'
+    );
+    expect(connection.requests).to.have.length(1);
   });
 });

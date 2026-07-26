@@ -10,12 +10,14 @@ import { z } from 'zod';
 const queryMetadataSchema = z.object({ name: z.string().min(1) });
 const queryStatusSchema = z.object({
   completionStatus: z.string().min(1),
+  progress: z.number().min(0).max(1).optional(),
   queryId: z.string().regex(/^[\w%.~-]+$/u),
   rowCount: z.number().int().nonnegative(),
 });
 const queryResponseSchema = z.object({
   data: z.array(z.array(z.unknown())).optional(),
   metadata: z.array(queryMetadataSchema).optional(),
+  progress: z.number().min(0).max(1).optional(),
   returnedRows: z.number().int().nonnegative().optional(),
   status: queryStatusSchema,
 });
@@ -42,7 +44,7 @@ function parseResponse(response: unknown): QueryResponse {
 }
 
 function isComplete(response: QueryResponse): boolean {
-  return ['ResultsProduced', 'Success', 'Succeeded'].includes(response.status.completionStatus);
+  return response.status.completionStatus === 'Finished' || response.progress === 1 || response.status.progress === 1;
 }
 
 function isFailed(response: QueryResponse): boolean {
