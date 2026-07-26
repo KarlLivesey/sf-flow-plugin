@@ -125,7 +125,7 @@ describe('FlowVersionsService date validation', (): void => {
     { label: 'an invalid created-before day', filter: { createdBefore: '2026-02-30' } },
     { label: 'an invalid created-after month', filter: { createdAfter: '2026-13-01' } },
     { label: 'a non-leap modified-before day', filter: { modifiedBefore: '2025-02-29' } },
-    { label: 'an invalid modified-after day', filter: { modifiedAfter: '2026-04-31' } },
+    { label: 'an invalid modified-after datetime', filter: { modifiedAfter: '2026-04-31T12:00:00Z' } },
   ];
 
   for (const { label, filter } of invalidFilters) {
