@@ -142,6 +142,26 @@ describe('Flow lint output', (): void => {
 });
 
 describe('Flow lint baseline scope', (): void => {
+  it('accepts the Salesforce CLI JSON success envelope as a scoped baseline', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'flow-lint-envelope-'));
+    const baseline = join(directory, 'baseline.json');
+    try {
+      await writeFile(
+        baseline,
+        JSON.stringify({
+          status: 0,
+          result: baselineDocument([{ ...existing, message: 'Previous harmless wording.' }]),
+          warnings: [],
+        }),
+        'utf8'
+      );
+      const result = await applyFlowLintBaseline(lintResult(), baseline);
+      assertSarifOutput(result);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it('rejects a full-result baseline belonging to another Flow', async (): Promise<void> => {
     await expectBaselineRejected(
       baselineDocument([existing], 'Other_Flow'),
