@@ -79,6 +79,21 @@ describe('FlowDeleteVersionService planning', (): void => {
   });
 });
 
+describe('FlowDeleteVersionService missing version guidance', (): void => {
+  it('advises selecting an inactive numbered version', async (): Promise<void> => {
+    try {
+      await new FlowDeleteVersionService(gateway()).deleteVersion(request({ version: 99 }));
+      expect.fail('Expected FlowVersionNotFound.');
+    } catch (error: unknown) {
+      expect(error).to.be.instanceOf(Error);
+      expect((error as Error).name).to.equal('FlowVersionNotFound');
+      expect((error as Error & { actions?: string[] }).actions).to.deep.equal([
+        'Use sf flow versions to choose an existing inactive version number.',
+      ]);
+    }
+  });
+});
+
 describe('FlowDeleteVersionService mutation', (): void => {
   it('rechecks, deletes and verifies the selected version', async (): Promise<void> => {
     const fake = gateway();

@@ -5,9 +5,9 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import {
+  flowDeleteVersionNotFound,
   flowDeleteVersionFailed,
   flowDeleteVersionVerificationFailed,
-  flowVersionNotFound,
 } from '../errors/flow-errors.js';
 import { positiveFlowVersionSchema } from '../schemas/flow.js';
 import type {
@@ -134,7 +134,7 @@ export class FlowDeleteVersionService {
     const versions = await this.gateway.findVersions(definition.id);
     const selected = versions.find((version) => version.versionNumber === request.version);
     if (selected === undefined) {
-      throw flowVersionNotFound(request.apiName, request.version);
+      throw flowDeleteVersionNotFound(request.apiName, request.version);
     }
     return { request, state: { definition, versions }, selected };
   }

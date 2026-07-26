@@ -56,6 +56,14 @@ export function flowVersionNotFound(apiName: string, version: FlowVersionSelecto
   });
 }
 
+export function flowDeleteVersionNotFound(apiName: string, version: number): SfError {
+  return createFlowError({
+    code: 'FlowVersionNotFound',
+    message: `Flow "${apiName}" does not have version "${version}".`,
+    action: 'Use sf flow versions to choose an existing inactive version number.',
+  });
+}
+
 export function flowVersionNotActivatable(apiName: string, version: number, status: string): SfError {
   return createFlowError({
     code: 'FlowVersionNotActivatable',
