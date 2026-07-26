@@ -29,7 +29,10 @@ const nullableTextSchema = z
   .string()
   .nullable()
   .optional()
-  .transform((value) => value ?? null);
+  .transform((value) => {
+    const trimmed = value?.trim();
+    return trimmed === undefined || trimmed.length === 0 ? null : trimmed;
+  });
 
 export function parseFlowRuntimeBreakdown(record: Record<string, unknown>): FlowRuntimeMetricBreakdown {
   return {
@@ -94,7 +97,7 @@ export function summariseFlowRuntimeMetrics(
     from,
     executions: breakdowns.reduce((total, item) => total + item.executions, 0),
     successfulExecutions: breakdowns
-      .filter((item) => isSuccessful(item.status))
+      .filter((item) => isSuccessful(item.status) && !isFailed(item))
       .reduce((total, item) => total + item.executions, 0),
     failedExecutions: breakdowns.filter(isFailed).reduce((total, item) => total + item.executions, 0),
     averageDurationMilliseconds: weightedAverage(breakdowns),

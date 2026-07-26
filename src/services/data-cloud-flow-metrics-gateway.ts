@@ -16,6 +16,7 @@ import type {
 } from '../types/flow-metrics.js';
 import { parseFlowRuntimeBreakdown, summariseFlowRuntimeMetrics } from '../utils/flow-runtime-metrics.js';
 import { qualifiedFlowName } from '../utils/flow-state.js';
+import { DataCloudSqlQueryClient } from './data-cloud-sql-query-client.js';
 
 interface FlowDmoSchema {
   flowObject: string;
@@ -46,17 +47,8 @@ interface IdentifierDetails {
   name: string;
 }
 
-interface SchemaResolution {
-  name: string;
-  schemaIndex: number;
-  previousError?: unknown;
-}
-
 type DataCloudRecord = Record<string, unknown>;
 
-const queryResultSchema = z.object({
-  records: z.array(z.record(z.string(), z.unknown())),
-});
 const runtimeMetricsRequestSchema: z.ZodType<FlowRuntimeMetricsRequest> = z.object({
   apiName: flowApiNameSchema,
   namespace: namespaceSchema.nullable(),
@@ -72,7 +64,7 @@ function validateRuntimeMetricsRequest(request: FlowRuntimeMetricsRequest): Flow
   return validated.data;
 }
 
-const DMO_SCHEMAS: ReadonlyArray<FlowDmoSchema> = [
+const DMO_SCHEMAS = [
   {
     flowObject: 'std__FlowDmo__dlm',
     flowId: 'std__Id__c',
@@ -106,10 +98,10 @@ const DMO_SCHEMAS: ReadonlyArray<FlowDmoSchema> = [
     runCompleted: 'ssot__CompletedDateTime__c',
     runErrorReason: 'ssot__ErrorReason__c',
   },
-];
+] as const satisfies ReadonlyArray<FlowDmoSchema>;
 
-function escapeSoqlLiteral(value: string): string {
-  return value.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
+function escapeSqlLiteral(value: string): string {
+  return value.replaceAll("'", "''");
 }
 
 function readText(record: DataCloudRecord, field: string, label: string): string {
@@ -134,32 +126,33 @@ function singleIdentifier(records: ReadonlyArray<DataCloudRecord>, details: Iden
 function buildFlowQuery(schema: FlowDmoSchema, name: string): string {
   return (
     `SELECT ${schema.flowId}, ${schema.flowName} FROM ${schema.flowObject} ` +
-    `WHERE ${schema.flowName} = '${escapeSoqlLiteral(name)}' LIMIT 2`
+    `WHERE ${schema.flowName} = '${escapeSqlLiteral(name)}' LIMIT 2`
   );
 }
 
 function buildVersionQuery(schema: FlowDmoSchema, flowId: string, version: number): string {
   return (
     `SELECT ${schema.versionId}, ${schema.versionNumber} FROM ${schema.versionObject} ` +
-    `WHERE ${schema.versionFlowId} = '${escapeSoqlLiteral(flowId)}' AND ${schema.versionNumber} = ${version} LIMIT 2`
+    `WHERE ${schema.versionFlowId} = '${escapeSqlLiteral(flowId)}' AND ${schema.versionNumber} = ${version} LIMIT 2`
   );
 }
 
 function durationFields(schema: FlowDmoSchema): string {
   return schema.runDuration === undefined
     ? ''
-    : `, AVG(${schema.runDuration}) averageDurationMilliseconds` +
-        `, MIN(${schema.runDuration}) minimumDurationMilliseconds` +
-        `, MAX(${schema.runDuration}) maximumDurationMilliseconds`;
+    : `, AVG(${schema.runDuration}) AS "averageDurationMilliseconds"` +
+        `, MIN(${schema.runDuration}) AS "minimumDurationMilliseconds"` +
+        `, MAX(${schema.runDuration}) AS "maximumDurationMilliseconds"`;
 }
 
 function buildMetricsQuery(schema: FlowDmoSchema, versionId: string, from: string): string {
   return (
     `SELECT ${schema.runStatus}, ${schema.runErrorReason}` +
-    `, COUNT(${schema.runId}) executions${durationFields(schema)}` +
-    `, MIN(${schema.runScheduled}) firstExecution, MAX(${schema.runCompleted}) lastExecution ` +
-    `FROM ${schema.runObject} WHERE ${schema.runVersionId} = '${escapeSoqlLiteral(versionId)}' ` +
-    `AND ${schema.runScheduled} >= ${from} GROUP BY ${schema.runStatus}, ${schema.runErrorReason}`
+    `, COUNT(${schema.runId}) AS "executions"${durationFields(schema)}` +
+    `, MIN(${schema.runScheduled}) AS "firstExecution", MAX(${schema.runCompleted}) AS "lastExecution" ` +
+    `FROM ${schema.runObject} WHERE ${schema.runVersionId} = '${escapeSqlLiteral(versionId)}' ` +
+    `AND ${schema.runScheduled} >= timestamp with time zone '${escapeSqlLiteral(from)}' ` +
+    `GROUP BY ${schema.runStatus}, ${schema.runErrorReason}`
   );
 }
 
@@ -171,21 +164,51 @@ function normaliseBreakdown(record: DataCloudRecord, schema: FlowDmoSchema): Dat
   };
 }
 
+function isFlowMetricsError(error: unknown): boolean {
+  return error instanceof Error && error.name.startsWith('FlowDataCloud');
+}
+
+function isDmoUnavailable(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return /(?:relation|table|object).*(?:does not exist|not found|unknown)|(?:does not exist|not found).*(?:relation|table|object)/iu.test(
+    error.message
+  );
+}
+
+function requireVersion(
+  resolved: ResolvedDataCloudVersion | null,
+  name: string,
+  version: number
+): ResolvedDataCloudVersion {
+  if (resolved === null) {
+    throw flowDataCloudMetricsUnavailable(
+      `Data Cloud Flow metrics are not available for "${name}" version ${version}.`
+    );
+  }
+  return resolved;
+}
+
 export class DataCloudFlowMetricsGateway implements FlowRuntimeMetricsGateway {
-  public constructor(private readonly connection: Connection) {}
+  private readonly queryClient: DataCloudSqlQueryClient;
+
+  public constructor(connection: Connection) {
+    this.queryClient = new DataCloudSqlQueryClient(connection);
+  }
 
   public async getMetrics(request: FlowRuntimeMetricsRequest): Promise<FlowRuntimeMetrics> {
     const validatedRequest = validateRuntimeMetricsRequest(request);
     const from = new Date(Date.now() - validatedRequest.windowDays * 86_400_000).toISOString();
-    const resolved = await this.resolveVersion(validatedRequest);
     try {
-      const records = await this.query(buildMetricsQuery(resolved.schema, resolved.versionId, from));
+      const resolved = await this.resolveVersion(validatedRequest);
+      const records = await this.queryClient.query(buildMetricsQuery(resolved.schema, resolved.versionId, from));
       const breakdowns = records.map((record) =>
         parseFlowRuntimeBreakdown(normaliseBreakdown(record, resolved.schema))
       );
       return summariseFlowRuntimeMetrics(validatedRequest, from, breakdowns);
     } catch (error: unknown) {
-      if (error instanceof Error && error.name.startsWith('FlowDataCloud')) {
+      if (isFlowMetricsError(error)) {
         throw error;
       }
       throw flowDataCloudMetricsFailed(
@@ -197,37 +220,35 @@ export class DataCloudFlowMetricsGateway implements FlowRuntimeMetricsGateway {
 
   private async resolveVersion(request: FlowRuntimeMetricsRequest): Promise<ResolvedDataCloudVersion> {
     const name = qualifiedFlowName(request.apiName, request.namespace);
-    return this.resolveWithSchema(request, { name, schemaIndex: 0 });
+    try {
+      return requireVersion(await this.findVersion(DMO_SCHEMAS[0], name, request.version), name, request.version);
+    } catch (error: unknown) {
+      if (isFlowMetricsError(error) || !isDmoUnavailable(error)) {
+        throw error;
+      }
+      return this.resolveLegacyVersion(name, request.version, error);
+    }
   }
 
-  private async resolveWithSchema(
-    request: FlowRuntimeMetricsRequest,
-    resolution: SchemaResolution
+  private async resolveLegacyVersion(
+    name: string,
+    version: number,
+    standardError: unknown
   ): Promise<ResolvedDataCloudVersion> {
-    const schema = DMO_SCHEMAS[resolution.schemaIndex];
-    if (schema === undefined) {
-      throw flowDataCloudMetricsUnavailable(
-        `Data Cloud Flow metrics are not available for "${resolution.name}" version ${request.version}.`,
-        resolution.previousError
-      );
-    }
-    let resolved: ResolvedDataCloudVersion | null;
     try {
-      resolved = await this.findVersion(schema, resolution.name, request.version);
+      return requireVersion(await this.findVersion(DMO_SCHEMAS[1], name, version), name, version);
     } catch (error: unknown) {
-      return this.resolveWithSchema(request, {
-        name: resolution.name,
-        schemaIndex: resolution.schemaIndex + 1,
-        previousError: error,
-      });
+      if (isFlowMetricsError(error)) {
+        throw error;
+      }
+      if (isDmoUnavailable(error)) {
+        throw flowDataCloudMetricsUnavailable(
+          `Data Cloud Flow metrics are not available for "${name}" version ${version}.`,
+          standardError
+        );
+      }
+      throw error;
     }
-    return (
-      resolved ??
-      this.resolveWithSchema(request, {
-        ...resolution,
-        schemaIndex: resolution.schemaIndex + 1,
-      })
-    );
   }
 
   private async findVersion(
@@ -235,26 +256,17 @@ export class DataCloudFlowMetricsGateway implements FlowRuntimeMetricsGateway {
     name: string,
     version: number
   ): Promise<ResolvedDataCloudVersion | null> {
-    const flows = await this.query(buildFlowQuery(schema, name));
+    const flows = await this.queryClient.query(buildFlowQuery(schema, name));
     const flowId = singleIdentifier(flows, { field: schema.flowId, label: 'Flow', name });
     if (flowId === null) {
       return null;
     }
-    const versions = await this.query(buildVersionQuery(schema, flowId, version));
+    const versions = await this.queryClient.query(buildVersionQuery(schema, flowId, version));
     const versionId = singleIdentifier(versions, {
       field: schema.versionId,
       label: 'Flow version',
       name: `${name} v${version}`,
     });
     return versionId === null ? null : { schema, versionId };
-  }
-
-  private async query(soql: string): Promise<ReadonlyArray<DataCloudRecord>> {
-    const response: unknown = await this.connection.query(soql);
-    const parsed = queryResultSchema.safeParse(response);
-    if (!parsed.success) {
-      throw flowDataCloudMetricsFailed('Data Cloud returned a malformed query response.');
-    }
-    return parsed.data.records;
   }
 }

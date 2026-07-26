@@ -168,7 +168,20 @@ export function formatFlowCheckSarif(result: FlowCheckResult): string {
             message: { text: item.message },
             ...(item.path === null
               ? {}
-              : { locations: [{ physicalLocation: { artifactLocation: { uri: item.path } } }] }),
+              : {
+                  locations: [
+                    {
+                      logicalLocations: [
+                        {
+                          name: item.path,
+                          fullyQualifiedName: `${item.apiName}:${item.path}`,
+                          kind: 'flowElementOrMetadataPath',
+                        },
+                      ],
+                      properties: { flowApiName: item.apiName, metadataPath: item.path },
+                    },
+                  ],
+                }),
           })),
         },
       ],

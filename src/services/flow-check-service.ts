@@ -26,6 +26,11 @@ import {
   traversalCheckFindings,
   versionCheckFindings,
 } from '../utils/flow-check-analysis.js';
+import {
+  type ResolvedCheckFlow,
+  requiresFlowDescription,
+  resolveFlowCheckRoot,
+} from '../utils/flow-check-resolution.js';
 import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
 import { FlowDependenciesService } from './flow-dependencies-service.js';
 import { FlowDescribeService } from './flow-describe-service.js';
@@ -36,6 +41,7 @@ import { FlowVersionsService } from './flow-versions-service.js';
 type FlowCheckGateway = FlowDefinitionGateway & FlowDependencyGateway & FlowMetadataGateway;
 
 interface CheckData {
+  root: ResolvedCheckFlow;
   descriptions: FlowDescription[];
   traversalFindings: FlowCheckFinding[];
   lintResults: FlowLintResult[];
@@ -120,15 +126,11 @@ function entryFindings(checks: ReadonlyArray<FlowCheckKind>, data: CheckData): F
 }
 
 function createEntry(checks: FlowCheckKind[], data: CheckData): FlowCheckEntry {
-  const root = data.descriptions[0];
-  if (root === undefined) {
-    throw flowCheckFailed('Flow traversal did not return the requested root Flow.');
-  }
   const findings = entryFindings(checks, data);
   return {
-    apiName: root.apiName,
-    namespace: root.namespace,
-    resolvedVersion: root.versionNumber,
+    apiName: data.root.apiName,
+    namespace: data.root.namespace,
+    resolvedVersion: data.root.versionNumber,
     checks,
     contracts: flowContracts(data.descriptions),
     metrics: data.metrics,
@@ -178,19 +180,30 @@ export class FlowCheckService {
 
   private async checkFlow(context: FlowCheckContext): Promise<FlowCheckEntry> {
     const { request, apiName, checks, progress } = context;
-    const described = await new FlowDescribeService(this.gateway).describe(describeRequest(request, apiName), progress);
+    const described = requiresFlowDescription(checks)
+      ? await new FlowDescribeService(this.gateway).describe(describeRequest(request, apiName), progress)
+      : null;
+    const root =
+      described === null
+        ? await resolveFlowCheckRoot(this.gateway, { request, apiName, progress })
+        : { apiName: described.apiName, namespace: described.namespace, versionNumber: described.resolvedVersion };
+    const descriptions = described?.flows ?? [];
     const [lintResults, dependencyFindings, versionFindings, metrics] = await Promise.all([
-      this.lintFlows(context, described.flows),
+      this.lintFlows(context, descriptions),
       this.checkDependencies(context),
       this.checkVersions(context),
       this.calculateMetrics(context),
     ]);
-    const traversalFindings = traversalCheckFindings(
-      { apiName: described.apiName, namespace: described.namespace, version: described.resolvedVersion },
-      described.warnings
-    );
+    const traversalFindings =
+      described === null
+        ? []
+        : traversalCheckFindings(
+            { apiName: described.apiName, namespace: described.namespace, version: described.resolvedVersion },
+            described.warnings
+          );
     return createEntry(checks, {
-      descriptions: described.flows,
+      root,
+      descriptions,
       traversalFindings,
       lintResults,
       dependencyFindings,
