@@ -43,6 +43,8 @@ export class FakeFlowGateway implements FlowDefinitionGateway {
   public readonly dependencyQueries: DependencyQuery[] = [];
   public readonly metadata = new Map<string, JsonObject>();
   public readonly permissionChecks: FlowMutationOperation[] = [];
+  public readonly versionQueries: string[] = [];
+  public allVersionQueries = 0;
   public allowDefinitionUpdates = true;
   public allowVersionDeletes = true;
   public persistUpdates = true;
@@ -83,11 +85,13 @@ export class FakeFlowGateway implements FlowDefinitionGateway {
 
   public async findVersions(definitionId: string): Promise<ReadonlyArray<FlowVersion>> {
     this.throwQueryError();
+    this.versionQueries.push(definitionId);
     return this.versions.filter((version) => version.definitionId === definitionId);
   }
 
   public async findAllVersions(): Promise<ReadonlyArray<FlowVersion>> {
     this.throwQueryError();
+    this.allVersionQueries += 1;
     return this.versions;
   }
 

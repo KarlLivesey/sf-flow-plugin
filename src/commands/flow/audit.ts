@@ -12,7 +12,7 @@ import { FlowAuditService } from '../../services/flow-audit-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type { FlowAuditRequest, FlowAuditResult } from '../../types/flow.js';
 import { createFlowCommandContext } from '../../utils/flow-command.js';
-import { validateFlowApiName } from '../../utils/flow-name-validation.js';
+import { validateFlowApiName, validateNamespace } from '../../utils/flow-name-validation.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
 
@@ -22,6 +22,8 @@ const messages = Messages.loadMessages('sf-flow-plugin', 'flow.audit');
 export interface AuditFlagValues {
   'target-org': Org | undefined;
   'api-name': string[] | undefined;
+  type: string[] | undefined;
+  namespace: string | undefined;
   'fail-on-findings': boolean;
   'max-inactive-versions': number;
   'older-than': { days: number } | undefined;
@@ -34,6 +36,8 @@ function createRequest(flags: AuditFlagValues, targetOrg: string): FlowAuditRequ
   return {
     targetOrg,
     apiNames,
+    types: flags.type ?? [],
+    ...(flags.namespace === undefined ? {} : { namespace: flags.namespace }),
     maxInactiveVersions: flags['max-inactive-versions'],
     ...(flags['older-than'] === undefined ? {} : { olderThanDays: flags['older-than'].days }),
   };
@@ -55,6 +59,13 @@ export default class FlowAudit extends SfCommand<FlowAuditResult> {
       multiple: true,
       summary: messages.getMessage('flags.api-name.summary'),
     }),
+    type: Flags.string({
+      multiple: true,
+      summary: messages.getMessage('flags.type.summary'),
+    }),
+    namespace: Flags.string({
+      summary: messages.getMessage('flags.namespace.summary'),
+    }),
     'fail-on-findings': Flags.boolean({
       default: false,
       summary: messages.getMessage('flags.fail-on-findings.summary'),
@@ -75,6 +86,9 @@ export default class FlowAudit extends SfCommand<FlowAuditResult> {
 
   public async run(): Promise<FlowAuditResult> {
     const flags = await this.parseFlags();
+    if (flags.namespace !== undefined) {
+      validateNamespace(flags.namespace);
+    }
     const context = createFlowCommandContext(flags);
     const service = new FlowAuditService(new ToolingFlowDefinitionGateway(context.connection));
     const result = await withFlowProgress(this.spinner, 'audit', async (progress) =>

@@ -17,6 +17,8 @@ const result: FlowCompareResult = {
   apiName: 'Order_Processing',
   namespace: null,
   definitionId: '300000000000001',
+  fromDefinitionId: '300000000000001',
+  toDefinitionId: '300000000000001',
   requestedFrom: 'active',
   requestedTo: 'latest',
   scopes: [],
@@ -29,12 +31,21 @@ const result: FlowCompareResult = {
   changed: 1,
   different: true,
   targetOrg: 'admin@example.com',
+  fromOrg: 'admin@example.com',
+  toOrg: 'admin@example.com',
+  crossOrg: false,
 };
 
 describe('flow compare flags', (): void => {
   it('defaults to comparing active with latest', (): void => {
     expect(FlowCompare.flags.from.default).to.equal('active');
     expect(FlowCompare.flags.to.default).to.equal('latest');
+  });
+
+  it('rejects combining the single-org and cross-org flags', (): void => {
+    expect(FlowCompare.flags['target-org'].exclusive).to.deep.equal(['from-org', 'to-org']);
+    expect(FlowCompare.flags['from-org'].exclusive).to.deep.equal(['target-org']);
+    expect(FlowCompare.flags['to-org'].exclusive).to.deep.equal(['target-org']);
   });
 
   it('parses selectors', (): void => {
@@ -50,11 +61,13 @@ describe('flow compare flags', (): void => {
   });
 });
 
-describe('flow compare command execution', (): void => {
+describe('flow compare request execution', (): void => {
   it('passes selectors and namespace to the service', async (): Promise<void> => {
     const flags = {
       'api-name': 'Order_Processing',
       'target-org': createCommandOrg({} as Connection),
+      'from-org': undefined,
+      'to-org': undefined,
       from: 1 as const,
       to: 'latest' as const,
       'fail-on-difference': false,
@@ -72,16 +85,22 @@ describe('flow compare command execution', (): void => {
       namespace: 'example',
       from: 1,
       to: 'latest',
+      fromOrg: 'admin@example.com',
+      toOrg: 'admin@example.com',
       scopes: ['elements', 'resources'],
       ignoreOrder: true,
     });
     expect(actual).to.equal(result);
   });
+});
 
+describe('flow compare exit status', (): void => {
   it('sets a failing process status when requested and versions differ', async (): Promise<void> => {
     const flags = {
       'api-name': 'Order_Processing',
       'target-org': createCommandOrg({} as Connection),
+      'from-org': undefined,
+      'to-org': undefined,
       from: 'active' as const,
       to: 'latest' as const,
       'fail-on-difference': true,
@@ -98,5 +117,32 @@ describe('flow compare command execution', (): void => {
     } finally {
       process.exitCode = undefined;
     }
+  });
+});
+
+describe('flow compare cross-org execution', (): void => {
+  it('passes separate authenticated orgs to a cross-org comparison', async (): Promise<void> => {
+    const flags = {
+      'api-name': 'Order_Processing',
+      'target-org': createCommandOrg({} as Connection),
+      'from-org': createCommandOrg({} as Connection, 'developer@example.com'),
+      'to-org': createCommandOrg({} as Connection, 'preprod@example.com'),
+      from: 'latest' as const,
+      to: 'active' as const,
+      'fail-on-difference': false,
+      only: undefined,
+      'ignore-order': false,
+      namespace: undefined,
+      'api-version': undefined,
+    };
+    $$.SANDBOX.stub(FlowCompare.prototype, 'parseFlags').resolves(flags);
+    const compare = $$.SANDBOX.stub(FlowComparisonService.prototype, 'compare').resolves(result);
+    await FlowCompare.run(['--json']);
+    expect(compare.firstCall.args[0]).to.include({
+      fromOrg: 'developer@example.com',
+      toOrg: 'preprod@example.com',
+      from: 'latest',
+      to: 'active',
+    });
   });
 });

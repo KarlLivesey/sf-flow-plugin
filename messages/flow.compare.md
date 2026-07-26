@@ -14,6 +14,14 @@ API name of the Flow definition.
 
 Username or alias of the target org. Uses the configured target org when omitted.
 
+# flags.from-org.summary
+
+Source Salesforce org for a cross-org comparison. Requires `--to-org`.
+
+# flags.to-org.summary
+
+Target Salesforce org for a cross-org comparison. Requires `--from-org`.
+
 # flags.from.summary
 
 Source version: active, latest, or a positive version number.
@@ -52,6 +60,10 @@ Salesforce API version to use for the Tooling API requests.
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --from 4 --to 7
 
+- Compare a Flow across two orgs:
+
+  <%= config.bin %> <%= command.id %> --api-name Order_Processing --from-org Development --to-org Preprod --from latest --to active
+
 - Return machine-readable structural changes:
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --from active --to latest --fail-on-difference --json
@@ -62,7 +74,7 @@ Salesforce API version to use for the Tooling API requests.
 
 # info.title
 
-Changes in Flow %s from version %s to version %s
+Changes in Flow %s from version %s in %s to version %s in %s
 
 # info.summary
 

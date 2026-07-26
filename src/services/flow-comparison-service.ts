@@ -12,6 +12,7 @@ import type {
   FlowComparisonChange,
   FlowComparisonVersionSelector,
   FlowMetadataGateway,
+  JsonObject,
 } from '../types/flow-analysis.js';
 import type { FlowDefinition, FlowDefinitionGateway, FlowDefinitionLookup, FlowVersion } from '../types/flow.js';
 import { compareFlowMetadata } from '../utils/flow-metadata-diff.js';
@@ -24,9 +25,32 @@ interface VersionContext {
 }
 
 interface ResolvedComparison {
+  fromDefinition: FlowDefinition;
+  toDefinition: FlowDefinition;
   fromVersion: FlowVersion;
   toVersion: FlowVersion;
   changes: FlowComparisonChange[];
+}
+
+interface ComparisonGateways {
+  from: FlowDefinitionGateway & FlowMetadataGateway;
+  to: FlowDefinitionGateway & FlowMetadataGateway;
+}
+
+interface ResolvedSides {
+  from: VersionContext;
+  to: VersionContext;
+  fromVersion: FlowVersion;
+  toVersion: FlowVersion;
+  detail: string;
+}
+
+interface VersionContextRequest {
+  gateway: FlowDefinitionGateway;
+  request: FlowCompareRequest;
+  selector: FlowComparisonVersionSelector;
+  org: string;
+  progress: FlowProgressReporter;
 }
 
 function createLookup(request: FlowCompareRequest): FlowDefinitionLookup {
@@ -70,16 +94,14 @@ function changeCount(changes: ReadonlyArray<FlowComparisonChange>, kind: FlowCom
   return changes.filter((change) => change.kind === kind).length;
 }
 
-function createResult(
-  request: FlowCompareRequest,
-  definition: FlowDefinition,
-  comparison: ResolvedComparison
-): FlowCompareResult {
-  const { fromVersion, toVersion, changes } = comparison;
+function createResult(request: FlowCompareRequest, comparison: ResolvedComparison): FlowCompareResult {
+  const { fromDefinition, toDefinition, fromVersion, toVersion, changes } = comparison;
   return {
-    apiName: definition.apiName,
-    namespace: definition.namespace,
-    definitionId: definition.id,
+    apiName: fromDefinition.apiName,
+    namespace: fromDefinition.namespace,
+    definitionId: fromDefinition.id,
+    fromDefinitionId: fromDefinition.id,
+    toDefinitionId: toDefinition.id,
     requestedFrom: request.from,
     requestedTo: request.to,
     scopes: request.scopes,
@@ -92,6 +114,9 @@ function createResult(
     changed: changeCount(changes, 'changed'),
     different: changes.length > 0,
     targetOrg: request.targetOrg,
+    fromOrg: request.fromOrg,
+    toOrg: request.toOrg,
+    crossOrg: request.fromOrg !== request.toOrg,
   };
 }
 
@@ -105,43 +130,97 @@ function shouldRethrow(error: unknown): boolean {
 }
 
 async function resolveComparison(
-  gateway: FlowDefinitionGateway & FlowMetadataGateway,
+  gateways: ComparisonGateways,
   request: FlowCompareRequest,
   progress: FlowProgressReporter
-): Promise<{ definition: FlowDefinition; comparison: ResolvedComparison }> {
-  const context = await resolveVersionContext(gateway, request, progress);
-  const fromVersion = selectVersion(context, request.from);
-  const toVersion = selectVersion(context, request.to);
-  const name = qualifiedFlowName(context.definition.apiName, context.definition.namespace);
-  progress('loading-metadata', `${name} v${fromVersion.versionNumber} → v${toVersion.versionNumber}`);
-  const fromMetadata = await gateway.getVersionMetadata(fromVersion.id);
-  const toMetadata = fromVersion.id === toVersion.id ? fromMetadata : await gateway.getVersionMetadata(toVersion.id);
-  progress('comparing-metadata', `${name} v${fromVersion.versionNumber} → v${toVersion.versionNumber}`);
+): Promise<ResolvedComparison> {
+  const sides = await resolveSides(gateways, request, progress);
+  const { fromMetadata, toMetadata } = await loadMetadata(gateways, sides, progress);
+  progress('comparing-metadata', sides.detail);
   const changes = compareFlowMetadata(fromMetadata, toMetadata, {
     scopes: request.scopes,
     ignoreOrder: request.ignoreOrder,
   });
-  return { definition: context.definition, comparison: { fromVersion, toVersion, changes } };
+  return {
+    fromDefinition: sides.from.definition,
+    toDefinition: sides.to.definition,
+    fromVersion: sides.fromVersion,
+    toVersion: sides.toVersion,
+    changes,
+  };
 }
 
-async function resolveVersionContext(
-  gateway: FlowDefinitionGateway,
-  request: FlowCompareRequest,
-  progress: FlowProgressReporter
-): Promise<VersionContext> {
-  progress('resolving-flow', request.apiName);
+async function resolveVersionContext(context: VersionContextRequest): Promise<VersionContext> {
+  const { gateway, request, selector, org, progress } = context;
+  progress('resolving-flow', `${request.apiName} (${org})`);
   const definition = selectFlowDefinition(request.apiName, await gateway.findDefinitions(createLookup(request)));
   progress(
     'loading-versions',
-    `${qualifiedFlowName(definition.apiName, definition.namespace)} (${versionSelectorLabel(
-      request.from
-    )} → ${versionSelectorLabel(request.to)})`
+    `${qualifiedFlowName(definition.apiName, definition.namespace)} (${versionSelectorLabel(selector)}, ${org})`
   );
   return { definition, versions: await gateway.findVersions(definition.id) };
 }
 
+async function resolveContexts(
+  gateways: ComparisonGateways,
+  request: FlowCompareRequest,
+  progress: FlowProgressReporter
+): Promise<{ from: VersionContext; to: VersionContext }> {
+  const from = await resolveVersionContext({
+    gateway: gateways.from,
+    request,
+    selector: request.from,
+    org: request.fromOrg,
+    progress,
+  });
+  if (gateways.from === gateways.to && request.fromOrg === request.toOrg) {
+    return { from, to: from };
+  }
+  const to = await resolveVersionContext({
+    gateway: gateways.to,
+    request,
+    selector: request.to,
+    org: request.toOrg,
+    progress,
+  });
+  return { from, to };
+}
+
+async function resolveSides(
+  gateways: ComparisonGateways,
+  request: FlowCompareRequest,
+  progress: FlowProgressReporter
+): Promise<ResolvedSides> {
+  const contexts = await resolveContexts(gateways, request, progress);
+  const fromVersion = selectVersion(contexts.from, request.from);
+  const toVersion = selectVersion(contexts.to, request.to);
+  const fromName = qualifiedFlowName(contexts.from.definition.apiName, contexts.from.definition.namespace);
+  const toName = qualifiedFlowName(contexts.to.definition.apiName, contexts.to.definition.namespace);
+  const detail = `${fromName} v${fromVersion.versionNumber} (${request.fromOrg}) → ${toName} v${toVersion.versionNumber} (${request.toOrg})`;
+  return { ...contexts, fromVersion, toVersion, detail };
+}
+
+async function loadMetadata(
+  gateways: ComparisonGateways,
+  sides: ResolvedSides,
+  progress: FlowProgressReporter
+): Promise<{ fromMetadata: JsonObject; toMetadata: JsonObject }> {
+  progress('loading-metadata', sides.detail);
+  const fromMetadata = await gateways.from.getVersionMetadata(sides.fromVersion.id);
+  const sameVersion = gateways.from === gateways.to && sides.fromVersion.id === sides.toVersion.id;
+  const toMetadata = sameVersion ? fromMetadata : await gateways.to.getVersionMetadata(sides.toVersion.id);
+  return { fromMetadata, toMetadata };
+}
+
 export class FlowComparisonService {
-  public constructor(private readonly gateway: FlowDefinitionGateway & FlowMetadataGateway) {}
+  private readonly toGateway: FlowDefinitionGateway & FlowMetadataGateway;
+
+  public constructor(
+    private readonly fromGateway: FlowDefinitionGateway & FlowMetadataGateway,
+    toGateway?: FlowDefinitionGateway & FlowMetadataGateway
+  ) {
+    this.toGateway = toGateway ?? fromGateway;
+  }
 
   public async compare(
     request: FlowCompareRequest,
@@ -151,8 +230,8 @@ export class FlowComparisonService {
       throw flowComparisonFailed('The Flow comparison scope is invalid.');
     }
     try {
-      const { definition, comparison } = await resolveComparison(this.gateway, request, progress);
-      return createResult(request, definition, comparison);
+      const comparison = await resolveComparison({ from: this.fromGateway, to: this.toGateway }, request, progress);
+      return createResult(request, comparison);
     } catch (error: unknown) {
       if (shouldRethrow(error)) {
         throw error;
