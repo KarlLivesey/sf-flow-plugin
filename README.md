@@ -680,12 +680,14 @@ request, but activation can still change concurrently. The version reported by S
 is authoritative.
 
 Results include one top-level duration for the complete REST action request, plus outputs, errors and success for each
-invocation. Per-invocation Salesforce error text is replaced by a fixed redacted message while a validated Salesforce
-status code is retained when available. Raw transport exceptions are not retained as causes; only a validated
-transport status is exposed when available. Input and output properties whose names look sensitive are redacted on a
-best-effort basis; arbitrary values under other property names can still appear in terminal, JSON and output-file
-results. A transport failure can leave execution outcome unknown, so the command does not automatically retry a
-potentially non-idempotent Flow.
+invocation. In dry-run results, every invocation has `executed: false` and `success: null`, while the top-level
+`successful` value is also `null`; `--fail-on-flow-error` does not fail a dry run because no runtime outcome exists.
+Per-invocation Salesforce error text is replaced by a fixed redacted message while a validated Salesforce status code
+is retained when available. Raw transport exceptions are not retained as causes; only a validated transport status is
+exposed when available. Input and output properties whose names look sensitive are redacted on a best-effort basis;
+arbitrary values under other property names can still appear in terminal, JSON and output-file results. A transport
+failure can leave execution outcome unknown, so the command does not automatically retry a potentially non-idempotent
+Flow.
 
 `sf flow debug` is intentionally not included because Salesforce does not expose a verified supported interface for
 the requested arbitrary-version tracing, rollback, run-as and record-trigger simulation contract. Flow tests are not
