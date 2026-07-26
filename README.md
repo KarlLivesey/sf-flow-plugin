@@ -598,7 +598,7 @@ fault-path coverage, variables, formulas, unused resources, referenced objects, 
 elements. `maximumPathDepthUpperBound` and `maximumLoopNestingUpperBound` are upper bounds derived by condensing
 strongly connected components; they can exceed any individual non-repeating path through a cyclic component.
 Recursive analysis defaults to active subflows with latest fallback. The command reports facts only; policy
-thresholds belong in `sf flow check`.
+thresholds belong in downstream CI or policy tooling.
 
 Static analysis is the default and does not query Data Cloud. Add `--data-cloud` to query runtime telemetry for the
 selected root Flow version, using the authenticated target org and a 30-day window by default:
