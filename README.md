@@ -53,6 +53,7 @@ If `--target-org` is omitted, the command uses the Salesforce CLI `target-org` c
 
 | Command                | Purpose                                                         |
 | ---------------------- | --------------------------------------------------------------- |
+| `sf flow list`         | Inventory Flow definitions and their current version state.     |
 | `sf flow activate`     | Activate and verify a selected Flow version.                    |
 | `sf flow versions`     | List every version and identify the active and latest versions. |
 | `sf flow compare`      | Compare the structure of two Flow versions.                     |
@@ -64,6 +65,25 @@ If `--target-org` is omitted, the command uses the Salesforce CLI `target-org` c
 | `sf flow prune`        | Safely plan or delete old inactive Flow versions.               |
 
 Commands show an automatic Salesforce-style progress spinner while they query or mutate the org. Each stage identifies the Flow and relevant version or version scope. Progress output is suppressed automatically when `--json` is used.
+
+## `sf flow list`
+
+```text
+sf flow list \
+  [--target-org ORG] \
+  [--api-version VERSION] \
+  [--json]
+```
+
+List every Flow definition with its qualified API name, latest label and process type, active and latest version
+numbers, latest status, and last-modified date:
+
+```bash
+sf flow list --target-org MySandbox
+```
+
+The label, type, status and last-modified date describe the latest version. Definitions without a latest version
+report those values as empty. Use `--json` for a stable structured inventory.
 
 ## `sf flow activate`
 

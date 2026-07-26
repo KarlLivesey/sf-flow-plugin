@@ -152,6 +152,14 @@
   },
   {
     "alias": [],
+    "command": "flow:list",
+    "flagAliases": [],
+    "flagChars": ["o"],
+    "flags": ["api-version", "flags-dir", "json", "target-org"],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
     "command": "flow:prune",
     "flagAliases": [],
     "flagChars": ["n", "o"],
