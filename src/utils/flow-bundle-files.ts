@@ -35,6 +35,8 @@ interface PreparedTransaction {
   stale: string[];
 }
 
+type RemoveDirectory = (path: string, options: { force: true; recursive: true }) => Promise<void>;
+
 const previousManifestSchema = z.object({
   rootFlow: z.string().regex(/^[A-Za-z][A-Za-z0-9_]*$/u),
   flows: z.array(z.object({ qualifiedName: z.string().regex(/^[A-Za-z][A-Za-z0-9_]*$/u) })),
@@ -182,6 +184,22 @@ async function commit(transaction: BundleTransaction, stale: ReadonlyArray<strin
   await installStaged(transaction, overwrite);
 }
 
+export async function removeFlowBundleStageDirectory(
+  stageDir: string,
+  outcome: 'committed' | 'preparation-failed',
+  remove: RemoveDirectory = rm
+): Promise<void> {
+  try {
+    await remove(stageDir, { recursive: true, force: true });
+  } catch (error: unknown) {
+    const message =
+      outcome === 'committed'
+        ? `The Flow bundle was written, but staging directory "${stageDir}" was retained and must be removed manually.`
+        : `Flow bundle preparation failed and staging directory "${stageDir}" was retained and must be removed manually.`;
+    throw flowBundleFailed(message, error);
+  }
+}
+
 async function prepareTransaction(
   files: ReadonlyArray<FlowBundleFile>,
   overwrite: boolean,
@@ -194,7 +212,7 @@ async function prepareTransaction(
     transaction.staged = await stageFiles(validated, stageDir);
     return { transaction, stale };
   } catch (error: unknown) {
-    await rm(stageDir, { recursive: true, force: true }).catch(() => undefined);
+    await removeFlowBundleStageDirectory(stageDir, 'preparation-failed');
     throw error;
   }
 }
@@ -234,8 +252,8 @@ export async function writeFlowBundleFiles(
   const prepared = await prepareTransaction(files, overwrite, outputDir);
   try {
     await commit(prepared.transaction, prepared.stale, overwrite);
-    await rm(prepared.transaction.stageDir, { recursive: true, force: true }).catch(() => undefined);
   } catch (error: unknown) {
     return handleFailure(prepared.transaction, error);
   }
+  await removeFlowBundleStageDirectory(prepared.transaction.stageDir, 'committed');
 }
