@@ -2,6 +2,21 @@
 
 All notable user-visible changes to this project will be documented in this file.
 
+## 1.3.0 - 2026-07-26
+
+### Added
+
+- Added `sf flow list` to inventory Flow definitions with their labels, types, namespaces, active and latest versions, status and last-modified dates.
+- Added `sf flow lint` checks for unreachable elements, missing fault paths, DML inside loops, hard-coded Salesforce IDs, inactive or missing subflows and unused resources.
+- Added `sf flow export` to write an active, latest or numbered Flow version as deployable Metadata API XML, defaulting the exported status to Draft.
+- Added cross-org `sf flow compare` support with explicit source and destination orgs.
+- Added Flow audit filters for process type and namespace.
+- Added selectable `sf flow describe` sections for elements, resources, references, inputs and outputs.
+
+### Changed
+
+- Dependency queries now guard Salesforce's 2,000-record query cap per traversal direction and depth, fail safely when results may be truncated and support an explicit `--allow-truncated` override.
+
 ## 1.2.0 - 2026-07-26
 
 ### Added
