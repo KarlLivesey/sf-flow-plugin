@@ -38,7 +38,10 @@ const actionResultSchema: z.ZodType<FlowActionResult> = z.object({
     .transform((errors) => errors ?? []),
   invocationId: z.string().nullable().optional(),
   isSuccess: z.boolean(),
-  outputValues: z.record(z.string(), z.json()).default({}),
+  outputValues: z
+    .record(z.string(), z.json())
+    .nullish()
+    .transform((outputValues) => outputValues ?? {}),
   version: z.number().int().positive().optional(),
 });
 
@@ -58,6 +61,27 @@ function invocationFailureMessage(apiName: string, error: unknown): string {
   return `Salesforce could not invoke Flow "${apiName}".${code === null ? '' : ` Status: ${code}.`}`;
 }
 
+function isPermissionFailure(error: unknown): boolean {
+  const parsed = transportErrorSchema.safeParse(error);
+  if (!parsed.success) {
+    return false;
+  }
+  const code = parsed.data.statusCode ?? parsed.data.code;
+  if (code === 401 || code === 403) {
+    return true;
+  }
+  return (
+    typeof code === 'string' &&
+    new Set([
+      'FORBIDDEN',
+      'INSUFFICIENT_ACCESS',
+      'INSUFFICIENT_ACCESS_OR_READONLY',
+      'INVALID_SESSION_ID',
+      'UNAUTHORIZED',
+    ]).has(code)
+  );
+}
+
 export class RestFlowInvocationGateway implements FlowInvocationGateway {
   public constructor(private readonly connection: Connection) {}
 
@@ -75,8 +99,11 @@ export class RestFlowInvocationGateway implements FlowInvocationGateway {
   public async assertFlowActionAvailable(apiName: string): Promise<void> {
     try {
       await this.connection.request(this.actionUrl(apiName));
-    } catch {
-      throw flowInvocationPermissionDenied(apiName);
+    } catch (error: unknown) {
+      if (isPermissionFailure(error)) {
+        throw flowInvocationPermissionDenied(apiName);
+      }
+      throw flowInvocationFailed(invocationFailureMessage(apiName, error));
     }
   }
 
