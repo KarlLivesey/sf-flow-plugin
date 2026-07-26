@@ -65,16 +65,25 @@ Bootstrap trusted publishing after the package's initial publication:
 2. Require two-factor authentication and disallow traditional publish tokens in the package's npm publishing-access
    settings.
 
-Prepare a release on a branch by updating the package version without creating a local tag:
+Create the release branch from `main`, then prepare its version in a pull request:
 
 ```bash
-npm version patch --no-git-tag-version
+git switch main
+git pull --ff-only
+git switch -c release/1.3.0
+git push --set-upstream origin release/1.3.0
+
+git switch -c chore/prepare-1.3.0
+npm version 1.3.0 --no-git-tag-version
 ```
 
-Update `CHANGELOG.md`, commit the version and release notes, and open a pull request targeting `main`. Merging that
-pull request triggers publication; do not create or push the release tag manually. Use `minor`, `major`, or an explicit
-semantic version instead of `patch` when appropriate. Semantic prerelease versions publish under their prerelease
-identifier rather than the `latest` npm dist-tag.
+Update `CHANGELOG.md`, commit the version and release notes, and open a pull request targeting `release/1.3.0`.
+Feature and bug-fix pull requests for that release also target the release branch. A required policy check ensures that
+the `package.json` version exactly matches the version in the release branch name.
+
+When the release is ready, open a pull request from `release/1.3.0` into `main`. Merging that pull request triggers
+publication; do not create or push the release tag manually. Use the appropriate semantic version in place of `1.3.0`.
+Semantic prerelease versions publish under their prerelease identifier rather than the `latest` npm dist-tag.
 
 ## Adding a command
 
