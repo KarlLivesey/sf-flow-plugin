@@ -76,6 +76,29 @@ describe('DataCloudSqlQueryClient', (): void => {
     expect(connection.requests[1]).to.equal('/services/data/v65.0/ssot/query-sql/query-1?waitTimeMs=10000');
     expect(connection.requests[2]).to.equal('/services/data/v65.0/ssot/query-sql/query-1/rows?offset=0&rowLimit=2000');
   });
+});
+
+describe('DataCloudSqlQueryClient pagination and completion', (): void => {
+  it('continues after rows returned with the initial response without fetching them twice', async (): Promise<void> => {
+    const connection = new QueryConnectionDouble([
+      {
+        ...queryResponse('Running', 3),
+        data: [['flow-1'], ['flow-2']],
+        metadata: [{ name: 'flowId' }],
+        returnedRows: 2,
+      },
+      queryResponse('Finished', 3),
+      {
+        ...queryResponse('Finished', 3),
+        data: [['flow-3']],
+        metadata: [{ name: 'flowId' }],
+        returnedRows: 1,
+      },
+    ]);
+    const records = await new DataCloudSqlQueryClient(connection.asConnection()).query('SELECT flowId FROM Flow');
+    expect(records).to.deep.equal([{ flowId: 'flow-1' }, { flowId: 'flow-2' }, { flowId: 'flow-3' }]);
+    expect(connection.requests[2]).to.equal('/services/data/v65.0/ssot/query-sql/query-1/rows?offset=2&rowLimit=2000');
+  });
 
   it('waits after intermediate results and accepts documented full progress', async (): Promise<void> => {
     const connection = new QueryConnectionDouble([
@@ -93,7 +116,7 @@ describe('DataCloudSqlQueryClient', (): void => {
   });
 
   it('rejects an initially failed query even when progress is complete', async (): Promise<void> => {
-    await expectFailedQuery([queryResponse('Failed', 0, 1)], 'failed');
+    await expectFailedQuery([queryResponse('FAILED', 0, 1)], 'failed');
   });
 
   it('rejects a failed polling response even when progress is complete', async (): Promise<void> => {

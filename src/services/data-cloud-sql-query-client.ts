@@ -48,7 +48,7 @@ function isComplete(response: QueryResponse): boolean {
 }
 
 function isFailed(response: QueryResponse): boolean {
-  return ['Aborted', 'Error', 'Failed'].includes(response.status.completionStatus);
+  return ['aborted', 'error', 'failed'].includes(response.status.completionStatus.toLowerCase());
 }
 
 function assertQuerySucceeded(response: QueryResponse): void {
@@ -66,6 +66,16 @@ function recordsForResponse(response: QueryResponse): DataCloudRecord[] {
   return data.map((row) => Object.fromEntries(metadata.map((field, index) => [field.name, row[index]])));
 }
 
+function inlineRecords(initial: QueryResponse, completed: QueryResponse): DataCloudRecord[] {
+  const initialRecords = recordsForResponse(initial);
+  const completedRecords = completed === initial ? initialRecords : recordsForResponse(completed);
+  const records = initialRecords.length > 0 ? initialRecords : completedRecords;
+  if (records.length > completed.status.rowCount) {
+    throw new Error('Data Cloud returned more SQL rows than its reported row count.');
+  }
+  return records;
+}
+
 export class DataCloudSqlQueryClient {
   private readonly baseUrl: string;
 
@@ -77,15 +87,15 @@ export class DataCloudSqlQueryClient {
     const initial = await this.start(sql);
     assertQuerySucceeded(initial);
     const completed = isComplete(initial) ? initial : await this.waitForCompletion(initial);
-    const inlineRecords = recordsForResponse(completed);
-    if (inlineRecords.length === completed.status.rowCount) {
-      return inlineRecords;
+    const records = inlineRecords(initial, completed);
+    if (records.length === completed.status.rowCount) {
+      return records;
     }
     return this.collectRows({
       queryId: completed.status.queryId,
       rowCount: completed.status.rowCount,
-      offset: 0,
-      records: [],
+      offset: records.length,
+      records,
     });
   }
 
