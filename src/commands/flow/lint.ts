@@ -26,6 +26,7 @@ import {
   writeFlowLintOutput,
 } from '../../utils/flow-lint-output.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
+import { qualifiedFlowName } from '../../utils/flow-state.js';
 import { parseInspectionVersionSelector } from './describe.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -164,12 +165,13 @@ export default class FlowLint extends SfCommand<FlowLintResult> {
   }
 
   private writeHumanOutput(result: FlowLintResult): void {
+    const flowName = qualifiedFlowName(result.apiName, result.namespace);
     if (result.findings.length === 0) {
-      this.log(messages.getMessage('info.clean', [result.apiName, result.resolvedVersion]));
+      this.log(messages.getMessage('info.clean', [flowName, result.resolvedVersion]));
       return;
     }
     this.writeFindingTable(
-      messages.getMessage('info.new-title', [result.apiName, result.resolvedVersion, result.newFindings.length]),
+      messages.getMessage('info.new-title', [flowName, result.resolvedVersion, result.newFindings.length]),
       result.newFindings
     );
     if (result.baselineFindings.length > 0) {
