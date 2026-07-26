@@ -246,6 +246,7 @@ sf flow describe \
   [--recursive] \
   [--subflow-version active|latest] \
   [--max-depth NUMBER] \
+  [--only elements|resources|references|inputs|outputs ...] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--json]
@@ -255,6 +256,16 @@ The command summarises inputs, outputs, variables, formulas, executable elements
 
 ```bash
 sf flow describe --api-name Order_Processing
+```
+
+Repeat `--only` to return selected sections and remove unrelated columns and structured arrays:
+
+```bash
+sf flow describe \
+  --api-name Order_Processing \
+  --only inputs \
+  --only outputs \
+  --only references
 ```
 
 Use `--recursive` to follow referenced subflows. `--subflow-version` defaults to `active`: it follows the active version when one exists and otherwise falls back to latest with a warning. Specify `latest` to always follow each subflow's latest version. `--max-depth` defaults to `10`; a value of `0` describes only the requested Flow:

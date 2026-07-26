@@ -21,6 +21,7 @@ const result: FlowDescribeResult = {
   subflowVersion: 'active',
   recursive: true,
   maxDepth: 4,
+  sections: ['inputs', 'references'],
   flows: [],
   warnings: [],
   targetOrg: 'admin@example.com',
@@ -52,6 +53,7 @@ describe('flow describe command execution', (): void => {
       'subflow-version': 'latest' as const,
       recursive: true,
       'max-depth': 4,
+      only: ['inputs' as const, 'references' as const],
       namespace: undefined,
       'api-version': undefined,
     };
@@ -65,6 +67,7 @@ describe('flow describe command execution', (): void => {
       subflowVersion: 'latest',
       recursive: true,
       maxDepth: 4,
+      sections: ['inputs', 'references'],
     });
     expect(actual).to.equal(result);
   });

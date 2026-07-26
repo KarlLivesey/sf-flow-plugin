@@ -104,6 +104,7 @@
       "json",
       "max-depth",
       "namespace",
+      "only",
       "recursive",
       "subflow-version",
       "target-org"

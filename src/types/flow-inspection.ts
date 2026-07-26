@@ -88,6 +88,8 @@ export interface FlowGraphStyle {
 
 export type FlowSubflowVersionSelector = 'active' | 'latest';
 
+export type FlowDescribeSection = 'elements' | 'inputs' | 'outputs' | 'references' | 'resources';
+
 export interface FlowTraversalRequest extends NamedFlowRequest {
   version: FlowComparisonVersionSelector;
   subflowVersion: FlowSubflowVersionSelector;
@@ -95,7 +97,9 @@ export interface FlowTraversalRequest extends NamedFlowRequest {
   maxDepth: number;
 }
 
-export type FlowDescribeRequest = FlowTraversalRequest;
+export interface FlowDescribeRequest extends FlowTraversalRequest {
+  sections?: FlowDescribeSection[];
+}
 
 export interface FlowGraphRequest extends FlowTraversalRequest {
   format: FlowGraphFormat;
@@ -196,6 +200,7 @@ export interface FlowDescribeResult {
   subflowVersion: FlowSubflowVersionSelector;
   recursive: boolean;
   maxDepth: number;
+  sections: FlowDescribeSection[];
   flows: FlowDescription[];
   warnings: FlowTraversalWarning[];
   targetOrg: string;
