@@ -97,6 +97,36 @@ export interface FlowTraversalRequest extends NamedFlowRequest {
 
 export type FlowDescribeRequest = FlowTraversalRequest;
 
+export type FlowExportFormat = 'xml';
+
+export type FlowExportStatus = 'active' | 'draft';
+
+export interface FlowExportRequest extends NamedFlowRequest {
+  version: FlowComparisonVersionSelector;
+  format: FlowExportFormat;
+  status: FlowExportStatus;
+  outputFile: string;
+}
+
+export interface FlowExportArtifact {
+  result: FlowExportResult;
+  content: string;
+}
+
+export interface FlowExportResult {
+  apiName: string;
+  namespace: string | null;
+  definitionId: string;
+  requestedVersion: FlowComparisonVersionSelector;
+  resolvedVersion: FlowVersionNumber;
+  sourceStatus: string;
+  exportedStatus: 'Active' | 'Draft';
+  format: FlowExportFormat;
+  outputFile: string;
+  bytes: number;
+  targetOrg: string;
+}
+
 export interface FlowGraphRequest extends FlowTraversalRequest {
   format: FlowGraphFormat;
   includeVariables: boolean;

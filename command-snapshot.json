@@ -112,6 +112,25 @@
   },
   {
     "alias": [],
+    "command": "flow:export",
+    "flagAliases": [],
+    "flagChars": ["n", "o"],
+    "flags": [
+      "api-name",
+      "api-version",
+      "flags-dir",
+      "flow-version",
+      "format",
+      "json",
+      "namespace",
+      "output-file",
+      "status",
+      "target-org"
+    ],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
     "command": "flow:graph",
     "flagAliases": ["colour"],
     "flagChars": ["f", "n", "o", "r"],

@@ -17,6 +17,7 @@ export type FlowProgressAction =
   | 'deactivate'
   | 'dependencies'
   | 'describe'
+  | 'export'
   | 'graph'
   | 'prune'
   | 'versions';
@@ -47,6 +48,7 @@ const actionMessages: Record<FlowProgressAction, string> = {
   deactivate: messages.getMessage('actions.deactivate'),
   dependencies: messages.getMessage('actions.dependencies'),
   describe: messages.getMessage('actions.describe'),
+  export: messages.getMessage('actions.export'),
   graph: messages.getMessage('actions.graph'),
   prune: messages.getMessage('actions.prune'),
   versions: messages.getMessage('actions.versions'),
