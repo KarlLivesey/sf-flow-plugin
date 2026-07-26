@@ -47,18 +47,14 @@ type DataCloudRecord = Record<string, unknown>;
 
 const httpErrorSchema = z
   .object({
-    errorCode: z
-      .string()
-      .regex(/^[A-Z][A-Z0-9_]*$/u)
-      .optional(),
-    name: z
-      .string()
-      .regex(/^[A-Z][A-Z0-9_]*$/u)
-      .optional(),
-    status: z.number().int().optional(),
-    statusCode: z.number().int().optional(),
+    errorCode: z.unknown().optional(),
+    name: z.unknown().optional(),
+    status: z.unknown().optional(),
+    statusCode: z.unknown().optional(),
   })
   .passthrough();
+const httpCodeSchema = z.string().regex(/^[A-Z][A-Z0-9_]*$/u);
+const httpStatusSchema = z.number().int();
 
 const runtimeMetricsRequestSchema: z.ZodType<FlowRuntimeMetricsRequest> = z.object({
   apiName: flowApiNameSchema,
@@ -153,14 +149,15 @@ function isDmoNotFound(error: unknown): boolean {
     return false;
   }
   const { errorCode, name, status, statusCode } = parsed.data;
-  return (
-    statusCode === 404 ||
-    status === 404 ||
-    errorCode === 'NOT_FOUND' ||
-    errorCode === 'ERROR_HTTP_404' ||
-    name === 'NOT_FOUND' ||
-    name === 'ERROR_HTTP_404'
-  );
+  const safeStatuses = [statusCode, status].flatMap((candidate) => {
+    const validated = httpStatusSchema.safeParse(candidate);
+    return validated.success ? [validated.data] : [];
+  });
+  const safeCodes = [errorCode, name].flatMap((candidate) => {
+    const validated = httpCodeSchema.safeParse(candidate);
+    return validated.success ? [validated.data] : [];
+  });
+  return safeStatuses.includes(404) || safeCodes.some((code) => code === 'NOT_FOUND' || code === 'ERROR_HTTP_404');
 }
 
 function requireVersion(

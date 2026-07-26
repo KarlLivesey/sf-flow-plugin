@@ -51,6 +51,12 @@ function isFailed(response: QueryResponse): boolean {
   return ['Aborted', 'Error', 'Failed'].includes(response.status.completionStatus);
 }
 
+function assertQuerySucceeded(response: QueryResponse): void {
+  if (isFailed(response)) {
+    throw new Error(`Data Cloud SQL query ${response.status.completionStatus.toLowerCase()}.`);
+  }
+}
+
 function recordsForResponse(response: QueryResponse): DataCloudRecord[] {
   const metadata = response.metadata ?? [];
   const data = response.data ?? [];
@@ -69,6 +75,7 @@ export class DataCloudSqlQueryClient {
 
   public async query(sql: string): Promise<ReadonlyArray<DataCloudRecord>> {
     const initial = await this.start(sql);
+    assertQuerySucceeded(initial);
     const completed = isComplete(initial) ? initial : await this.waitForCompletion(initial);
     const inlineRecords = recordsForResponse(completed);
     if (inlineRecords.length === completed.status.rowCount) {
@@ -96,13 +103,12 @@ export class DataCloudSqlQueryClient {
     response: QueryResponse,
     remainingRequests = MAX_STATUS_REQUESTS
   ): Promise<QueryResponse> {
-    if (isFailed(response)) {
-      throw new Error(`Data Cloud SQL query ${response.status.completionStatus.toLowerCase()}.`);
-    }
+    assertQuerySucceeded(response);
     if (remainingRequests === 0) {
       throw new Error('Data Cloud SQL query did not complete within 60 seconds.');
     }
     const next = await this.getStatus(response.status.queryId);
+    assertQuerySucceeded(next);
     return isComplete(next) ? next : this.waitForCompletion(next, remainingRequests - 1);
   }
 

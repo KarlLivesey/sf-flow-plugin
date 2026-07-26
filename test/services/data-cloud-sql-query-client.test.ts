@@ -46,6 +46,18 @@ function queryResponse(
   };
 }
 
+async function expectFailedQuery(responses: unknown[], expectedStatus: string): Promise<void> {
+  try {
+    await new DataCloudSqlQueryClient(new QueryConnectionDouble(responses).asConnection()).query(
+      'SELECT flowId FROM Flow'
+    );
+    expect.fail('Expected the Data Cloud query to fail.');
+  } catch (error: unknown) {
+    expect(error).to.be.instanceOf(Error);
+    expect((error as Error).message).to.equal(`Data Cloud SQL query ${expectedStatus}.`);
+  }
+}
+
 describe('DataCloudSqlQueryClient', (): void => {
   it('waits for completion and loads result rows', async (): Promise<void> => {
     const connection = new QueryConnectionDouble([
@@ -78,5 +90,13 @@ describe('DataCloudSqlQueryClient', (): void => {
     const records = await new DataCloudSqlQueryClient(connection.asConnection()).query('SELECT flowId FROM Flow');
     expect(records).to.deep.equal([{ flowId: 'flow-1' }]);
     expect(connection.requests).to.have.length(2);
+  });
+
+  it('rejects an initially failed query even when progress is complete', async (): Promise<void> => {
+    await expectFailedQuery([queryResponse('Failed', 0, 1)], 'failed');
+  });
+
+  it('rejects a failed polling response even when progress is complete', async (): Promise<void> => {
+    await expectFailedQuery([queryResponse('Running', 0), queryResponse('Aborted', 0, 1)], 'aborted');
   });
 });
