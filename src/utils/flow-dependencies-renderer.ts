@@ -18,6 +18,10 @@ function source(dependency: FlowDependency): string {
     : `${dependency.sourceNamespace}__${dependency.sourceApiName}`;
 }
 
+function sourceNode(dependency: FlowDependency): string {
+  return `Flow:${source(dependency)}`;
+}
+
 function escapeLabel(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
 }
@@ -62,7 +66,7 @@ function renderMermaid(result: FlowDependenciesResult): string {
   const lines = ['flowchart LR'];
   const ids = new Map<string, string>();
   for (const dependency of result.dependencies) {
-    const from = source(dependency);
+    const from = sourceNode(dependency);
     const to = target(dependency);
     const edge = dependency.direction === 'uses' ? '-->' : '<--';
     lines.push(`  ${nodeId(ids, from)}["${escapeLabel(from)}"] ${edge} ${nodeId(ids, to)}["${escapeLabel(to)}"]`);
@@ -73,7 +77,7 @@ function renderMermaid(result: FlowDependenciesResult): string {
 function renderDot(result: FlowDependenciesResult): string {
   const lines = ['digraph FlowDependencies {', '  rankdir=LR;'];
   for (const dependency of result.dependencies) {
-    const from = escapeLabel(source(dependency));
+    const from = escapeLabel(sourceNode(dependency));
     const to = escapeLabel(target(dependency));
     const edge = dependency.direction === 'uses' ? `"${from}" -> "${to}";` : `"${to}" -> "${from}";`;
     lines.push(`  ${edge}`);

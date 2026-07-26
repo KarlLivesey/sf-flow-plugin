@@ -78,6 +78,29 @@ const dependencies: FlowDependenciesResult = {
   targetOrg: 'admin@example.com',
 };
 
+function recursiveDependencies(): FlowDependenciesResult {
+  const base = dependencies.dependencies[0];
+  if (base === undefined) {
+    throw new Error('Expected a dependency fixture.');
+  }
+  return {
+    ...dependencies,
+    recursive: true,
+    dependencies: [
+      { ...base, sourceApiName: 'Flow_A', name: 'Flow_B', componentId: 'flow-b', type: 'Flow' },
+      {
+        ...base,
+        sourceDefinitionId: 'flow-b',
+        sourceApiName: 'Flow_B',
+        depth: 1,
+        name: 'Handler',
+        componentId: 'handler',
+        type: 'ApexClass',
+      },
+    ],
+  };
+}
+
 describe('Flow report renderers', (): void => {
   for (const format of ['summary', 'unified', 'markdown'] as const) {
     it(`renders comparison ${format} output`, (): void => {
@@ -128,5 +151,18 @@ describe('Flow dependency renderer structure', (): void => {
     expect(first?.[1]).to.match(/^n\d+$/u);
     expect(second?.[1]).to.match(/^n\d+$/u);
     expect(first?.[1]).not.to.equal(second?.[1]);
+  });
+});
+
+describe('Flow dependency renderer recursion', (): void => {
+  it('uses one Flow node across recursive Mermaid and DOT edges', (): void => {
+    const recursive = recursiveDependencies();
+    const mermaid = renderFlowDependencies(recursive, 'mermaid');
+    const recursiveNode = /(\w+)\["Flow:Flow_B"\]/u.exec(mermaid)?.[1];
+    expect(recursiveNode).to.match(/^n\d+$/u);
+    expect(mermaid.match(new RegExp(`${recursiveNode ?? 'missing'}\\["Flow:Flow_B"\\]`, 'gu'))).to.have.length(2);
+    const dot = renderFlowDependencies(recursive, 'dot');
+    expect(dot).to.contain('"Flow:Flow_A" -> "Flow:Flow_B";');
+    expect(dot).to.contain('"Flow:Flow_B" -> "ApexClass:Handler";');
   });
 });
