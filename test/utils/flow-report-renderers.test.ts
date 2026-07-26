@@ -126,6 +126,31 @@ describe('Flow report renderers', (): void => {
   });
 });
 
+describe('Flow comparison renderer structure', (): void => {
+  it('keeps multiline string values on their marked unified-diff lines', (): void => {
+    const multiline: FlowCompareResult = {
+      ...comparison,
+      changes: [
+        {
+          kind: 'changed',
+          path: '$.description',
+          before: 'first line\nsecond line',
+          after: 'replacement\nsecond replacement line',
+        },
+      ],
+    };
+    expect(renderFlowComparison(multiline, 'unified')).to.equal(
+      [
+        '--- Order_Processing@1',
+        '+++ Order_Processing@2',
+        '@@ $.description @@',
+        '- "first line\\nsecond line"',
+        '+ "replacement\\nsecond replacement line"',
+      ].join('\n')
+    );
+  });
+});
+
 describe('Flow dependency renderer structure', (): void => {
   it('identifies the source Flow on every tree edge', (): void => {
     const tree = renderFlowDependencies(dependencies, 'tree');
