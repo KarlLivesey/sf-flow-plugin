@@ -56,7 +56,7 @@ describe('Flow metrics analysis', (): void => {
       decisions: 1,
       decisionOutcomes: 1,
       loops: 1,
-      maximumLoopNesting: 1,
+      maximumLoopNestingUpperBound: 1,
       dmlElements: 1,
       dmlInsideLoops: 1,
       faultCapableElements: 1,
@@ -65,7 +65,7 @@ describe('Flow metrics analysis', (): void => {
       unreachableElements: 0,
     });
     expect(metrics.referencedObjects).to.deep.equal(['Account']);
-    expect(totalFlowMetrics([metrics])).to.include({ executableElements: 4, maximumLoopNesting: 1 });
+    expect(totalFlowMetrics([metrics])).to.include({ executableElements: 4, maximumLoopNestingUpperBound: 1 });
   });
 });
 
@@ -101,6 +101,31 @@ describe('Flow metrics path analysis', (): void => {
       ],
     };
     const description = analyseFlowMetadata({ definition, version, metadata, depth: 0 });
-    expect(analyseFlowMetrics(metadata, description).maximumPathDepth).to.equal(51);
+    expect(analyseFlowMetrics(metadata, description).maximumPathDepthUpperBound).to.equal(51);
+  });
+});
+
+describe('Flow metrics cyclic bounds', (): void => {
+  it('labels the condensed cyclic component calculation as an upper bound', (): void => {
+    const metadata = {
+      start: { connector: { targetReference: 'Choose_Branch' } },
+      decisions: [
+        {
+          name: 'Choose_Branch',
+          rules: [
+            { name: 'First', connector: { targetReference: 'First_Branch' } },
+            { name: 'Second', connector: { targetReference: 'Second_Branch' } },
+          ],
+          defaultConnector: { targetReference: 'Third_Branch' },
+        },
+      ],
+      assignments: [
+        { name: 'First_Branch', connector: { targetReference: 'Choose_Branch' } },
+        { name: 'Second_Branch', connector: { targetReference: 'Choose_Branch' } },
+        { name: 'Third_Branch', connector: { targetReference: 'Choose_Branch' } },
+      ],
+    };
+    const description = analyseFlowMetadata({ definition, version, metadata, depth: 0 });
+    expect(analyseFlowMetrics(metadata, description).maximumPathDepthUpperBound).to.equal(4);
   });
 });

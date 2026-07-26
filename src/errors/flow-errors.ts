@@ -234,8 +234,7 @@ export function flowDataCloudMetricsUnavailable(message: string, cause?: unknown
   return createFlowError({
     code: 'FlowDataCloudMetricsUnavailable',
     message,
-    action:
-      'Confirm that Data Cloud is provisioned, Flow metrics collection is enabled for this Flow, and the authenticated user can query its Flow DMOs.',
+    action: 'Confirm that Flow metrics collection has produced records for the selected Flow and version.',
     ...(cause === undefined ? {} : { cause }),
   });
 }

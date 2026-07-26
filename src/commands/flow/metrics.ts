@@ -154,7 +154,7 @@ export default class FlowMetrics extends SfCommand<FlowMetricsCommandResult> {
         { key: 'loops', name: 'Loops' },
         { key: 'dmlElements', name: 'DML' },
         { key: 'dmlInsideLoops', name: 'DML in loops' },
-        { key: 'maximumPathDepth', name: 'Path depth' },
+        { key: 'maximumPathDepthUpperBound', name: 'Path depth upper bound' },
         { key: 'faultPathCoverage', name: 'Fault coverage' },
         { key: 'unreachableElements', name: 'Unreachable' },
         { key: 'referencedObjects', name: 'Objects' },

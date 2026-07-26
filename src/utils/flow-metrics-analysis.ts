@@ -18,8 +18,8 @@ function adjacency(description: FlowDescription): ReadonlyMap<string, ReadonlyAr
 }
 
 interface PathMetrics {
-  depth: number;
-  loopNesting: number;
+  depthUpperBound: number;
+  loopNestingUpperBound: number;
 }
 
 interface PathContext {
@@ -142,10 +142,11 @@ function componentPathMetrics(component: number, context: PathContext): PathMetr
   const children = [...(context.graph.get(component) ?? [])].map((target) => componentPathMetrics(target, context));
   const nodes = context.components[component] ?? [];
   const result = {
-    depth: nodes.filter((node) => node !== 'start').length + Math.max(0, ...children.map((child) => child.depth)),
-    loopNesting:
+    depthUpperBound:
+      nodes.filter((node) => node !== 'start').length + Math.max(0, ...children.map((child) => child.depthUpperBound)),
+    loopNestingUpperBound:
       nodes.filter((node) => context.loopNames.has(node)).length +
-      Math.max(0, ...children.map((child) => child.loopNesting)),
+      Math.max(0, ...children.map((child) => child.loopNestingUpperBound)),
   };
   context.memo.set(component, result);
   return result;
@@ -200,12 +201,12 @@ export function analyseFlowMetrics(metadata: JsonObject, description: FlowDescri
       (connector) => decisions.some((decision) => decision.name === connector.source) && connector.kind === 'outcome'
     ).length,
     loops: loops.size,
-    maximumLoopNesting: paths.loopNesting,
+    maximumLoopNestingUpperBound: paths.loopNestingUpperBound,
     dmlElements: description.elements.filter((element) => FLOW_DML_TYPES.has(element.type)).length,
     dmlInsideLoops: findings.filter((finding) => finding.rule === 'dml-inside-loop').length,
     apexActions: description.apexActions.length,
     subflows: description.subflows.length,
-    maximumPathDepth: paths.depth,
+    maximumPathDepthUpperBound: paths.depthUpperBound,
     faultCapableElements: faultCapable,
     faultConnectedElements: faultCapable - missingFaults,
     faultPathCoverage: faultCapable === 0 ? null : (faultCapable - missingFaults) / faultCapable,
@@ -225,12 +226,12 @@ const countKeys: Array<keyof FlowMetricCounts> = [
   'decisions',
   'decisionOutcomes',
   'loops',
-  'maximumLoopNesting',
+  'maximumLoopNestingUpperBound',
   'dmlElements',
   'dmlInsideLoops',
   'apexActions',
   'subflows',
-  'maximumPathDepth',
+  'maximumPathDepthUpperBound',
   'faultCapableElements',
   'faultConnectedElements',
   'variables',
@@ -242,8 +243,8 @@ const countKeys: Array<keyof FlowMetricCounts> = [
 ];
 
 const maximumKeys: ReadonlySet<keyof FlowMetricCounts> = new Set([
-  'maximumLoopNesting',
-  'maximumPathDepth',
+  'maximumLoopNestingUpperBound',
+  'maximumPathDepthUpperBound',
   'maximumFanIn',
   'maximumFanOut',
 ]);
