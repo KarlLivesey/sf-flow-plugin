@@ -81,6 +81,7 @@
     "flagAliases": [],
     "flagChars": ["d", "n", "o", "r"],
     "flags": [
+      "allow-truncated",
       "api-name",
       "api-version",
       "direction",

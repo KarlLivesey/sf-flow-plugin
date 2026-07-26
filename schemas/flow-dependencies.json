@@ -38,6 +38,15 @@
             "$ref": "#/definitions/FlowDependency"
           }
         },
+        "truncated": {
+          "type": "boolean"
+        },
+        "truncations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowDependencyTruncation"
+          }
+        },
         "targetOrg": {
           "type": "string"
         }
@@ -52,6 +61,8 @@
         "types",
         "definitionsScanned",
         "dependencies",
+        "truncated",
+        "truncations",
         "targetOrg"
       ],
       "additionalProperties": false
@@ -107,6 +118,31 @@
     "FlowDependencyQueryDirection": {
       "type": "string",
       "enum": ["uses", "used-by"]
+    },
+    "FlowDependencyTruncation": {
+      "type": "object",
+      "properties": {
+        "definitionId": {
+          "type": "string"
+        },
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "direction": {
+          "$ref": "#/definitions/FlowDependencyQueryDirection"
+        },
+        "depth": {
+          "type": "number"
+        },
+        "limit": {
+          "type": "number"
+        }
+      },
+      "required": ["definitionId", "apiName", "namespace", "direction", "depth", "limit"],
+      "additionalProperties": false
     }
   }
 }

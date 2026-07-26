@@ -252,6 +252,7 @@ sf flow dependencies \
   [--max-depth NUMBER] \
   [--type COMPONENT_TYPE ...] \
   [--fail-on-dependencies] \
+  [--allow-truncated] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--json]
@@ -268,6 +269,10 @@ sf flow dependencies \
 This command reports Salesforce's `MetadataComponentDependency` index. Salesforce can omit unsupported dependency types, and the index represents component-level rather than historical version-specific relationships.
 
 Dependency analysis is definition-level. With `--recursive`, indexed Flow dependencies are followed without revisiting definitions, up to `--max-depth` (default `10`). Every direction is a separate query capped at 2,000 records; `both` therefore runs one `uses` query and one `used-by` query per visited Flow definition.
+
+When any query returns exactly 2,000 records, the result explicitly reports that direction as potentially truncated
+and the command exits with status 1 by default. Use `--allow-truncated` only when incomplete dependency output is
+acceptable; the structured result still sets `truncated: true` and lists every capped query.
 
 `--type` is repeatable and filters each capped query by metadata component type. Recursive filtered traversal includes `Flow` internally so it can reach nested definitions, but only requested types appear in the result. `--fail-on-dependencies` retains the result and sets process status 1 when matching records exist.
 
