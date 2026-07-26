@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowListResult",
+  "definitions": {
+    "FlowListResult": {
+      "type": "object",
+      "properties": {
+        "targetOrg": {
+          "type": "string"
+        },
+        "definitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowListEntry"
+          }
+        }
+      },
+      "required": ["targetOrg", "definitions"],
+      "additionalProperties": false
+    },
+    "FlowListEntry": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "definitionId": {
+          "type": "string"
+        },
+        "label": {
+          "type": ["string", "null"]
+        },
+        "processType": {
+          "type": ["string", "null"]
+        },
+        "activeVersion": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowVersionNumber"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "latestVersion": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowVersionNumber"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "type": ["string", "null"]
+        },
+        "lastModifiedDate": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": [
+        "apiName",
+        "namespace",
+        "definitionId",
+        "label",
+        "processType",
+        "activeVersion",
+        "latestVersion",
+        "status",
+        "lastModifiedDate"
+      ],
+      "additionalProperties": false
+    },
+    "FlowVersionNumber": {
+      "type": "number"
+    }
+  }
+}
