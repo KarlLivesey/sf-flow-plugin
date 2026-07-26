@@ -8,15 +8,18 @@ import type { JsonObject, JsonValue } from '../types/flow-analysis.js';
 import type { FlowDescription, FlowElementSummary, FlowLintFinding } from '../types/flow-inspection.js';
 
 const SALESFORCE_ID_PATTERN = /(?<![A-Za-z0-9])[A-Za-z0-9]{15}(?:[A-Za-z0-9]{3})?(?![A-Za-z0-9])/gu;
-const FAULT_PATH_TYPES = new Set(['Action', 'Apex Plugin', 'Record Create', 'Record Delete', 'Record Update']);
 const DML_TYPES = new Set(['Record Create', 'Record Delete', 'Record Update']);
 const RESOURCE_KEYS = new Set(['formulas', 'variables']);
-const ELEMENT_KEYS: Readonly<Record<string, string>> = {
+const FAULT_PATH_COLLECTIONS: Readonly<Record<string, string>> = {
   Action: 'actionCalls',
   'Apex Plugin': 'apexPluginCalls',
+  'Orchestrated Stage': 'orchestratedStages',
   'Record Create': 'recordCreates',
   'Record Delete': 'recordDeletes',
+  'Record Lookup': 'recordLookups',
   'Record Update': 'recordUpdates',
+  Subflow: 'subflows',
+  Wait: 'waits',
 };
 
 interface FindingLocation {
@@ -101,7 +104,7 @@ function containsTargetReference(value: JsonValue): boolean {
 }
 
 function metadataElement(metadata: JsonObject, element: FlowElementSummary): JsonObject | undefined {
-  const key = ELEMENT_KEYS[element.type];
+  const key = FAULT_PATH_COLLECTIONS[element.type];
   const values = key === undefined ? undefined : metadata[key];
   if (!Array.isArray(values)) {
     return undefined;
@@ -118,7 +121,7 @@ function metadataElement(metadata: JsonObject, element: FlowElementSummary): Jso
 
 function missingFaultPathFindings(metadata: JsonObject, description: FlowDescription): FlowLintFinding[] {
   return description.elements
-    .filter((element) => FAULT_PATH_TYPES.has(element.type))
+    .filter((element) => FAULT_PATH_COLLECTIONS[element.type] !== undefined)
     .filter((element) => {
       const value = metadataElement(metadata, element);
       return value === undefined || !containsTargetReference(value.faultConnector ?? null);
@@ -182,13 +185,27 @@ function collectHardCodedIds(value: JsonValue, path: string, findings: FlowLintF
   }
 }
 
-function referencesResource(value: JsonValue, name: string, rootKey: string | null = null): boolean {
+function referencesResourceDeclaration(value: JsonValue, name: string): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    value.name !== name &&
+    referencesResource(value, name)
+  );
+}
+
+function referencesResourceCollection(value: JsonValue, name: string): boolean {
+  return Array.isArray(value) && value.some((declaration) => referencesResourceDeclaration(declaration, name));
+}
+
+function referencesResource(value: JsonValue, name: string): boolean {
   if (Array.isArray(value)) {
-    return value.some((item) => referencesResource(item, name, rootKey));
+    return value.some((item) => referencesResource(item, name));
   }
   if (typeof value === 'object' && value !== null) {
-    return Object.entries(value).some(
-      ([key, child]) => !RESOURCE_KEYS.has(rootKey ?? key) && referencesResource(child, name, rootKey ?? key)
+    return Object.entries(value).some(([key, child]) =>
+      RESOURCE_KEYS.has(key) ? referencesResourceCollection(child, name) : referencesResource(child, name)
     );
   }
   if (typeof value !== 'string') {

@@ -49,6 +49,36 @@ describe('analyseFlowLintMetadata structural rules', (): void => {
   });
 });
 
+describe('analyseFlowLintMetadata fault-path rules', (): void => {
+  it('checks every supported fault-capable element collection', (): void => {
+    const metadata = {
+      start: { connector: { targetReference: 'Call_Action' } },
+      actionCalls: [{ name: 'Call_Action', actionType: 'apex', connector: { targetReference: 'Call_Plugin' } }],
+      apexPluginCalls: [{ name: 'Call_Plugin', connector: { targetReference: 'Run_Stage' } }],
+      orchestratedStages: [{ name: 'Run_Stage', connector: { targetReference: 'Create_Record' } }],
+      recordCreates: [{ name: 'Create_Record', connector: { targetReference: 'Delete_Record' } }],
+      recordDeletes: [{ name: 'Delete_Record', connector: { targetReference: 'Find_Record' } }],
+      recordLookups: [{ name: 'Find_Record', connector: { targetReference: 'Update_Record' } }],
+      recordUpdates: [{ name: 'Update_Record', connector: { targetReference: 'Call_Subflow' } }],
+      subflows: [{ name: 'Call_Subflow', flowName: 'Child_Flow', connector: { targetReference: 'Wait_For_Event' } }],
+      waits: [{ name: 'Wait_For_Event' }],
+    };
+    const description = analyseFlowMetadata({ definition, version, metadata, depth: 0 });
+    const findings = analyseFlowLintMetadata(metadata, description);
+    expect(findings.filter((item) => item.rule === 'missing-fault-path').map((item) => item.element)).to.deep.equal([
+      'Call_Action',
+      'Call_Plugin',
+      'Run_Stage',
+      'Create_Record',
+      'Delete_Record',
+      'Find_Record',
+      'Update_Record',
+      'Call_Subflow',
+      'Wait_For_Event',
+    ]);
+  });
+});
+
 describe('analyseFlowLintMetadata value and resource rules', (): void => {
   it('finds hard-coded IDs and unused private resources', (): void => {
     const metadata = {
@@ -77,6 +107,30 @@ describe('analyseFlowLintMetadata value and resource rules', (): void => {
     expect(findings.filter((item) => item.rule === 'hard-coded-id')).to.have.length(1);
     expect(findings.filter((item) => item.rule === 'unused-resource').map((item) => item.element)).to.deep.equal([
       'UnusedValue',
+      'UnusedFormula',
+    ]);
+  });
+});
+
+describe('analyseFlowLintMetadata resource-reference rules', (): void => {
+  it('counts references from other resource declarations without counting the resource itself', (): void => {
+    const metadata = {
+      start: { connector: { targetReference: 'Use_Total' } },
+      assignments: [
+        {
+          name: 'Use_Total',
+          assignmentItems: [{ value: { elementReference: 'TotalWithTax' } }],
+        },
+      ],
+      formulas: [
+        { name: 'Subtotal', dataType: 'Currency', expression: '100' },
+        { name: 'TotalWithTax', dataType: 'Currency', expression: '{!Subtotal} * 1.2' },
+        { name: 'UnusedFormula', dataType: 'Currency', expression: '0' },
+      ],
+    };
+    const description = analyseFlowMetadata({ definition, version, metadata, depth: 0 });
+    const findings = analyseFlowLintMetadata(metadata, description);
+    expect(findings.filter((item) => item.rule === 'unused-resource').map((item) => item.element)).to.deep.equal([
       'UnusedFormula',
     ]);
   });
