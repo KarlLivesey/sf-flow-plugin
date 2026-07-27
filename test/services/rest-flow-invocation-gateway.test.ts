@@ -153,6 +153,21 @@ describe('RestFlowInvocationGateway errors', (): void => {
   });
 });
 
+describe('RestFlowInvocationGateway org-query security', (): void => {
+  it('does not retain raw org-query transport errors as causes', async (): Promise<void> => {
+    const fake = connection({});
+    fake.query.rejects(httpApiError('ERROR_HTTP_503', 'sensitive Salesforce response'));
+    const error = await new RestFlowInvocationGateway(fake.connection)
+      .isProductionOrg()
+      .catch((caught: unknown) => caught);
+    expect(error).to.have.property(
+      'message',
+      'Could not determine whether the target org is a production org. Status: ERROR_HTTP_503.'
+    );
+    expect((error as Error & { cause?: unknown }).cause).to.equal(undefined);
+  });
+});
+
 describe('RestFlowInvocationGateway transport aliases', (): void => {
   it('reports recognised invocation authorisation failures as permission failures', async (): Promise<void> => {
     const fake = connection({});

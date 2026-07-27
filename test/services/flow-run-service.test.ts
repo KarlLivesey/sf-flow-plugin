@@ -224,3 +224,25 @@ describe('FlowRunService eligibility', (): void => {
     await expectErrorName(new FlowRunService(fake).run(request({ invocations: [{}] })), 'FlowInvocationFailed');
   });
 });
+
+describe('FlowRunService managed Flow identity', (): void => {
+  it('qualifies a managed Flow when no active version exists', async (): Promise<void> => {
+    const managed = {
+      ...flowDefinition({
+        id: definitionId,
+        apiName: 'Calculate_Discount',
+        activeVersionId: null,
+        latestVersionId: null,
+      }),
+      namespace: 'managed',
+    };
+    const fake = gateways();
+    const error = await new FlowRunService({
+      definition: new FakeFlowGateway([managed], []),
+      invocation: fake.invocation,
+    })
+      .run(request({ namespace: 'managed' }))
+      .catch((caught: unknown) => caught);
+    expect(error).to.have.property('message').that.includes('managed__Calculate_Discount');
+  });
+});

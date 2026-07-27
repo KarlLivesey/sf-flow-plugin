@@ -5,12 +5,22 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import type { JsonObject, JsonValue } from './flow-analysis.js';
+import type { FlowDebugError, FlowDebugEvent, FlowDebugLogRecord, FlowDebugLogLevel } from './flow-debug.js';
 import type { NamedFlowRequest, FlowVersionNumber } from './flow.js';
 
 export interface FlowRunRequest extends NamedFlowRequest {
   invocations: JsonObject[];
   dryRun: boolean;
   confirm: boolean;
+}
+
+export interface FlowRollbackRequest extends NamedFlowRequest {
+  input: JsonObject;
+  dryRun: boolean;
+  confirm: boolean;
+  logLevel: FlowDebugLogLevel;
+  showValues: boolean;
+  waitMilliseconds: number;
 }
 
 export interface FlowInvocationError {
@@ -40,6 +50,16 @@ export interface FlowRunResult {
   successful: boolean | null;
   invocations: FlowInvocation[];
   targetOrg: string;
+  debug?: FlowRunDebug;
+}
+
+export interface FlowRunDebug {
+  correlationId: string | null;
+  databaseChangesRolledBack: boolean | null;
+  valuesShown: boolean;
+  error: FlowDebugError | null;
+  debugLog: FlowDebugLogRecord | null;
+  events: FlowDebugEvent[];
 }
 
 export interface FlowActionError {

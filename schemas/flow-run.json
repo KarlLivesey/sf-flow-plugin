@@ -40,6 +40,9 @@
         },
         "targetOrg": {
           "type": "string"
+        },
+        "debug": {
+          "$ref": "#/definitions/FlowRunDebug"
         }
       },
       "required": [
@@ -130,6 +133,114 @@
         }
       },
       "required": ["message", "code"],
+      "additionalProperties": false
+    },
+    "FlowRunDebug": {
+      "type": "object",
+      "properties": {
+        "correlationId": {
+          "type": ["string", "null"]
+        },
+        "databaseChangesRolledBack": {
+          "type": ["boolean", "null"]
+        },
+        "valuesShown": {
+          "type": "boolean"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowDebugError"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "debugLog": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowDebugLogRecord"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowDebugEvent"
+          }
+        }
+      },
+      "required": ["correlationId", "databaseChangesRolledBack", "valuesShown", "error", "debugLog", "events"],
+      "additionalProperties": false
+    },
+    "FlowDebugError": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": ["string", "null"]
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": ["type", "message"],
+      "additionalProperties": false
+    },
+    "FlowDebugLogRecord": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "operation": {
+          "type": "string"
+        },
+        "startTime": {
+          "type": "string"
+        },
+        "durationMilliseconds": {
+          "type": "number"
+        },
+        "logLength": {
+          "type": "number"
+        }
+      },
+      "required": ["id", "status", "operation", "startTime", "durationMilliseconds", "logLength"],
+      "additionalProperties": false
+    },
+    "FlowDebugEvent": {
+      "type": "object",
+      "properties": {
+        "sequence": {
+          "type": "number"
+        },
+        "timestamp": {
+          "type": "string"
+        },
+        "event": {
+          "type": "string"
+        },
+        "interviewId": {
+          "type": ["string", "null"]
+        },
+        "elementType": {
+          "type": ["string", "null"]
+        },
+        "elementName": {
+          "type": ["string", "null"]
+        },
+        "detail": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["sequence", "timestamp", "event", "interviewId", "elementType", "elementName", "detail"],
       "additionalProperties": false
     }
   }

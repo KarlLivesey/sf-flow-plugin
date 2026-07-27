@@ -74,7 +74,9 @@ function createLookup(request: FlowRunRequest): FlowDefinitionLookup {
 function activeVersion(definition: FlowDefinition, versions: ReadonlyArray<FlowVersion>): FlowVersion {
   const version = versions.find((candidate) => candidate.id === definition.activeVersionId);
   if (version === undefined) {
-    throw flowInvocationFailed(`Flow "${definition.apiName}" does not have an active version.`);
+    throw flowInvocationFailed(
+      `Flow "${qualifiedFlowName(definition.apiName, definition.namespace)}" does not have an active version.`
+    );
   }
   return version;
 }
