@@ -66,5 +66,6 @@ export interface FlowDebugArtifact<Result> {
 
 export interface FlowDebugGateway {
   isProductionOrg(): Promise<boolean>;
+  assertDebugAvailable(apiName: string): Promise<void>;
   execute(request: FlowDebugExecutionRequest, progress?: FlowDebugTransportProgress): Promise<FlowDebugTransportResult>;
 }

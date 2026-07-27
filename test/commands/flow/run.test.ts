@@ -82,7 +82,8 @@ describe('flow run command', (): void => {
     expect(FlowRun.flags['input-file'].exclusive).to.deep.equal(['input']);
     expect(FlowRun.flags['dry-run'].default).to.equal(false);
     expect(FlowRun.flags.rollback.default).to.equal(false);
-    expect(FlowRun.flags.rollback.exclusive).to.deep.equal(['dry-run']);
+    expect(FlowRun.flags.rollback.exclusive).to.equal(undefined);
+    expect(FlowRun.flags['raw-log-file'].exclusive).to.deep.equal(['dry-run']);
     expect(FlowRun.flags.confirm.default).to.equal(false);
   });
 
@@ -150,10 +151,59 @@ describe('flow run rollback command', (): void => {
       apiName: 'Calculate_Discount',
       targetOrg: 'admin@example.com',
       input: { percentage: '10' },
+      dryRun: false,
       confirm: false,
       logLevel: 'detailed',
       showValues: false,
       waitMilliseconds: 120_000,
+    });
+    expect(actual).to.equal(debugResult);
+  });
+});
+
+describe('flow run rollback dry-run command', (): void => {
+  it('accepts rollback with dry-run as a non-executing preflight', async (): Promise<void> => {
+    const commandFlags = {
+      ...flags(),
+      'dry-run': true,
+      rollback: true,
+      'log-level': undefined,
+      'show-values': undefined,
+      wait: undefined,
+    };
+    const debugResult: FlowRunResult = {
+      ...result,
+      dryRun: true,
+      successful: null,
+      invocations: [
+        {
+          interviewId: null,
+          version: 1,
+          success: null,
+          inputs: { percentage: 10 },
+          outputs: {},
+          errors: [],
+          executed: false,
+        },
+      ],
+      debug: {
+        correlationId: null,
+        databaseChangesRolledBack: null,
+        valuesShown: false,
+        error: null,
+        debugLog: null,
+        events: [],
+      },
+    };
+    $$.SANDBOX.stub(FlowRun.prototype, 'parseFlags').resolves(commandFlags);
+    const debug = $$.SANDBOX.stub(FlowDebugService.prototype, 'debug').resolves({
+      result: debugResult,
+      rawLog: '',
+    });
+    const actual = await FlowRun.run(['--json']);
+    expect(debug.firstCall.args[0]).to.include({
+      apiName: 'Calculate_Discount',
+      dryRun: true,
     });
     expect(actual).to.equal(debugResult);
   });

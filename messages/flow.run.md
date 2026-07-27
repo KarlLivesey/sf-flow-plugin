@@ -49,7 +49,7 @@ Write the complete unredacted Salesforce ApexLog to a new file. Requires --rollb
 
 # flags.dry-run.summary
 
-Validate eligibility, inputs, org safety and invocation access without executing the Flow.
+Validate eligibility, inputs, org safety and selected execution-mode access without executing the Flow.
 
 # flags.rollback.summary
 
@@ -122,6 +122,10 @@ Flow %s version %s invocations
 # info.dry-run
 
 Dry run only: eligibility, declared inputs, production safety and REST action access were checked. Runtime success was not predicted.
+
+# info.rollback-dry-run
+
+Dry run only: rollback eligibility, inputs, production safety and tracing-object permissions were checked. Apex execution permission and runtime success cannot be proven without executing Apex.
 
 # info.request-duration
 

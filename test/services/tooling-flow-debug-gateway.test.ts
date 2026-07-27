@@ -38,7 +38,12 @@ function request(): FlowDebugExecutionRequest {
   };
 }
 
-function connection(): { connection: Connection; executeAnonymous: sinon.SinonStub } {
+function connection(): {
+  connection: Connection;
+  describe: sinon.SinonStub;
+  executeAnonymous: sinon.SinonStub;
+} {
+  const describe = sinon.stub();
   const executeAnonymous = sinon
     .stub()
     .resolves({ compiled: true, success: true, line: -1, column: -1, compileProblem: null });
@@ -47,8 +52,9 @@ function connection(): { connection: Connection; executeAnonymous: sinon.SinonSt
       identity: sinon.stub().resolves({
         id: 'https://login.salesforce.com/id/00D000000000001/005000000000001',
       }),
-      tooling: { executeAnonymous },
+      tooling: { describe, executeAnonymous },
     } as unknown as Connection,
+    describe,
     executeAnonymous,
   };
 }
@@ -64,6 +70,29 @@ function stubLifecycle(): {
     find: sinon.stub(ToolingFlowDebugLog.prototype, 'find').resolves(log),
   };
 }
+
+describe('ToolingFlowDebugGateway permissions', (): void => {
+  it('checks rollback tracing permissions without executing Apex', async (): Promise<void> => {
+    const fake = connection();
+    fake.describe.onFirstCall().resolves({ createable: true, deletable: true, updateable: false });
+    fake.describe.onSecondCall().resolves({ createable: true, deletable: true, updateable: true });
+    await new ToolingFlowDebugGateway(fake.connection).assertDebugAvailable('Calculate_Discount');
+    expect(fake.describe.calledTwice).to.equal(true);
+    expect(fake.describe.firstCall.calledWithExactly('DebugLevel')).to.equal(true);
+    expect(fake.describe.secondCall.calledWithExactly('TraceFlag')).to.equal(true);
+    expect(fake.executeAnonymous.called).to.equal(false);
+  });
+
+  it('rejects incomplete rollback tracing permissions', async (): Promise<void> => {
+    const fake = connection();
+    fake.describe.onFirstCall().resolves({ createable: true, deletable: true, updateable: false });
+    fake.describe.onSecondCall().resolves({ createable: true, deletable: true, updateable: false });
+    await expectErrorName(
+      new ToolingFlowDebugGateway(fake.connection).assertDebugAvailable('Calculate_Discount'),
+      'FlowDebugPermissionDenied'
+    );
+  });
+});
 
 describe('ToolingFlowDebugGateway lifecycle', (): void => {
   it('executes marked Apex, retrieves the log and always closes tracing', async (): Promise<void> => {

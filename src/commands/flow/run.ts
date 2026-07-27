@@ -71,6 +71,7 @@ async function createRollbackRequest(
   return {
     ...createNamedFlowRequest(flags, context),
     input,
+    dryRun: flags['dry-run'],
     confirm: flags.confirm,
     logLevel: flags['log-level'] ?? 'detailed',
     showValues: flags['show-values'] ?? false,
@@ -134,17 +135,16 @@ export default class FlowRun extends SfCommand<FlowRunResult> {
       summary: messages.getMessage('flags.output-file.summary'),
     }),
     'raw-log-file': Flags.file({
+      exclusive: ['dry-run'],
       relationships: [{ type: 'some', flags: ['rollback'] }],
       summary: messages.getMessage('flags.raw-log-file.summary'),
     }),
     'dry-run': Flags.boolean({
       default: false,
-      exclusive: ['rollback'],
       summary: messages.getMessage('flags.dry-run.summary'),
     }),
     rollback: Flags.boolean({
       default: false,
-      exclusive: ['dry-run'],
       summary: messages.getMessage('flags.rollback.summary'),
     }),
     confirm: Flags.boolean({
@@ -223,7 +223,7 @@ export default class FlowRun extends SfCommand<FlowRunResult> {
     if (this.jsonEnabled()) {
       return;
     }
-    if (flags.rollback) {
+    if (flags.rollback && !flags['dry-run']) {
       this.warn(messages.getMessage('warnings.rollback'));
       if (flags['raw-log-file'] !== undefined) {
         this.warn(messages.getMessage('warnings.raw-log'));
@@ -254,8 +254,8 @@ export default class FlowRun extends SfCommand<FlowRunResult> {
       ],
     });
     if (result.dryRun && !this.jsonEnabled()) {
-      this.log(messages.getMessage('info.dry-run'));
-    } else if (result.debug !== undefined) {
+      this.log(messages.getMessage(result.debug === undefined ? 'info.dry-run' : 'info.rollback-dry-run'));
+    } else if (result.debug?.debugLog !== undefined && result.debug.debugLog !== null) {
       this.table({
         title: messages.getMessage('info.trace-title', [result.debug.debugLog.id]),
         data: result.debug.events.map((event) => ({ ...event })),

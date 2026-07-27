@@ -4,22 +4,18 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import {
-  flowDebugFailed,
-  flowDebugRollbackFailed,
-  flowInputInvalid,
-  flowProductionConfirmationRequired,
-} from '../errors/flow-errors.js';
-import type { FlowMetadataGateway, JsonObject, JsonValue } from '../types/flow-analysis.js';
-import type {
-  FlowDebugArtifact,
-  FlowDebugGateway,
-  FlowDebugTransportStage,
-  FlowDebugTransportResult,
-} from '../types/flow-debug.js';
-import type { FlowInvocationError, FlowRollbackRequest, FlowRunResult } from '../types/flow-invocation.js';
+import { flowDebugFailed, flowInputInvalid, flowProductionConfirmationRequired } from '../errors/flow-errors.js';
+import type { FlowMetadataGateway, JsonObject } from '../types/flow-analysis.js';
+import type { FlowDebugArtifact, FlowDebugGateway, FlowDebugTransportStage } from '../types/flow-debug.js';
+import type { FlowRollbackRequest, FlowRunResult } from '../types/flow-invocation.js';
 import type { FlowDefinition, FlowDefinitionGateway, FlowDefinitionLookup, FlowVersion } from '../types/flow.js';
 import { parseFlowDebugLog } from '../utils/flow-debug-log.js';
+import {
+  createFlowDebugArtifact,
+  createFlowDebugDryRunArtifact,
+  type ExecutedFlowDebug,
+  type PreparedFlowDebug,
+} from '../utils/flow-debug-result.js';
 import { analyseFlowMetadata } from '../utils/flow-metadata-analysis.js';
 import { validateFlowInputs } from '../utils/flow-input-schema.js';
 import { noFlowProgress, type FlowProgressReporter, type FlowProgressStage } from '../utils/flow-progress.js';
@@ -37,24 +33,12 @@ interface ResolvedDebugFlow {
   metadata: JsonObject;
 }
 
-interface PreparedDebug {
+interface PreparedDebug extends PreparedFlowDebug {
   flow: ResolvedDebugFlow;
-  input: JsonObject;
   outputVariables: string[];
-  production: boolean;
 }
 
-interface ExecutedDebug {
-  transport: FlowDebugTransportResult;
-  durationMilliseconds: number;
-  parsed: ReturnType<typeof parseFlowDebugLog>;
-}
-
-interface ResultContext {
-  request: FlowRollbackRequest;
-  prepared: PreparedDebug;
-  executed: ExecutedDebug;
-}
+type ExecutedDebug = ExecutedFlowDebug;
 
 interface ValidatedDebugInput {
   input: JsonObject;
@@ -109,14 +93,6 @@ function validateInputSize(input: JsonObject): void {
   }
 }
 
-function hiddenValues(value: Readonly<Record<string, JsonValue>>): Record<string, JsonValue> {
-  return Object.fromEntries(Object.keys(value).map((key) => [key, '[REDACTED]']));
-}
-
-function visibleValues(value: Readonly<Record<string, JsonValue>>, showValues: boolean): Record<string, JsonValue> {
-  return showValues ? { ...value } : hiddenValues(value);
-}
-
 function validateDebugInput(
   flow: ResolvedDebugFlow,
   request: FlowRollbackRequest,
@@ -131,77 +107,6 @@ function validateDebugInput(
   validateInputSize(input);
   const outputVariables = description.variables.filter((variable) => variable.output).map((variable) => variable.name);
   return { input, outputVariables };
-}
-
-function assertCompleted(context: ResultContext): void {
-  const { prepared, executed } = context;
-  if (!executed.transport.execution.success) {
-    return;
-  }
-  if (!executed.parsed.endMarker) {
-    throw flowDebugFailed(
-      `The correlated log for Flow "${prepared.flow.apiName}" did not contain a completion marker.`
-    );
-  }
-  if (!executed.parsed.rollbackMarker) {
-    throw flowDebugRollbackFailed(prepared.flow.apiName);
-  }
-}
-
-function executionError(context: ResultContext): ReturnType<typeof parseFlowDebugLog>['error'] {
-  if (context.executed.parsed.error !== null) {
-    return context.executed.parsed.error;
-  }
-  return context.executed.transport.execution.success
-    ? null
-    : {
-        type: null,
-        message: 'Salesforce terminated the debug transaction; inspect the Flow trace for details.',
-      };
-}
-
-function invocationErrors(context: ResultContext): FlowInvocationError[] {
-  const error = executionError(context);
-  return error === null ? [] : [{ message: error.message, code: error.type }];
-}
-
-function createArtifact(context: ResultContext): FlowDebugArtifact<FlowRunResult> {
-  assertCompleted(context);
-  const { request, prepared, executed } = context;
-  const { flow, input, production } = prepared;
-  const successful = executed.transport.execution.success && executed.parsed.error === null;
-  const result: FlowRunResult = {
-    apiName: flow.definition.apiName,
-    namespace: flow.definition.namespace,
-    definitionId: flow.definition.id,
-    version: flow.version.versionNumber,
-    processType: flow.version.processType,
-    production,
-    dryRun: false,
-    successful,
-    durationMilliseconds: executed.durationMilliseconds,
-    invocations: [
-      {
-        interviewId: executed.parsed.interviewId,
-        version: flow.version.versionNumber,
-        success: successful,
-        inputs: visibleValues(input, request.showValues),
-        outputs: visibleValues(executed.parsed.outputs, request.showValues),
-        errors: invocationErrors(context),
-        executed: true,
-      },
-    ],
-    targetOrg: request.targetOrg,
-    debug: {
-      correlationId: executed.transport.correlationId,
-      databaseChangesRolledBack: true,
-      valuesShown: request.showValues,
-      error: executionError(context),
-      debugLog: executed.transport.log,
-      events: executed.parsed.events,
-    },
-  };
-  return { result, rawLog: executed.transport.rawLog };
 }
 
 async function assertActiveVersionUnchanged(gateway: FlowDefinitionGateway, flow: ResolvedDebugFlow): Promise<void> {
@@ -226,8 +131,11 @@ export class FlowDebugService {
     progress: FlowProgressReporter = noFlowProgress
   ): Promise<FlowDebugArtifact<FlowRunResult>> {
     const prepared = await this.prepare(request, progress);
+    if (request.dryRun) {
+      return createFlowDebugDryRunArtifact(request, prepared);
+    }
     const executed = await this.execute(prepared, request, progress);
-    return createArtifact({ request, prepared, executed });
+    return createFlowDebugArtifact({ request, prepared, executed });
   }
 
   private async execute(
@@ -258,7 +166,7 @@ export class FlowDebugService {
 
   private async gateExecution(request: FlowRollbackRequest, flow: ResolvedDebugFlow): Promise<boolean> {
     const production = await this.gateways.debug.isProductionOrg();
-    if (production && !request.confirm) {
+    if (!request.dryRun && production && !request.confirm) {
       throw flowProductionConfirmationRequired(flow.apiName);
     }
     return production;
@@ -268,11 +176,24 @@ export class FlowDebugService {
     const flow = await this.resolveFlow(request, progress);
     assertDebuggable(flow);
     const validated = validateDebugInput(flow, request, progress);
+    const production = await this.preflight(request, flow, progress);
+    return { flow, ...validated, production };
+  }
+
+  private async preflight(
+    request: FlowRollbackRequest,
+    flow: ResolvedDebugFlow,
+    progress: FlowProgressReporter
+  ): Promise<boolean> {
     progress('checking-org', request.targetOrg);
     const production = await this.gateExecution(request, flow);
-    progress('checking-current-state', `${flow.apiName} v${flow.version.versionNumber} (active)`);
-    await assertActiveVersionUnchanged(this.gateways.definition, flow);
-    return { flow, ...validated, production };
+    progress('checking-permissions', `${flow.apiName} (Apex tracing)`);
+    await this.gateways.debug.assertDebugAvailable(flow.apiName);
+    if (!request.dryRun) {
+      progress('checking-current-state', `${flow.apiName} v${flow.version.versionNumber} (active)`);
+      await assertActiveVersionUnchanged(this.gateways.definition, flow);
+    }
+    return production;
   }
 
   private async resolveFlow(request: FlowRollbackRequest, progress: FlowProgressReporter): Promise<ResolvedDebugFlow> {

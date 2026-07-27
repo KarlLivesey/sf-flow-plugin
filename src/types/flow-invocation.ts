@@ -16,6 +16,7 @@ export interface FlowRunRequest extends NamedFlowRequest {
 
 export interface FlowRollbackRequest extends NamedFlowRequest {
   input: JsonObject;
+  dryRun: boolean;
   confirm: boolean;
   logLevel: FlowDebugLogLevel;
   showValues: boolean;
@@ -53,11 +54,11 @@ export interface FlowRunResult {
 }
 
 export interface FlowRunDebug {
-  correlationId: string;
-  databaseChangesRolledBack: boolean;
+  correlationId: string | null;
+  databaseChangesRolledBack: boolean | null;
   valuesShown: boolean;
   error: FlowDebugError | null;
-  debugLog: FlowDebugLogRecord;
+  debugLog: FlowDebugLogRecord | null;
   events: FlowDebugEvent[];
 }
 

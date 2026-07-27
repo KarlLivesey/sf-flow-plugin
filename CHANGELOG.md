@@ -11,6 +11,8 @@ All notable user-visible changes to this project will be documented in this file
   an exact per-run correlation marker and displays parsed Flow events.
 - Added production confirmation, configurable debug detail, structured and raw-log file output, value redaction and
   CI failure control for rollback execution.
+- Added `sf flow run --rollback --dry-run` to validate rollback eligibility, inputs, org context and tracing-object
+  permissions without executing Apex, creating temporary trace records or running the Flow.
 
 ### Safety and compatibility
 

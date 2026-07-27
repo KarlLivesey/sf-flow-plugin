@@ -19,6 +19,12 @@ export const organisationResultSchema = z.object({
   records: z.array(z.object({ IsSandbox: z.boolean() })).min(1),
 });
 
+export const debugObjectPermissionSchema = z.object({
+  createable: z.boolean(),
+  deletable: z.boolean(),
+  updateable: z.boolean(),
+});
+
 export const saveResultSchema = z.discriminatedUnion('success', [
   z.object({ success: z.literal(true), id: z.string().min(1), errors: z.array(z.never()) }),
   z.object({

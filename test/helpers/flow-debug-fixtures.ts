@@ -37,6 +37,7 @@ export function debugLog(options: { error?: boolean } = {}): string {
 
 export class FakeDebugGateway implements FlowDebugGateway {
   public executed: Array<Parameters<FlowDebugGateway['execute']>[0]> = [];
+  public availabilityChecks: string[] = [];
   public production = false;
   public transport: FlowDebugTransportResult = {
     correlationId,
@@ -55,6 +56,10 @@ export class FakeDebugGateway implements FlowDebugGateway {
   public async execute(request: Parameters<FlowDebugGateway['execute']>[0]): Promise<FlowDebugTransportResult> {
     this.executed.push(request);
     return this.transport;
+  }
+
+  public async assertDebugAvailable(apiName: string): Promise<void> {
+    this.availabilityChecks.push(apiName);
   }
 
   public async isProductionOrg(): Promise<boolean> {
@@ -116,6 +121,7 @@ export function flowDebugRequest(overrides: Partial<FlowRollbackRequest> = {}): 
     apiName: 'Calculate_Discount',
     targetOrg: 'admin@example.com',
     input: { percentage: '10', secretToken: 'input-secret' },
+    dryRun: false,
     confirm: false,
     logLevel: 'detailed',
     showValues: false,

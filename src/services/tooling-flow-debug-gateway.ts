@@ -24,6 +24,7 @@ import { createFlowDebugApex } from '../utils/flow-debug-apex.js';
 import { ToolingFlowDebugLog } from './tooling-flow-debug-log.js';
 import {
   apexExecutionSchema,
+  debugObjectPermissionSchema,
   identitySchema,
   isPermissionFailure,
   organisationResultSchema,
@@ -46,6 +47,18 @@ interface CapturedErrors {
 }
 
 type CapturedOperation = { success: true; result: FlowDebugTransportResult } | { success: false; error: Error };
+
+function hasDebugPermissions(debugLevel: unknown, traceFlag: unknown): boolean {
+  const debugLevelAccess = debugObjectPermissionSchema.parse(debugLevel);
+  const traceFlagAccess = debugObjectPermissionSchema.parse(traceFlag);
+  return (
+    debugLevelAccess.createable &&
+    debugLevelAccess.deletable &&
+    traceFlagAccess.createable &&
+    traceFlagAccess.updateable &&
+    traceFlagAccess.deletable
+  );
+}
 
 function normaliseError(error: unknown, message: string): Error {
   return error instanceof Error ? error : flowDebugFailed(message);
@@ -84,6 +97,25 @@ export class ToolingFlowDebugGateway {
       return result.records[0]?.IsSandbox === false;
     } catch (error: unknown) {
       throw flowQueryFailed('Could not determine whether the target org is a production org.', error);
+    }
+  }
+
+  public async assertDebugAvailable(apiName: string): Promise<void> {
+    try {
+      const descriptions = await Promise.all([
+        this.connection.tooling.describe('DebugLevel'),
+        this.connection.tooling.describe('TraceFlag'),
+      ]);
+      if (!hasDebugPermissions(descriptions[0], descriptions[1])) {
+        throw flowDebugPermissionDenied(apiName);
+      }
+    } catch (error: unknown) {
+      if (isPermissionFailure(error) || (error instanceof Error && error.name === 'FlowDebugPermissionDenied')) {
+        throw flowDebugPermissionDenied(apiName);
+      }
+      throw flowDebugFailed(
+        `Could not verify rollback tracing permissions for Flow "${apiName}".${transportStatusSuffix(error)}`
+      );
     }
   }
 

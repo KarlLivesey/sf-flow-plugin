@@ -666,7 +666,8 @@ sf flow run \
   [--input NAME=VALUE ...] \
   [--input-file FILE] \
   [--output-file FILE] \
-  [--dry-run|--rollback] \
+  [--dry-run] \
+  [--rollback] \
   [--log-level basic|detailed|finest] \
   [--show-values] \
   [--raw-log-file FILE] \
@@ -720,6 +721,7 @@ sf flow run \
   [--raw-log-file FILE] \
   [--output-file FILE] \
   [--wait MINUTES] \
+  [--dry-run] \
   [--confirm] \
   [--fail-on-flow-error] \
   [--namespace NAMESPACE] \
@@ -732,6 +734,10 @@ sf flow run \
 retrieves the related Salesforce ApexLog using an exact per-run correlation marker and displays its Flow events. It
 accepts one input object, validates declared inputs before execution and checks that the active Flow version has not
 changed during preflight.
+
+Combine `--rollback --dry-run` to validate the Flow, the single input object, production-org context and tracing-object
+permissions without executing Apex, creating trace records or running the Flow. This is a point-in-time preflight:
+Salesforce does not expose a read-only check that conclusively proves Execute Anonymous permission or runtime success.
 
 The generated Apex establishes a savepoint before starting the Flow and rolls back in a `finally` block, then emits
 markers that the command verifies in the correlated log. Rollback affects database work in the current transaction

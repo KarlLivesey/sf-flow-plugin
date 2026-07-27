@@ -21,6 +21,7 @@ describe('FlowDebugService rollback execution', (): void => {
       outputVariables: ['discount', 'secretToken'],
       logLevel: 'detailed',
     });
+    expect(gateways.debug.availabilityChecks).to.deep.equal(['Calculate_Discount']);
     expect(artifact.result).to.include({
       successful: true,
       dryRun: false,
@@ -61,6 +62,22 @@ describe('FlowDebugService rollback execution', (): void => {
 });
 
 describe('FlowDebugService safety', (): void => {
+  it('preflights rollback without tracing or executing the Flow', async (): Promise<void> => {
+    const gateways = flowDebugGateways();
+    gateways.debug.production = true;
+    const artifact = await new FlowDebugService(gateways).debug(flowDebugRequest({ dryRun: true }));
+    expect(gateways.debug.availabilityChecks).to.deep.equal(['Calculate_Discount']);
+    expect(gateways.debug.executed).to.deep.equal([]);
+    expect(artifact.rawLog).to.equal('');
+    expect(artifact.result).to.include({ production: true, dryRun: true, successful: null });
+    expect(artifact.result.invocations[0]).to.include({ executed: false, success: null });
+    expect(artifact.result.debug).to.deep.include({
+      correlationId: null,
+      databaseChangesRolledBack: null,
+      debugLog: null,
+    });
+  });
+
   it('requires confirmation for production even when rollback is enabled', async (): Promise<void> => {
     const gateways = flowDebugGateways();
     gateways.debug.production = true;
