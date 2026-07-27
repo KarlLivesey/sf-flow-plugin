@@ -90,6 +90,16 @@ function versionSelectorLabel(selector: FlowComparisonVersionSelector): string {
   return typeof selector === 'number' ? `v${selector}` : selector;
 }
 
+function assertMatchingFlowIdentity(contexts: { from: VersionContext; to: VersionContext }): void {
+  const fromName = qualifiedFlowName(contexts.from.definition.apiName, contexts.from.definition.namespace);
+  const toName = qualifiedFlowName(contexts.to.definition.apiName, contexts.to.definition.namespace);
+  if (fromName !== toName) {
+    throw flowComparisonFailed(
+      `The comparison resolved different Flows: "${fromName}" in the source org and "${toName}" in the target org. Specify --namespace to select the same qualified Flow in both orgs.`
+    );
+  }
+}
+
 function changeCount(changes: ReadonlyArray<FlowComparisonChange>, kind: FlowComparisonChange['kind']): number {
   return changes.filter((change) => change.kind === kind).length;
 }
@@ -199,6 +209,7 @@ async function resolveSides(
   progress: FlowProgressReporter
 ): Promise<ResolvedSides> {
   const contexts = await resolveContexts(gateways, request, progress);
+  assertMatchingFlowIdentity(contexts);
   const fromVersion = selectVersion(contexts.from, request.from);
   const toVersion = selectVersion(contexts.to, request.to);
   const fromName = qualifiedFlowName(contexts.from.definition.apiName, contexts.from.definition.namespace);

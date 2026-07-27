@@ -16,13 +16,11 @@ import type {
   FlowComparisonFormat,
   FlowComparisonScope,
   FlowComparisonVersionSelector,
-  JsonValue,
 } from '../../types/flow-analysis.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
 import { renderFlowComparison } from '../../utils/flow-comparison-renderer.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
 import { writeFlowReport } from '../../utils/flow-report-file.js';
-import { qualifiedFlowName } from '../../utils/flow-state.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('sf-flow-plugin', 'flow.compare');
@@ -81,13 +79,6 @@ function createComparisonContexts(flags: CompareFlagValues): ComparisonContexts 
   }
   const context = createFlowCommandContext(flags);
   return { from: context, to: context };
-}
-
-function displayValue(value: JsonValue | undefined): string {
-  if (value === undefined) {
-    return '';
-  }
-  return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
 async function writeComparisonReport(outputFile: string, content: string): Promise<void> {
@@ -205,37 +196,8 @@ export default class FlowCompare extends SfCommand<FlowCompareResult> {
     if (flags['output-file'] !== undefined) {
       await writeComparisonReport(flags['output-file'], rendered);
     }
-    if (flags.format === 'summary') {
-      this.writeHumanOutput(result);
-    } else if (!this.jsonEnabled()) {
-      this.log(rendered);
-    }
-  }
-
-  private writeHumanOutput(result: FlowCompareResult): void {
-    const name = qualifiedFlowName(result.apiName, result.namespace);
-    this.table({
-      title: messages.getMessage('info.title', [
-        name,
-        result.fromVersion,
-        result.fromOrg,
-        result.toVersion,
-        result.toOrg,
-      ]),
-      data: result.changes.map((change) => ({
-        ...change,
-        before: displayValue(change.before),
-        after: displayValue(change.after),
-      })),
-      columns: [
-        { key: 'kind', name: 'Change' },
-        { key: 'path', name: 'Path' },
-        { key: 'before', name: 'Before' },
-        { key: 'after', name: 'After' },
-      ],
-    });
     if (!this.jsonEnabled()) {
-      this.log(messages.getMessage('info.summary', [result.changes.length, name]));
+      this.log(rendered);
     }
   }
 }

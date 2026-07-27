@@ -105,3 +105,28 @@ describe('FlowComparisonService cross-org comparisons', (): void => {
     });
   });
 });
+
+describe('FlowComparisonService cross-org identity', (): void => {
+  it('rejects different qualified Flows resolved independently in each org', async (): Promise<void> => {
+    const source = gateway();
+    const targetDefinitionId = '300000000000101';
+    const targetVersion = flowVersion(targetDefinitionId, 4, 'Active');
+    const targetDefinition = {
+      ...flowDefinition({
+        id: targetDefinitionId,
+        apiName: 'Order_Processing',
+        activeVersionId: targetVersion.id,
+        latestVersionId: targetVersion.id,
+      }),
+      namespace: 'managed',
+    };
+    const target = new FakeFlowGateway([targetDefinition], [targetVersion]);
+    target.metadata.set(targetVersion.id, { status: 'Active', label: 'Target' });
+    await expectErrorName(
+      new FlowComparisonService(source, target).compare(
+        request({ fromOrg: 'developer@example.com', toOrg: 'preprod@example.com' })
+      ),
+      'FlowComparisonFailed'
+    );
+  });
+});
