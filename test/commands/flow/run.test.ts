@@ -99,3 +99,32 @@ describe('flow run command', (): void => {
     }
   });
 });
+
+describe('flow run dry-run command', (): void => {
+  it('does not set a failing status without a runtime outcome', async (): Promise<void> => {
+    const commandFlags = { ...flags(), 'dry-run': true, 'fail-on-flow-error': true };
+    $$.SANDBOX.stub(FlowRun.prototype, 'parseFlags').resolves(commandFlags);
+    $$.SANDBOX.stub(FlowRunService.prototype, 'run').resolves({
+      ...result,
+      dryRun: true,
+      successful: null,
+      invocations: [
+        {
+          interviewId: null,
+          version: 1,
+          success: null,
+          inputs: { percentage: 10 },
+          outputs: {},
+          errors: [],
+          executed: false,
+        },
+      ],
+    });
+    try {
+      await FlowRun.run(['--json']);
+      expect(process.exitCode).to.equal(undefined);
+    } finally {
+      process.exitCode = undefined;
+    }
+  });
+});

@@ -107,10 +107,15 @@ function normaliseErrors(result: FlowActionResult): FlowInvocationError[] {
   );
 }
 
+function interviewId(result: FlowActionResult): string | null {
+  const value = result.outputValues.Flow__InterviewGuid;
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
 function invocationResult(context: InvocationResultContext): FlowInvocation {
   const { input, action, version } = context;
   return {
-    interviewId: action.invocationId ?? null,
+    interviewId: interviewId(action),
     version,
     success: action.isSuccess && action.errors.length === 0,
     inputs: redactFlowObject(input),
@@ -124,7 +129,7 @@ function dryRunInvocation(flow: ResolvedRunnableFlow, input: JsonObject): FlowIn
   return {
     interviewId: null,
     version: flow.version.versionNumber,
-    success: true,
+    success: null,
     inputs: redactFlowObject(input),
     outputs: {},
     errors: [],
@@ -149,14 +154,15 @@ function assertResultCount(flow: ResolvedRunnableFlow, inputs: JsonObject[], act
 }
 
 function executionVersion(flow: ResolvedRunnableFlow, actions: ReadonlyArray<FlowActionResult>): number {
-  const versions = new Set(actions.flatMap((action) => (action.version === undefined ? [] : [action.version])));
+  const versions = new Set(actions.map((action) => action.version));
   if (versions.size !== 1) {
-    if (versions.size === 0) {
-      return flow.version.versionNumber;
-    }
     throw flowInvocationFailed(`Salesforce reported mixed active versions for Flow "${flow.apiName}".`);
   }
-  return [...versions][0] ?? flow.version.versionNumber;
+  const version = [...versions][0];
+  if (version === undefined) {
+    throw flowInvocationFailed(`Salesforce did not report an execution version for Flow "${flow.apiName}".`);
+  }
+  return version;
 }
 
 async function assertActiveVersionUnchanged(gateway: FlowDefinitionGateway, flow: ResolvedRunnableFlow): Promise<void> {
@@ -191,6 +197,7 @@ async function executeInputs(context: ExecuteInputsContext): Promise<ExecutedInp
 
 function createResult(context: RunResultContext): FlowRunResult {
   const { request, flow, version, production, durationMilliseconds, invocations } = context;
+  const executed = invocations.every((invocation) => invocation.executed);
   return {
     apiName: flow.definition.apiName,
     namespace: flow.definition.namespace,
@@ -200,7 +207,7 @@ function createResult(context: RunResultContext): FlowRunResult {
     production,
     dryRun: request.dryRun,
     durationMilliseconds,
-    successful: invocations.every((invocation) => invocation.success),
+    successful: executed ? invocations.every((invocation) => invocation.success === true) : null,
     invocations,
     targetOrg: request.targetOrg,
   };

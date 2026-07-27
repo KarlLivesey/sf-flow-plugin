@@ -176,6 +176,15 @@ function fanCounts(description: FlowDescription): { maximumFanIn: number; maximu
   };
 }
 
+function uniqueFindingElements(
+  findings: ReturnType<typeof analyseFlowLintMetadata>,
+  rule: string
+): ReadonlySet<string> {
+  return new Set(
+    findings.flatMap((finding) => (finding.rule === rule && finding.element !== null ? [finding.element] : []))
+  );
+}
+
 export function analyseFlowMetrics(metadata: JsonObject, description: FlowDescription): FlowMetricEntry {
   const findings = analyseFlowLintMetadata(metadata, description);
   const missingFaults = findings.filter((finding) => finding.rule === 'missing-fault-path').length;
@@ -203,7 +212,7 @@ export function analyseFlowMetrics(metadata: JsonObject, description: FlowDescri
     loops: loops.size,
     maximumLoopNestingUpperBound: paths.loopNestingUpperBound,
     dmlElements: description.elements.filter((element) => FLOW_DML_TYPES.has(element.type)).length,
-    dmlInsideLoops: findings.filter((finding) => finding.rule === 'dml-inside-loop').length,
+    dmlInsideLoops: uniqueFindingElements(findings, 'dml-inside-loop').size,
     apexActions: description.apexActions.length,
     subflows: description.subflows.length,
     maximumPathDepthUpperBound: paths.depthUpperBound,

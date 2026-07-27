@@ -9,8 +9,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { expect } from 'chai';
+import sinon from 'sinon';
 
-import { writeFlowBundleFiles } from '../../src/utils/flow-bundle-files.js';
+import {
+  removeFlowBundleStageDirectory,
+  rollbackFlowBundleFiles,
+  writeFlowBundleFiles,
+} from '../../src/utils/flow-bundle-files.js';
 import { expectErrorName } from '../helpers/fake-flow-gateway.js';
 
 async function exists(file: string): Promise<boolean> {
@@ -20,6 +25,14 @@ async function exists(file: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function createStagedBackup(): Promise<{ backupPath: string; stageDir: string }> {
+  const stageDir = await mkdtemp(join(tmpdir(), '.sf-flow-bundle-stage-'));
+  const backupPath = join(stageDir, 'backups', '0');
+  await mkdir(join(stageDir, 'backups'), { recursive: true });
+  await writeFile(backupPath, 'original', 'utf8');
+  return { backupPath, stageDir };
 }
 
 describe('Flow bundle file output', (): void => {
@@ -63,6 +76,53 @@ describe('Flow bundle file rollback', (): void => {
       expect((await readdir(directory)).filter((file) => file.startsWith('.sf-flow-bundle-stage-'))).to.deep.equal([]);
     } finally {
       await rm(directory, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('Flow bundle incomplete rollback', (): void => {
+  it('retains staged backups when restoration fails', async (): Promise<void> => {
+    const { backupPath, stageDir } = await createStagedBackup();
+    const removeStage = sinon.stub().resolves();
+    try {
+      const error: unknown = await rollbackFlowBundleFiles(
+        {
+          stageDir,
+          installed: ['/output/Test.flow-meta.xml'],
+          backups: [{ backupPath, targetPath: '/output/Test.flow-meta.xml' }],
+        },
+        {
+          removeInstalled: sinon.stub().resolves(),
+          restoreBackup: sinon.stub().rejects(new Error('restore failed')),
+          removeStage,
+        }
+      ).then(
+        () => null,
+        (reason: unknown) => reason
+      );
+      expect(error).to.be.instanceOf(Error);
+      expect((error as Error).message).to.include(stageDir);
+      expect(removeStage.called).to.equal(false);
+      expect(await readFile(backupPath, 'utf8')).to.equal('original');
+    } finally {
+      await rm(stageDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('Flow bundle staging cleanup', (): void => {
+  it('reports the retained stage path after committed cleanup fails', async (): Promise<void> => {
+    const stageDir = '/tmp/.sf-flow-bundle-stage-retained';
+    try {
+      await removeFlowBundleStageDirectory(stageDir, 'committed', async () => {
+        throw new Error('cleanup failed');
+      });
+      expect.fail('Expected FlowBundleFailed.');
+    } catch (error: unknown) {
+      expect(error).to.be.instanceOf(Error);
+      expect((error as Error).name).to.equal('FlowBundleFailed');
+      expect((error as Error).message).to.include(stageDir);
+      expect((error as Error).message).to.include('was written');
     }
   });
 });

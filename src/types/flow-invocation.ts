@@ -21,7 +21,7 @@ export interface FlowInvocationError {
 export interface FlowInvocation {
   interviewId: string | null;
   version: FlowVersionNumber;
-  success: boolean;
+  success: boolean | null;
   inputs: JsonObject;
   outputs: Record<string, JsonValue>;
   errors: FlowInvocationError[];
@@ -37,7 +37,7 @@ export interface FlowRunResult {
   production: boolean;
   dryRun: boolean;
   durationMilliseconds: number;
-  successful: boolean;
+  successful: boolean | null;
   invocations: FlowInvocation[];
   targetOrg: string;
 }
@@ -53,7 +53,7 @@ export interface FlowActionResult {
   invocationId?: string | null | undefined;
   isSuccess: boolean;
   outputValues: Record<string, JsonValue>;
-  version?: number | undefined;
+  version: number;
 }
 
 export interface FlowInvocationGateway {

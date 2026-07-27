@@ -18,6 +18,7 @@ import type { FlowMetricsCommandResult, FlowMetricsRequest } from '../../types/f
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
 import { writeFlowReportFile } from '../../utils/flow-report-file.js';
+import { qualifiedFlowName } from '../../utils/flow-state.js';
 import { parseInspectionVersionSelector } from './describe.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -140,9 +141,13 @@ export default class FlowMetrics extends SfCommand<FlowMetricsCommandResult> {
 
   private writeHumanOutput(result: FlowMetricsCommandResult): void {
     this.table({
-      title: messages.getMessage('info.title', [result.apiName, result.resolvedVersion]),
+      title: messages.getMessage('info.title', [
+        qualifiedFlowName(result.apiName, result.namespace),
+        result.resolvedVersion,
+      ]),
       data: result.flows.map((flow) => ({
         ...flow,
+        apiName: qualifiedFlowName(flow.apiName, flow.namespace),
         faultPathCoverage: flow.faultPathCoverage === null ? '-' : `${Math.round(flow.faultPathCoverage * 100)}%`,
         referencedObjects: flow.referencedObjects.join(', '),
       })),

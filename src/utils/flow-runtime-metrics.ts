@@ -33,6 +33,10 @@ const nullableTextSchema = z
     const trimmed = value?.trim();
     return trimmed === undefined || trimmed.length === 0 ? null : trimmed;
   });
+const nullableTimestampSchema = nullableTextSchema.refine(
+  (value) => value === null || !Number.isNaN(Date.parse(value)),
+  'Expected a valid timestamp.'
+);
 
 export function parseFlowRuntimeBreakdown(record: Record<string, unknown>): FlowRuntimeMetricBreakdown {
   return {
@@ -42,8 +46,8 @@ export function parseFlowRuntimeBreakdown(record: Record<string, unknown>): Flow
     averageDurationMilliseconds: nullableDurationValueSchema.parse(record.averageDurationMilliseconds),
     minimumDurationMilliseconds: nullableDurationValueSchema.parse(record.minimumDurationMilliseconds),
     maximumDurationMilliseconds: nullableDurationValueSchema.parse(record.maximumDurationMilliseconds),
-    firstExecution: nullableTextSchema.parse(record.firstExecution),
-    lastExecution: nullableTextSchema.parse(record.lastExecution),
+    firstExecution: nullableTimestampSchema.parse(record.firstExecution),
+    lastExecution: nullableTimestampSchema.parse(record.lastExecution),
   };
 }
 
@@ -78,7 +82,9 @@ function dateExtreme(
   field: 'firstExecution' | 'lastExecution',
   direction: 'first' | 'last'
 ): string | null {
-  const values = breakdowns.flatMap((item) => (item[field] === null ? [] : [item[field]])).sort();
+  const values = breakdowns
+    .flatMap((item) => (item[field] === null ? [] : [item[field]]))
+    .sort((left, right) => Date.parse(left) - Date.parse(right));
   return values.length === 0 ? null : (direction === 'first' ? values[0] : values.at(-1)) ?? null;
 }
 

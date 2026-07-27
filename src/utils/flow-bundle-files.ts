@@ -18,22 +18,33 @@ interface StagedFile {
   targetPath: string;
 }
 
-interface BackupFile {
+export interface FlowBundleBackupFile {
   backupPath: string;
   targetPath: string;
 }
 
-interface BundleTransaction {
+export interface FlowBundleRollbackState {
   stageDir: string;
-  staged: StagedFile[];
-  backups: BackupFile[];
+  backups: FlowBundleBackupFile[];
   installed: string[];
+}
+
+export interface FlowBundleRollbackOperations {
+  removeInstalled(file: string): Promise<void>;
+  restoreBackup(file: FlowBundleBackupFile): Promise<void>;
+  removeStage(stageDir: string): Promise<void>;
+}
+
+interface BundleTransaction extends FlowBundleRollbackState {
+  staged: StagedFile[];
 }
 
 interface PreparedTransaction {
   transaction: BundleTransaction;
   stale: string[];
 }
+
+type RemoveDirectory = (path: string, options: { force: true; recursive: true }) => Promise<void>;
 
 const previousManifestSchema = z.object({
   rootFlow: z.string().regex(/^[A-Za-z][A-Za-z0-9_]*$/u),
@@ -139,12 +150,14 @@ async function backupTargets(transaction: BundleTransaction, targets: ReadonlyAr
   }, Promise.resolve());
 }
 
-async function installFile(file: StagedFile, overwrite: boolean): Promise<void> {
+async function installFile(transaction: BundleTransaction, file: StagedFile, overwrite: boolean): Promise<void> {
   if (overwrite) {
     await rename(file.stagedPath, file.targetPath);
+    transaction.installed.push(file.targetPath);
     return;
   }
   await link(file.stagedPath, file.targetPath);
+  transaction.installed.push(file.targetPath);
   await rm(file.stagedPath, { force: true });
 }
 
@@ -152,8 +165,7 @@ async function installStaged(transaction: BundleTransaction, overwrite: boolean)
   await transaction.staged.reduce(async (previous, file) => {
     await previous;
     await mkdir(dirname(file.targetPath), { recursive: true });
-    await installFile(file, overwrite);
-    transaction.installed.push(file.targetPath);
+    await installFile(transaction, file, overwrite);
   }, Promise.resolve());
 }
 
@@ -161,24 +173,49 @@ function failed(results: ReadonlyArray<PromiseSettledResult<unknown>>): boolean 
   return results.some((result) => result.status === 'rejected');
 }
 
-async function rollback(transaction: BundleTransaction): Promise<void> {
-  const removed = await Promise.allSettled(transaction.installed.map(async (file) => rm(file, { force: true })));
-  const restored = await Promise.allSettled(
-    transaction.backups.map(async (file) => {
-      await mkdir(dirname(file.targetPath), { recursive: true });
-      await rename(file.backupPath, file.targetPath);
-    })
-  );
-  const cleaned = await Promise.allSettled([rm(transaction.stageDir, { recursive: true, force: true })]);
-  if (failed(removed) || failed(restored) || failed(cleaned)) {
-    throw new Error('The Flow bundle rollback did not complete.');
+const defaultRollbackOperations: FlowBundleRollbackOperations = {
+  removeInstalled: async (file) => rm(file, { force: true }),
+  restoreBackup: async (file) => {
+    await mkdir(dirname(file.targetPath), { recursive: true });
+    await rename(file.backupPath, file.targetPath);
+  },
+  removeStage: async (stageDir) => rm(stageDir, { recursive: true, force: true }),
+};
+
+export async function rollbackFlowBundleFiles(
+  transaction: FlowBundleRollbackState,
+  operations: FlowBundleRollbackOperations = defaultRollbackOperations
+): Promise<void> {
+  const removed = await Promise.allSettled(transaction.installed.map(async (file) => operations.removeInstalled(file)));
+  const restored = await Promise.allSettled(transaction.backups.map(async (file) => operations.restoreBackup(file)));
+  if (failed(removed) || failed(restored)) {
+    throw new Error(
+      `The Flow bundle rollback did not complete; staging directory "${transaction.stageDir}" was retained.`
+    );
   }
+  await operations.removeStage(transaction.stageDir);
 }
 
 async function commit(transaction: BundleTransaction, stale: ReadonlyArray<string>, overwrite: boolean): Promise<void> {
   const targets = [...new Set([...transaction.staged.map((file) => file.targetPath), ...stale])];
   await backupTargets(transaction, overwrite ? targets : stale);
   await installStaged(transaction, overwrite);
+}
+
+export async function removeFlowBundleStageDirectory(
+  stageDir: string,
+  outcome: 'committed' | 'preparation-failed',
+  remove: RemoveDirectory = rm
+): Promise<void> {
+  try {
+    await remove(stageDir, { recursive: true, force: true });
+  } catch (error: unknown) {
+    const message =
+      outcome === 'committed'
+        ? `The Flow bundle was written, but staging directory "${stageDir}" was retained and must be removed manually.`
+        : `Flow bundle preparation failed and staging directory "${stageDir}" was retained and must be removed manually.`;
+    throw flowBundleFailed(message, error);
+  }
 }
 
 async function prepareTransaction(
@@ -193,7 +230,7 @@ async function prepareTransaction(
     transaction.staged = await stageFiles(validated, stageDir);
     return { transaction, stale };
   } catch (error: unknown) {
-    await rm(stageDir, { recursive: true, force: true }).catch(() => undefined);
+    await removeFlowBundleStageDirectory(stageDir, 'preparation-failed');
     throw error;
   }
 }
@@ -218,9 +255,12 @@ async function prepareTargets(
 
 async function handleFailure(transaction: BundleTransaction, error: unknown): Promise<never> {
   try {
-    await rollback(transaction);
+    await rollbackFlowBundleFiles(transaction);
   } catch (rollbackError: unknown) {
-    throw flowBundleFailed('Could not write the Flow bundle and rollback was incomplete.', rollbackError);
+    throw flowBundleFailed(
+      `Could not write the Flow bundle and rollback was incomplete; staging directory "${transaction.stageDir}" was retained.`,
+      rollbackError
+    );
   }
   throw flowBundleFailed('Could not write the Flow bundle; previous files were restored.', error);
 }
@@ -233,8 +273,8 @@ export async function writeFlowBundleFiles(
   const prepared = await prepareTransaction(files, overwrite, outputDir);
   try {
     await commit(prepared.transaction, prepared.stale, overwrite);
-    await rm(prepared.transaction.stageDir, { recursive: true, force: true }).catch(() => undefined);
   } catch (error: unknown) {
     return handleFailure(prepared.transaction, error);
   }
+  await removeFlowBundleStageDirectory(prepared.transaction.stageDir, 'committed');
 }

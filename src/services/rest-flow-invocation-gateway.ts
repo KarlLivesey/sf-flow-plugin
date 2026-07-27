@@ -22,13 +22,22 @@ const actionErrorSchema = z.union([
 
 const transportErrorSchema = z
   .object({
-    code: z
-      .string()
-      .regex(/^[A-Z][A-Z0-9_]*$/u)
-      .optional(),
-    statusCode: z.union([z.number().int().min(100).max(599), z.string().regex(/^[A-Z][A-Z0-9_]*$/u)]).optional(),
+    code: z.unknown().optional(),
+    errorCode: z.unknown().optional(),
+    name: z.unknown().optional(),
+    statusCode: z.unknown().optional(),
   })
   .passthrough();
+const transportCodeSchema = z.string().regex(/^[A-Z][A-Z0-9_]*$/u);
+const transportStatusSchema = z.union([z.number().int().min(100).max(599), z.string().regex(/^[A-Z][A-Z0-9_]*$/u)]);
+
+const permissionErrorCodes = new Set([
+  'FORBIDDEN',
+  'INSUFFICIENT_ACCESS',
+  'INSUFFICIENT_ACCESS_OR_READONLY',
+  'INVALID_SESSION_ID',
+  'UNAUTHORIZED',
+]);
 
 const actionResultSchema: z.ZodType<FlowActionResult> = z.object({
   actionName: z.string().optional(),
@@ -42,17 +51,32 @@ const actionResultSchema: z.ZodType<FlowActionResult> = z.object({
     .record(z.string(), z.json())
     .nullish()
     .transform((outputValues) => outputValues ?? {}),
-  version: z.number().int().positive().optional(),
+  version: z.number().int().positive(),
 });
 
 const actionResultsSchema = z.array(actionResultSchema);
 
-function safeTransportCode(error: unknown): string | null {
+function transportCodes(error: unknown): Array<number | string> {
   const parsed = transportErrorSchema.safeParse(error);
   if (!parsed.success) {
-    return null;
+    return [];
   }
-  const code = parsed.data.statusCode ?? parsed.data.code;
+  const { code, errorCode, name, statusCode } = parsed.data;
+  const safeCode = (candidate: unknown): string[] => {
+    const validated = transportCodeSchema.safeParse(candidate);
+    return validated.success ? [validated.data] : [];
+  };
+  const safeStatus = transportStatusSchema.safeParse(statusCode);
+  return [
+    ...safeCode(errorCode),
+    ...(safeStatus.success ? [safeStatus.data] : []),
+    ...safeCode(code),
+    ...safeCode(name),
+  ];
+}
+
+function safeTransportCode(error: unknown): string | null {
+  const code = transportCodes(error)[0];
   return code === undefined ? null : String(code);
 }
 
@@ -62,23 +86,8 @@ function invocationFailureMessage(apiName: string, error: unknown): string {
 }
 
 function isPermissionFailure(error: unknown): boolean {
-  const parsed = transportErrorSchema.safeParse(error);
-  if (!parsed.success) {
-    return false;
-  }
-  const code = parsed.data.statusCode ?? parsed.data.code;
-  if (code === 401 || code === 403) {
-    return true;
-  }
-  return (
-    typeof code === 'string' &&
-    new Set([
-      'FORBIDDEN',
-      'INSUFFICIENT_ACCESS',
-      'INSUFFICIENT_ACCESS_OR_READONLY',
-      'INVALID_SESSION_ID',
-      'UNAUTHORIZED',
-    ]).has(code)
+  return transportCodes(error).some(
+    (code) => code === 401 || code === 403 || (typeof code === 'string' && permissionErrorCodes.has(code))
   );
 }
 
@@ -116,6 +125,9 @@ export class RestFlowInvocationGateway implements FlowInvocationGateway {
       });
       return actionResultsSchema.parse(response);
     } catch (error: unknown) {
+      if (isPermissionFailure(error)) {
+        throw flowInvocationPermissionDenied(apiName);
+      }
       throw flowInvocationFailed(invocationFailureMessage(apiName, error));
     }
   }

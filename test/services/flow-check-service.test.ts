@@ -8,7 +8,8 @@ import { expect } from 'chai';
 
 import { FlowCheckService } from '../../src/services/flow-check-service.js';
 import type { FlowCheckRequest } from '../../src/types/flow-check.js';
-import { nestedFlowGateway } from '../helpers/flow-inspection-fixtures.js';
+import type { FlowDefinition } from '../../src/types/flow.js';
+import { nestedFlowGateway, subflowMetadata } from '../helpers/flow-inspection-fixtures.js';
 
 function request(overrides: Partial<FlowCheckRequest> = {}): FlowCheckRequest {
   return {
@@ -34,11 +35,12 @@ describe('FlowCheckService', (): void => {
   });
 
   it('runs metrics only when selected', async (): Promise<void> => {
-    const result = await new FlowCheckService(nestedFlowGateway()).check(
-      request({ checks: ['metrics'], recursive: true })
-    );
+    const gateway = nestedFlowGateway();
+    const result = await new FlowCheckService(gateway).check(request({ checks: ['metrics'], recursive: true }));
     expect(result.checks).to.deep.equal(['metrics']);
     expect(result.flows[0]?.metrics?.flows.map((flow) => flow.apiName)).to.deep.equal(['Flow_A', 'Flow_B']);
+    expect(gateway.metadataQueries).to.deep.equal(['301000000000000001', '301000000000100002']);
+    expect(gateway.versionQueries).to.deep.equal(['300000000000001', '300000000000101']);
   });
 
   it('reports dependency truncation as an error unless explicitly allowed', async (): Promise<void> => {
@@ -71,6 +73,35 @@ describe('FlowCheckService', (): void => {
   });
 });
 
+describe('FlowCheckService lint concurrency', (): void => {
+  it('bounds referenced-subflow definition lookups across Flow linting', async (): Promise<void> => {
+    const gateway = nestedFlowGateway();
+    gateway.metadata.set('301000000000000001', {
+      subflows: Array.from({ length: 12 }, (_, index) => ({
+        name: `Call_Missing_${index}`,
+        flowName: `Missing_Child_${index}`,
+      })),
+    });
+    const originalFindDefinitions = gateway.findDefinitions.bind(gateway);
+    let active = 0;
+    let maximumActive = 0;
+    gateway.findDefinitions = async (lookup): Promise<ReadonlyArray<FlowDefinition>> => {
+      active += 1;
+      maximumActive = Math.max(maximumActive, active);
+      await new Promise((resolve) => {
+        setImmediate(resolve);
+      });
+      try {
+        return await originalFindDefinitions(lookup);
+      } finally {
+        active -= 1;
+      }
+    };
+    await new FlowCheckService(gateway).check(request({ checks: ['lint', 'subflows'] }));
+    expect(maximumActive).to.equal(4);
+  });
+});
+
 describe('FlowCheckService query selection', (): void => {
   it('does not query referenced subflows when only lint is selected', async (): Promise<void> => {
     const gateway = nestedFlowGateway();
@@ -79,5 +110,32 @@ describe('FlowCheckService query selection', (): void => {
     expect(result.flows[0]?.contracts[0]?.inputs.map((input) => input.name)).to.deep.equal(['InputValue']);
     expect(gateway.definitionQueries.map((lookup) => lookup.apiName)).to.deep.equal(['Flow_A', 'Flow_A']);
     expect(gateway.versionQueries).to.deep.equal(['300000000000001', '300000000000001']);
+  });
+});
+
+describe('FlowCheckService recursive subflow findings', (): void => {
+  it('reports one finding for a missing referenced subflow', async (): Promise<void> => {
+    const gateway = nestedFlowGateway();
+    gateway.metadata.set('301000000000000001', subflowMetadata('Missing_Flow'));
+    const result = await new FlowCheckService(gateway).check(request({ checks: ['subflows'], recursive: true }));
+    expect(result.findings.filter((finding) => finding.code === 'missing-subflow')).to.have.length(1);
+    expect(result).to.include({ errors: 1, warnings: 0 });
+  });
+
+  it('reports a malformed referenced subflow without aborting the aggregated check', async (): Promise<void> => {
+    const gateway = nestedFlowGateway();
+    gateway.metadata.set('301000000000000001', subflowMetadata('not a valid Flow name'));
+    const result = await new FlowCheckService(gateway).check(request({ checks: ['subflows'], recursive: true }));
+    expect(result.findings).to.deep.include({
+      apiName: 'Flow_A',
+      namespace: null,
+      version: 1,
+      check: 'subflows',
+      code: 'missing-subflow',
+      severity: 'error',
+      message: 'missing-subflow: Flow_A -> not a valid Flow name',
+      path: 'Flow_A -> not a valid Flow name',
+    });
+    expect(result).to.include({ errors: 1, warnings: 0 });
   });
 });

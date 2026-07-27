@@ -44,11 +44,21 @@ function parseResponse(response: unknown): QueryResponse {
 }
 
 function isComplete(response: QueryResponse): boolean {
-  return response.status.completionStatus === 'Finished' || response.progress === 1 || response.status.progress === 1;
+  return (
+    response.status.completionStatus.toLowerCase() === 'finished' ||
+    response.progress === 1 ||
+    response.status.progress === 1
+  );
 }
 
 function isFailed(response: QueryResponse): boolean {
-  return ['Aborted', 'Error', 'Failed'].includes(response.status.completionStatus);
+  return ['aborted', 'error', 'failed'].includes(response.status.completionStatus.toLowerCase());
+}
+
+function assertQuerySucceeded(response: QueryResponse): void {
+  if (isFailed(response)) {
+    throw new Error(`Data Cloud SQL query ${response.status.completionStatus.toLowerCase()}.`);
+  }
 }
 
 function recordsForResponse(response: QueryResponse): DataCloudRecord[] {
@@ -60,6 +70,16 @@ function recordsForResponse(response: QueryResponse): DataCloudRecord[] {
   return data.map((row) => Object.fromEntries(metadata.map((field, index) => [field.name, row[index]])));
 }
 
+function inlineRecords(initial: QueryResponse, completed: QueryResponse): DataCloudRecord[] {
+  const initialRecords = recordsForResponse(initial);
+  const completedRecords = completed === initial ? initialRecords : recordsForResponse(completed);
+  const records = initialRecords.length > 0 ? initialRecords : completedRecords;
+  if (records.length > completed.status.rowCount) {
+    throw new Error('Data Cloud returned more SQL rows than its reported row count.');
+  }
+  return records;
+}
+
 export class DataCloudSqlQueryClient {
   private readonly baseUrl: string;
 
@@ -69,16 +89,17 @@ export class DataCloudSqlQueryClient {
 
   public async query(sql: string): Promise<ReadonlyArray<DataCloudRecord>> {
     const initial = await this.start(sql);
+    assertQuerySucceeded(initial);
     const completed = isComplete(initial) ? initial : await this.waitForCompletion(initial);
-    const inlineRecords = recordsForResponse(completed);
-    if (inlineRecords.length === completed.status.rowCount) {
-      return inlineRecords;
+    const records = inlineRecords(initial, completed);
+    if (records.length === completed.status.rowCount) {
+      return records;
     }
     return this.collectRows({
       queryId: completed.status.queryId,
       rowCount: completed.status.rowCount,
-      offset: 0,
-      records: [],
+      offset: records.length,
+      records,
     });
   }
 
@@ -96,13 +117,12 @@ export class DataCloudSqlQueryClient {
     response: QueryResponse,
     remainingRequests = MAX_STATUS_REQUESTS
   ): Promise<QueryResponse> {
-    if (isFailed(response)) {
-      throw new Error(`Data Cloud SQL query ${response.status.completionStatus.toLowerCase()}.`);
-    }
+    assertQuerySucceeded(response);
     if (remainingRequests === 0) {
       throw new Error('Data Cloud SQL query did not complete within 60 seconds.');
     }
     const next = await this.getStatus(response.status.queryId);
+    assertQuerySucceeded(next);
     return isComplete(next) ? next : this.waitForCompletion(next, remainingRequests - 1);
   }
 

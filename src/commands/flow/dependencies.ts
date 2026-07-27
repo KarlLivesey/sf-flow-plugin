@@ -169,9 +169,12 @@ export default class FlowDependencies extends SfCommand<FlowDependenciesResult> 
   private writeHumanOutput(result: FlowDependenciesResult): void {
     this.table({
       title: messages.getMessage('info.title', [qualifiedFlowName(result.apiName, result.namespace)]),
-      data: result.dependencies.map((dependency) => ({ ...dependency })),
+      data: result.dependencies.map((dependency) => ({
+        ...dependency,
+        sourceFlow: qualifiedFlowName(dependency.sourceApiName, dependency.sourceNamespace),
+      })),
       columns: [
-        { key: 'sourceApiName', name: 'Source Flow' },
+        { key: 'sourceFlow', name: 'Source Flow' },
         { key: 'depth', name: 'Depth' },
         { key: 'direction', name: 'Direction' },
         { key: 'type', name: 'Type' },

@@ -10,8 +10,25 @@ import { dirname, resolve } from 'node:path';
 import { z } from 'zod';
 
 import { flowLintFailed } from '../errors/flow-errors.js';
+import { flowApiNameSchema, namespaceSchema } from '../schemas/flow.js';
 import type { FlowLintFinding, FlowLintResult } from '../types/flow-lint.js';
 import { legacyFlowLintFingerprint } from './flow-lint-fingerprint.js';
+import { qualifiedFlowName } from './flow-state.js';
+
+interface BaselineFinding {
+  finding: FlowLintFinding;
+  legacyMessageKey: string | null;
+}
+
+interface FlowLintBaseline {
+  apiName: string;
+  namespace: string | null;
+  findings: BaselineFinding[];
+}
+
+function legacyMessageKey(finding: Omit<FlowLintFinding, 'fingerprint'>): string {
+  return JSON.stringify([finding.rule, finding.element, finding.path, finding.message]);
+}
 
 const findingSchema = z
   .object({
@@ -33,26 +50,48 @@ const findingSchema = z
     element: z.string().nullable(),
     path: z.string().nullable(),
   })
-  .transform(
-    (finding): FlowLintFinding => ({
-      ...finding,
-      fingerprint: finding.fingerprint ?? legacyFlowLintFingerprint(finding),
-    })
-  );
+  .transform((finding): BaselineFinding => {
+    const legacy = finding.fingerprint === undefined;
+    return {
+      finding: {
+        ...finding,
+        fingerprint: finding.fingerprint ?? legacyFlowLintFingerprint(finding),
+      },
+      legacyMessageKey: legacy ? legacyMessageKey(finding) : null,
+    };
+  });
 
-const baselineSchema = z.union([
-  z.array(findingSchema),
-  z.object({ findings: z.array(findingSchema) }).transform((value) => value.findings),
+// A complete result identity is required so a findings-only file cannot suppress another Flow's findings.
+const scopedBaselineSchema: z.ZodType<FlowLintBaseline> = z.object({
+  apiName: flowApiNameSchema,
+  namespace: namespaceSchema.nullable(),
+  findings: z.array(findingSchema),
+});
+
+const baselineSchema: z.ZodType<FlowLintBaseline> = z.union([
+  scopedBaselineSchema,
+  z
+    .object({
+      status: z.union([z.literal(0), z.literal(1)]),
+      result: scopedBaselineSchema,
+      warnings: z.array(z.unknown()),
+    })
+    .transform(({ result }) => result),
 ]);
 
 function findingKey(finding: FlowLintFinding): string {
   return finding.fingerprint;
 }
 
-function classifyFindings(result: FlowLintResult, baseline: ReadonlyArray<FlowLintFinding>): FlowLintResult {
-  const known = new Set(baseline.map(findingKey));
-  const baselineFindings = result.findings.filter((finding) => known.has(findingKey(finding)));
-  const newFindings = result.findings.filter((finding) => !known.has(findingKey(finding)));
+function classifyFindings(result: FlowLintResult, baseline: ReadonlyArray<BaselineFinding>): FlowLintResult {
+  const known = new Set(baseline.map((entry) => findingKey(entry.finding)));
+  const legacy = new Set(
+    baseline.flatMap((entry) => (entry.legacyMessageKey === null ? [] : [entry.legacyMessageKey]))
+  );
+  const isKnown = (finding: FlowLintFinding): boolean =>
+    known.has(findingKey(finding)) || legacy.has(legacyMessageKey(finding));
+  const baselineFindings = result.findings.filter(isKnown);
+  const newFindings = result.findings.filter((finding) => !isKnown(finding));
   return {
     ...result,
     newFindings,
@@ -62,21 +101,36 @@ function classifyFindings(result: FlowLintResult, baseline: ReadonlyArray<FlowLi
   };
 }
 
-async function readBaseline(file: string): Promise<FlowLintFinding[]> {
+function assertBaselineScope(result: FlowLintResult, baseline: FlowLintBaseline, file: string): void {
+  if (baseline.apiName === result.apiName && baseline.namespace === result.namespace) {
+    return;
+  }
+  throw flowLintFailed(
+    `Flow lint baseline "${file}" is scoped to Flow "${qualifiedFlowName(
+      baseline.apiName,
+      baseline.namespace
+    )}", not "${qualifiedFlowName(result.apiName, result.namespace)}".`
+  );
+}
+
+async function readBaseline(file: string, result: FlowLintResult): Promise<BaselineFinding[]> {
   const resolved = resolve(file);
+  let baseline: FlowLintBaseline;
   try {
     const content = await readFile(resolved, 'utf8');
-    return baselineSchema.parse(JSON.parse(content) as unknown);
+    baseline = baselineSchema.parse(JSON.parse(content) as unknown);
   } catch (error: unknown) {
     throw flowLintFailed(`Could not read a valid Flow lint baseline from "${resolved}".`, error);
   }
+  assertBaselineScope(result, baseline, resolved);
+  return baseline.findings;
 }
 
 export async function applyFlowLintBaseline(
   result: FlowLintResult,
   baselineFile: string | undefined
 ): Promise<FlowLintResult> {
-  return baselineFile === undefined ? result : classifyFindings(result, await readBaseline(baselineFile));
+  return baselineFile === undefined ? result : classifyFindings(result, await readBaseline(baselineFile, result));
 }
 
 function findingLine(finding: FlowLintFinding): string {
@@ -89,7 +143,7 @@ function section(title: string, findings: ReadonlyArray<FlowLintFinding>): strin
 }
 
 export function formatFlowLintHuman(result: FlowLintResult): string {
-  const heading = `Flow lint: ${result.apiName} v${result.resolvedVersion}`;
+  const heading = `Flow lint: ${qualifiedFlowName(result.apiName, result.namespace)} v${result.resolvedVersion}`;
   return [
     heading,
     '='.repeat(heading.length),
@@ -117,7 +171,7 @@ interface SarifResult {
   locations?: SarifLocation[];
 }
 
-function sarifLocation(apiName: string, finding: FlowLintFinding): SarifLocation | null {
+function sarifLocation(flowName: string, finding: FlowLintFinding): SarifLocation | null {
   const location = finding.path ?? finding.element;
   if (location === null) {
     return null;
@@ -126,7 +180,7 @@ function sarifLocation(apiName: string, finding: FlowLintFinding): SarifLocation
     logicalLocations: [
       {
         name: location,
-        fullyQualifiedName: `${apiName}:${location}`,
+        fullyQualifiedName: `${flowName}:${location}`,
         kind: finding.path === null ? 'flowElement' : 'metadataPath',
       },
     ],
@@ -134,8 +188,8 @@ function sarifLocation(apiName: string, finding: FlowLintFinding): SarifLocation
   };
 }
 
-function sarifResult(apiName: string, finding: FlowLintFinding, baseline: ReadonlySet<string>): SarifResult {
-  const location = sarifLocation(apiName, finding);
+function sarifResult(flowName: string, finding: FlowLintFinding, baseline: ReadonlySet<string>): SarifResult {
+  const location = sarifLocation(flowName, finding);
   return {
     ruleId: finding.rule,
     level: finding.severity,
@@ -148,6 +202,7 @@ function sarifResult(apiName: string, finding: FlowLintFinding, baseline: Readon
 
 export function formatFlowLintSarif(result: FlowLintResult): string {
   const baseline = new Set(result.baselineFindings.map(findingKey));
+  const flowName = qualifiedFlowName(result.apiName, result.namespace);
   return JSON.stringify(
     {
       $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
@@ -161,7 +216,7 @@ export function formatFlowLintSarif(result: FlowLintResult): string {
               rules: [...new Set(result.findings.map((finding) => finding.rule))].sort().map((id) => ({ id })),
             },
           },
-          results: result.findings.map((finding) => sarifResult(result.apiName, finding, baseline)),
+          results: result.findings.map((finding) => sarifResult(flowName, finding, baseline)),
         },
       ],
     },

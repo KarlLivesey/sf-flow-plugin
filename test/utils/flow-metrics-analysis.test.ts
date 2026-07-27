@@ -129,3 +129,33 @@ describe('Flow metrics cyclic bounds', (): void => {
     expect(analyseFlowMetrics(metadata, description).maximumPathDepthUpperBound).to.equal(4);
   });
 });
+
+describe('Flow metrics nested-loop counts', (): void => {
+  it('counts one DML element inside nested loops once', (): void => {
+    const metadata = {
+      start: { connector: { targetReference: 'Outer_Loop' } },
+      loops: [
+        {
+          name: 'Outer_Loop',
+          nextValueConnector: { targetReference: 'Inner_Loop' },
+          noMoreValuesConnector: { targetReference: 'Finish' },
+        },
+        {
+          name: 'Inner_Loop',
+          nextValueConnector: { targetReference: 'Create_Record' },
+          noMoreValuesConnector: { targetReference: 'Outer_Loop' },
+        },
+      ],
+      recordCreates: [
+        {
+          name: 'Create_Record',
+          object: 'Account',
+          connector: { targetReference: 'Inner_Loop' },
+        },
+      ],
+      assignments: [{ name: 'Finish' }],
+    };
+    const description = analyseFlowMetadata({ definition, version, metadata, depth: 0 });
+    expect(analyseFlowMetrics(metadata, description).dmlInsideLoops).to.equal(1);
+  });
+});

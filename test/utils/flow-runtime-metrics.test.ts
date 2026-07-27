@@ -41,3 +41,33 @@ describe('Flow runtime metric outcomes', (): void => {
     expect(result.failedExecutions).to.equal(3);
   });
 });
+
+describe('Flow runtime metric timestamps', (): void => {
+  it('selects timestamp extremes chronologically across timezone offsets', (): void => {
+    const first = parseFlowRuntimeBreakdown({
+      runStatus: 'Complete',
+      executions: 1,
+      firstExecution: '2026-07-20T01:00:00+02:00',
+      lastExecution: '2026-07-20T02:00:00+02:00',
+    });
+    const second = parseFlowRuntimeBreakdown({
+      runStatus: 'Complete',
+      executions: 1,
+      firstExecution: '2026-07-19T23:30:00Z',
+      lastExecution: '2026-07-20T00:30:00Z',
+    });
+    const result = summariseFlowRuntimeMetrics(request, '2026-07-01T00:00:00.000Z', [first, second]);
+    expect(result.firstExecution).to.equal('2026-07-20T01:00:00+02:00');
+    expect(result.lastExecution).to.equal('2026-07-20T00:30:00Z');
+  });
+
+  it('rejects malformed execution timestamps', (): void => {
+    expect(() =>
+      parseFlowRuntimeBreakdown({
+        runStatus: 'Complete',
+        executions: 1,
+        firstExecution: 'not-a-timestamp',
+      })
+    ).to.throw();
+  });
+});

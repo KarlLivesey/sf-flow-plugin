@@ -107,6 +107,30 @@ describe('flow dependencies command execution', (): void => {
   });
 });
 
+describe('flow dependencies interactive output', (): void => {
+  it('qualifies recursive source Flow names in the interactive table', async (): Promise<void> => {
+    $$.SANDBOX.stub(FlowDependencies.prototype, 'parseFlags').resolves(truncationFlags(true));
+    $$.SANDBOX.stub(FlowDependenciesService.prototype, 'getDependencies').resolves({
+      ...result,
+      dependencies: [
+        {
+          sourceDefinitionId: 'managed-definition',
+          sourceApiName: 'Order_Processing',
+          sourceNamespace: 'managed',
+          depth: 1,
+          direction: 'uses',
+          componentId: 'object',
+          name: 'Account',
+          namespace: null,
+          type: 'CustomObject',
+        },
+      ],
+    });
+    await FlowDependencies.run([]);
+    expect(commandUx.table.firstCall.args[0].data[0]).to.include({ sourceFlow: 'managed__Order_Processing' });
+  });
+});
+
 describe('flow dependencies CI execution', (): void => {
   it('sets a failing process status when requested and matching dependencies exist', async (): Promise<void> => {
     const flags = {

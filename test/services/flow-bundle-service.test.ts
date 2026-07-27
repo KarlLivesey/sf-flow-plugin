@@ -4,10 +4,15 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { expect } from 'chai';
 
 import { FlowBundleService } from '../../src/services/flow-bundle-service.js';
 import type { FlowBundleRequest } from '../../src/types/flow-bundle.js';
+import { writeFlowBundleFiles } from '../../src/utils/flow-bundle-files.js';
 import { FakeFlowGateway, expectErrorName, flowDefinition, flowVersion } from '../helpers/fake-flow-gateway.js';
 import { nestedFlowGateway, subflowMetadata, versionedSubflowGateway } from '../helpers/flow-inspection-fixtures.js';
 
@@ -23,6 +28,24 @@ function request(): FlowBundleRequest {
     outputDir: '/tmp/flow-bundle',
     overwrite: false,
   };
+}
+
+function managedFlowGateway(): FakeFlowGateway {
+  const version = flowVersion('300000000000201', 1, 'Active');
+  const gateway = new FakeFlowGateway(
+    [
+      {
+        id: version.definitionId,
+        apiName: 'Managed_Flow',
+        namespace: 'example',
+        activeVersionId: version.id,
+        latestVersionId: version.id,
+      },
+    ],
+    [version]
+  );
+  gateway.metadata.set(version.id, {});
+  return gateway;
 }
 
 describe('FlowBundleService', (): void => {
@@ -58,6 +81,34 @@ describe('FlowBundleService', (): void => {
     const gateway = nestedFlowGateway();
     gateway.truncatedDependencyQueries.add('300000000000001:uses');
     await expectErrorName(new FlowBundleService(gateway).bundle(request()), 'FlowBundleFailed');
+  });
+});
+
+describe('FlowBundleService ownership identity', (): void => {
+  it('uses the resolved managed namespace for omitted-then-explicit bundle ownership', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'flow-bundle-managed-'));
+    const gateway = managedFlowGateway();
+    try {
+      const omitted = await new FlowBundleService(gateway).bundle({
+        ...request(),
+        apiName: 'Managed_Flow',
+        outputDir: directory,
+      });
+      await writeFlowBundleFiles(omitted.files, false, directory);
+      const explicit = await new FlowBundleService(gateway).bundle({
+        ...request(),
+        apiName: 'Managed_Flow',
+        namespace: 'example',
+        outputDir: directory,
+        overwrite: true,
+      });
+      await writeFlowBundleFiles(explicit.files, true, directory);
+      expect(await readFile(join(directory, '.sf-flow-bundle/manifest.json'), 'utf8')).to.include(
+        '"rootFlow": "example__Managed_Flow"'
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });
 

@@ -7,16 +7,24 @@
 import { flowMetricsFailed } from '../errors/flow-errors.js';
 import type { FlowMetadataGateway } from '../types/flow-analysis.js';
 import type { FlowDefinitionGateway } from '../types/flow.js';
-import type { FlowDescribeRequest } from '../types/flow-inspection.js';
+import type { FlowDescribeRequest, FlowDescribeResult } from '../types/flow-inspection.js';
 import type {
   FlowMetricsCommandResult,
   FlowMetricsRequest,
+  FlowMetricsResult,
   FlowRuntimeMetrics,
   FlowRuntimeMetricsGateway,
 } from '../types/flow-metrics.js';
 import { analyseFlowMetrics, totalFlowMetrics } from '../utils/flow-metrics-analysis.js';
 import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
+import { CachingFlowMetadataGateway } from './caching-flow-metadata-gateway.js';
 import { FlowDescribeService } from './flow-describe-service.js';
+
+interface ResolvedRuntimeFlow {
+  apiName: string;
+  namespace: string | null;
+  version: number;
+}
 
 function describeRequest(request: FlowMetricsRequest): FlowDescribeRequest {
   return {
@@ -25,10 +33,39 @@ function describeRequest(request: FlowMetricsRequest): FlowDescribeRequest {
   };
 }
 
+export async function calculateResolvedFlowMetrics(
+  described: FlowDescribeResult,
+  metadataGateway: FlowMetadataGateway,
+  progress: FlowProgressReporter = noFlowProgress
+): Promise<FlowMetricsResult> {
+  const flows = await Promise.all(
+    described.flows.map(async (flow) => {
+      progress('loading-metadata', `${flow.qualifiedName} v${flow.versionNumber} (metrics)`);
+      return analyseFlowMetrics(await metadataGateway.getVersionMetadata(flow.versionId), flow);
+    })
+  );
+  progress('analysing-results', `${described.apiName} (${flows.length} Flow versions)`);
+  return {
+    apiName: described.apiName,
+    namespace: described.namespace,
+    requestedVersion: described.requestedVersion,
+    resolvedVersion: described.resolvedVersion,
+    subflowVersion: described.subflowVersion,
+    recursive: described.recursive,
+    maxDepth: described.maxDepth,
+    totals: totalFlowMetrics(flows),
+    referencedObjects: [...new Set(flows.flatMap((flow) => flow.referencedObjects))].sort(),
+    flows,
+    warnings: described.warnings,
+    targetOrg: described.targetOrg,
+  };
+}
+
 export class FlowMetricsService {
   public constructor(
     private readonly gateway: FlowDefinitionGateway & FlowMetadataGateway,
-    private readonly runtimeGateway?: FlowRuntimeMetricsGateway
+    private readonly runtimeGateway?: FlowRuntimeMetricsGateway,
+    private readonly sharedMetadataGateway?: FlowMetadataGateway
   ) {}
 
   public async calculate(
@@ -36,29 +73,24 @@ export class FlowMetricsService {
     progress: FlowProgressReporter = noFlowProgress
   ): Promise<FlowMetricsCommandResult> {
     try {
-      const described = await new FlowDescribeService(this.gateway).describe(describeRequest(request), progress);
-      const flows = await Promise.all(
-        described.flows.map(async (flow) => {
-          progress('loading-metadata', `${flow.qualifiedName} v${flow.versionNumber} (metrics)`);
-          return analyseFlowMetrics(await this.gateway.getVersionMetadata(flow.versionId), flow);
-        })
+      const metadataGateway = this.sharedMetadataGateway ?? new CachingFlowMetadataGateway(this.gateway);
+      const described = await new FlowDescribeService(this.gateway, metadataGateway).describe(
+        describeRequest(request),
+        progress
       );
-      const dataCloud = await this.loadDataCloudMetrics(request, described.resolvedVersion, progress);
-      progress('analysing-results', `${described.apiName} (${flows.length} Flow versions)`);
+      const metrics = await calculateResolvedFlowMetrics(described, metadataGateway, progress);
+      const dataCloud = await this.loadDataCloudMetrics(
+        request,
+        {
+          apiName: described.apiName,
+          namespace: described.namespace,
+          version: described.resolvedVersion,
+        },
+        progress
+      );
       return {
-        apiName: described.apiName,
-        namespace: described.namespace,
-        requestedVersion: described.requestedVersion,
-        resolvedVersion: described.resolvedVersion,
-        subflowVersion: described.subflowVersion,
-        recursive: described.recursive,
-        maxDepth: described.maxDepth,
-        totals: totalFlowMetrics(flows),
-        referencedObjects: [...new Set(flows.flatMap((flow) => flow.referencedObjects))].sort(),
-        flows,
+        ...metrics,
         dataCloud,
-        warnings: described.warnings,
-        targetOrg: described.targetOrg,
       };
     } catch (error: unknown) {
       if (error instanceof Error && error.name.startsWith('Flow') && error.name !== 'FlowInspectionFailed') {
@@ -70,7 +102,7 @@ export class FlowMetricsService {
 
   private async loadDataCloudMetrics(
     request: FlowMetricsRequest,
-    version: number,
+    resolved: ResolvedRuntimeFlow,
     progress: FlowProgressReporter
   ): Promise<FlowRuntimeMetrics | null> {
     if (!request.dataCloud) {
@@ -79,11 +111,14 @@ export class FlowMetricsService {
     if (this.runtimeGateway === undefined) {
       throw flowMetricsFailed('Data Cloud metrics were requested without a Data Cloud query gateway.');
     }
-    progress('loading-data-cloud-metrics', `${request.apiName} v${version} (last ${request.dataCloudDays} days)`);
+    progress(
+      'loading-data-cloud-metrics',
+      `${resolved.apiName} v${resolved.version} (last ${request.dataCloudDays} days)`
+    );
     return this.runtimeGateway.getMetrics({
-      apiName: request.apiName,
-      namespace: request.namespace ?? null,
-      version,
+      apiName: resolved.apiName,
+      namespace: resolved.namespace,
+      version: resolved.version,
       windowDays: request.dataCloudDays,
     });
   }

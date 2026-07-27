@@ -5,6 +5,7 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import type { FlowDependenciesResult, FlowDependency } from '../types/flow-analysis.js';
+import { qualifiedFlowName } from './flow-state.js';
 
 function target(dependency: FlowDependency): string {
   const name = dependency.name ?? dependency.componentId ?? 'unknown';
@@ -16,6 +17,10 @@ function source(dependency: FlowDependency): string {
   return dependency.sourceNamespace === null
     ? dependency.sourceApiName
     : `${dependency.sourceNamespace}__${dependency.sourceApiName}`;
+}
+
+function sourceNode(dependency: FlowDependency): string {
+  return `Flow:${source(dependency)}`;
 }
 
 function escapeLabel(value: string): string {
@@ -35,12 +40,12 @@ function renderTable(result: FlowDependenciesResult): string {
       dependency.componentId ?? '',
     ].join('\t')
   );
-  return [header, ...rows].join('\n');
+  return [`Root Flow\t${qualifiedFlowName(result.apiName, result.namespace)}`, '', header, ...rows].join('\n');
 }
 
 function renderTree(result: FlowDependenciesResult): string {
   return [
-    result.apiName,
+    qualifiedFlowName(result.apiName, result.namespace),
     ...result.dependencies.map((dependency) => {
       const edge = dependency.direction === 'uses' ? 'uses ->' : '<- used by';
       return `  [depth ${dependency.depth}] ${source(dependency)} ${edge} ${target(dependency)}`;
@@ -61,8 +66,10 @@ function nodeId(ids: Map<string, string>, label: string): string {
 function renderMermaid(result: FlowDependenciesResult): string {
   const lines = ['flowchart LR'];
   const ids = new Map<string, string>();
+  const root = `Flow:${qualifiedFlowName(result.apiName, result.namespace)}`;
+  lines.push(`  ${nodeId(ids, root)}["${escapeLabel(root)}"]`);
   for (const dependency of result.dependencies) {
-    const from = source(dependency);
+    const from = sourceNode(dependency);
     const to = target(dependency);
     const edge = dependency.direction === 'uses' ? '-->' : '<--';
     lines.push(`  ${nodeId(ids, from)}["${escapeLabel(from)}"] ${edge} ${nodeId(ids, to)}["${escapeLabel(to)}"]`);
@@ -72,8 +79,9 @@ function renderMermaid(result: FlowDependenciesResult): string {
 
 function renderDot(result: FlowDependenciesResult): string {
   const lines = ['digraph FlowDependencies {', '  rankdir=LR;'];
+  lines.push(`  "${escapeLabel(`Flow:${qualifiedFlowName(result.apiName, result.namespace)}`)}";`);
   for (const dependency of result.dependencies) {
-    const from = escapeLabel(source(dependency));
+    const from = escapeLabel(sourceNode(dependency));
     const to = escapeLabel(target(dependency));
     const edge = dependency.direction === 'uses' ? `"${from}" -> "${to}";` : `"${to}" -> "${from}";`;
     lines.push(`  ${edge}`);

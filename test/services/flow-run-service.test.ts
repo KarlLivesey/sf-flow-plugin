@@ -7,86 +7,14 @@
 import { expect } from 'chai';
 
 import { FlowRunService } from '../../src/services/flow-run-service.js';
-import type { JsonObject } from '../../src/types/flow-analysis.js';
-import type { FlowActionResult, FlowInvocationGateway, FlowRunRequest } from '../../src/types/flow-invocation.js';
-import type { FlowVersion } from '../../src/types/flow.js';
 import { expectErrorName, FakeFlowGateway, flowDefinition, flowVersion } from '../helpers/fake-flow-gateway.js';
-
-const definitionId = '300000000000001';
-
-class FakeInvocationGateway implements FlowInvocationGateway {
-  public readonly invoked: JsonObject[][] = [];
-  public availabilityChecks: string[] = [];
-  public production = false;
-  public onAvailabilityCheck: (() => Promise<void>) | undefined;
-  public results: FlowActionResult[] = [
-    { errors: [], invocationId: 'interview-1', isSuccess: true, outputValues: { discount: 10 }, version: 1 },
-  ];
-
-  public async isProductionOrg(): Promise<boolean> {
-    return this.production;
-  }
-
-  public async assertFlowActionAvailable(apiName: string): Promise<void> {
-    this.availabilityChecks.push(apiName);
-    await this.onAvailabilityCheck?.();
-  }
-
-  public async invokeFlow(_apiName: string, inputs: ReadonlyArray<JsonObject>): Promise<FlowActionResult[]> {
-    void _apiName;
-    this.invoked.push([...inputs]);
-    return this.results;
-  }
-}
-
-function request(overrides: Partial<FlowRunRequest> = {}): FlowRunRequest {
-  return {
-    apiName: 'Calculate_Discount',
-    targetOrg: 'admin@example.com',
-    invocations: [{ percentage: '10', secretToken: 'sensitive' }],
-    dryRun: false,
-    confirm: false,
-    ...overrides,
-  };
-}
-
-function runnableVersion(): FlowVersion {
-  return { ...flowVersion(definitionId, 1, 'Active'), processType: 'AutoLaunchedFlow' };
-}
-
-function gateways(): { definition: FakeFlowGateway; invocation: FakeInvocationGateway } {
-  const version = runnableVersion();
-  const definition = new FakeFlowGateway(
-    [
-      flowDefinition({
-        id: definitionId,
-        apiName: 'Calculate_Discount',
-        activeVersionId: version.id,
-        latestVersionId: version.id,
-      }),
-    ],
-    [version]
-  );
-  definition.metadata.set(version.id, {
-    variables: [
-      {
-        name: 'percentage',
-        dataType: 'Number',
-        isCollection: false,
-        isInput: true,
-        isOutput: false,
-      },
-      {
-        name: 'secretToken',
-        dataType: 'String',
-        isCollection: false,
-        isInput: true,
-        isOutput: false,
-      },
-    ],
-  });
-  return { definition, invocation: new FakeInvocationGateway() };
-}
+import {
+  definitionId,
+  FakeInvocationGateway,
+  flowRunGateways as gateways,
+  flowRunRequest as request,
+  runnableVersion,
+} from '../helpers/flow-run-fixtures.js';
 
 describe('FlowRunService execution', (): void => {
   it('validates, invokes and redacts Flow values', async (): Promise<void> => {
@@ -94,9 +22,9 @@ describe('FlowRunService execution', (): void => {
     fake.invocation.results = [
       {
         errors: [],
-        invocationId: 'interview-1',
+        invocationId: null,
         isSuccess: true,
-        outputValues: { discount: 10, sessionToken: 'sensitive' },
+        outputValues: { discount: 10, sessionToken: 'sensitive', ['Flow__InterviewGuid']: 'interview-1' },
         version: 1,
       },
     ];
@@ -106,7 +34,7 @@ describe('FlowRunService execution', (): void => {
       interviewId: 'interview-1',
       success: true,
       inputs: { percentage: 10, secretToken: '[REDACTED]' },
-      outputs: { discount: 10, sessionToken: '[REDACTED]' },
+      outputs: { discount: 10, sessionToken: '[REDACTED]', ['Flow__InterviewGuid']: 'interview-1' },
       executed: true,
     });
   });
@@ -118,6 +46,7 @@ describe('FlowRunService execution', (): void => {
         errors: ['plain error', { message: 'structured error', statusCode: 'FLOW_ERROR' }],
         isSuccess: false,
         outputValues: {},
+        version: 1,
       },
     ];
     const result = await new FlowRunService(fake).run(request());
@@ -133,8 +62,20 @@ describe('FlowRunService batch execution', (): void => {
   it('submits multiple inputs in one action request and preserves result order', async (): Promise<void> => {
     const fake = gateways();
     fake.invocation.results = [
-      { errors: [], invocationId: 'first', isSuccess: true, outputValues: { discount: 10 }, version: 1 },
-      { errors: [], invocationId: 'second', isSuccess: true, outputValues: { discount: 20 }, version: 1 },
+      {
+        errors: [],
+        invocationId: 'generic-first',
+        isSuccess: true,
+        outputValues: { discount: 10, ['Flow__InterviewGuid']: 'first' },
+        version: 1,
+      },
+      {
+        errors: [],
+        invocationId: 'generic-second',
+        isSuccess: true,
+        outputValues: { discount: 20, ['Flow__InterviewGuid']: 'second' },
+        version: 1,
+      },
     ];
     const invocations = [{ percentage: '10' }, { percentage: '20' }];
     const result = await new FlowRunService(fake).run(request({ invocations }));
@@ -150,18 +91,32 @@ describe('FlowRunService batch execution', (): void => {
     await expectErrorName(new FlowRunService(fake).run(request()), 'FlowInvocationFailed');
     expect(fake.invocation.invoked).to.have.length(1);
   });
+});
 
+describe('FlowRunService execution version', (): void => {
   it('reports the active version returned by the action request consistently', async (): Promise<void> => {
     const fake = gateways();
     fake.invocation.results = [
-      { errors: [], invocationId: 'interview-2', isSuccess: true, outputValues: {}, version: 2 },
-      { errors: [], invocationId: 'interview-3', isSuccess: true, outputValues: {} },
+      { errors: [], isSuccess: true, outputValues: {}, version: 2 },
+      { errors: [], isSuccess: true, outputValues: {}, version: 2 },
     ];
     const result = await new FlowRunService(fake).run(
       request({ invocations: [{ percentage: '10' }, { percentage: '20' }] })
     );
     expect(result.version).to.equal(2);
     expect(result.invocations.map((invocation) => invocation.version)).to.deep.equal([2, 2]);
+  });
+
+  it('rejects mixed versions returned by one action request', async (): Promise<void> => {
+    const fake = gateways();
+    fake.invocation.results = [
+      { errors: [], isSuccess: true, outputValues: {}, version: 1 },
+      { errors: [], isSuccess: true, outputValues: {}, version: 2 },
+    ];
+    await expectErrorName(
+      new FlowRunService(fake).run(request({ invocations: [{ percentage: '10' }, { percentage: '20' }] })),
+      'FlowInvocationFailed'
+    );
   });
 });
 
@@ -180,9 +135,9 @@ describe('FlowRunService safety', (): void => {
     const result = await new FlowRunService(fake).run(request({ dryRun: true }));
     expect(fake.invocation.availabilityChecks).to.deep.equal(['Calculate_Discount']);
     expect(fake.invocation.invoked).to.deep.equal([]);
-    expect(result).to.include({ production: true, dryRun: true, successful: true });
+    expect(result).to.include({ production: true, dryRun: true, successful: null });
     expect(result).to.include({ durationMilliseconds: 0 });
-    expect(result.invocations[0]).to.include({ executed: false });
+    expect(result.invocations[0]).to.include({ executed: false, success: null });
   });
 
   it('requires explicit confirmation before production execution', async (): Promise<void> => {

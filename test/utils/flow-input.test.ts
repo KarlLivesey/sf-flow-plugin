@@ -29,6 +29,23 @@ function variable(name: string, dataType: string, overrides: Partial<FlowVariabl
   };
 }
 
+function expectInvalidNumber(value: string, dataType = 'Number'): void {
+  expect(() => validateFlowInputs([{ value }], [variable('value', dataType)]))
+    .to.throw()
+    .with.property('name', 'FlowInputInvalid');
+}
+
+async function expectInvalidInputFile(contents: string): Promise<void> {
+  const directory = await mkdtemp(join(tmpdir(), 'sf-flow-input-invalid-'));
+  const inputFile = join(directory, 'inputs.json');
+  try {
+    await writeFile(inputFile, contents, 'utf8');
+    await expectErrorName(readFlowInputs(inputFile, []), 'FlowInputInvalid');
+  } finally {
+    await rm(directory, { recursive: true });
+  }
+}
+
 describe('Flow input flag parsing', (): void => {
   it('preserves values after the first equals sign', (): void => {
     expect(parseInputFlags(['expression=a=b', 'enabled=true'])).to.deep.equal({
@@ -105,5 +122,52 @@ describe('Flow input schema validation', (): void => {
     expect(() => validateFlowInputs([{ count: 'not-a-number' }], [variable('count', 'Integer')]))
       .to.throw()
       .with.property('name', 'FlowInputInvalid');
+  });
+});
+
+describe('Flow numeric input precision', (): void => {
+  it('accepts decimal notation within the documented precision policy', (): void => {
+    const result = validateFlowInputs(
+      [{ whole: '9007199254740991', fraction: '0.123456789012345', exponent: '1e3' }],
+      [variable('whole', 'Number'), variable('fraction', 'Decimal'), variable('exponent', 'Double')]
+    );
+    expect(result[0]).to.deep.equal({
+      whole: 9_007_199_254_740_991,
+      fraction: 0.123_456_789_012_345,
+      exponent: 1000,
+    });
+  });
+
+  it('rejects ambiguous notation, unsafe whole values and excessive fractional precision', (): void => {
+    for (const value of ['0x10', '+1', '01', '-0', '9007199254740993', '0.1234567890123456', '1e400', '1e-400']) {
+      expectInvalidNumber(value);
+    }
+    expectInvalidNumber('1.5', 'Integer');
+    expect(() => validateFlowInputs([{ value: '0x10' }], [variable('value', 'Number')])).to.throw(
+      'Use decimal notation'
+    );
+  });
+
+  it('applies the precision policy to numeric values supplied programmatically', (): void => {
+    for (const value of [9_007_199_254_740_992, 0.123_456_789_012_345_6, -0]) {
+      expect(() => validateFlowInputs([{ value }], [variable('value', 'Number')]))
+        .to.throw()
+        .with.property('name', 'FlowInputInvalid');
+    }
+  });
+
+  it('rejects unsafe numeric tokens inside JSON-formatted collection inputs', (): void => {
+    expect(() =>
+      validateFlowInputs([{ values: '[0.1234567890123456]' }], [variable('values', 'Number', { collection: true })])
+    )
+      .to.throw()
+      .with.property('name', 'FlowInputInvalid');
+  });
+});
+
+describe('Flow numeric input files', (): void => {
+  it('rejects unsafe JSON numbers before JSON.parse can round them', async (): Promise<void> => {
+    await expectInvalidInputFile('{"value":9007199254740993}');
+    await expectInvalidInputFile('{"value":0.1234567890123456}');
   });
 });

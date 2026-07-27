@@ -8,12 +8,16 @@ export interface FlowDmoSchema {
   flowObject: string;
   flowId: string;
   flowName: string;
-  flowOrganizationId: string;
+  flowDataSourceId: string;
+  flowDataSourceObjectId: string;
+  flowSourceObjectName: string;
   versionObject: string;
   versionId: string;
   versionFlowId: string;
   versionNumber: string;
-  versionOrganizationId: string;
+  versionDataSourceId: string;
+  versionDataSourceObjectId: string;
+  versionSourceObjectName: string;
   runObject: string;
   runId: string;
   runVersionId: string;
@@ -30,12 +34,16 @@ export const FLOW_DMO_SCHEMAS = [
     flowObject: 'std__FlowDmo__dlm',
     flowId: 'std__Id__c',
     flowName: 'std__NameInterfaceField__c',
-    flowOrganizationId: 'std__InternalOrganizationId__c',
+    flowDataSourceId: 'std__DataSourceId__c',
+    flowDataSourceObjectId: 'std__DataSourceObjectId__c',
+    flowSourceObjectName: 'FlowRecord',
     versionObject: 'std__FlowVersionDmo__dlm',
     versionId: 'std__Id__c',
     versionFlowId: 'std__FlowId__c',
     versionNumber: 'std__VersionNumber__c',
-    versionOrganizationId: 'std__InternalOrganizationId__c',
+    versionDataSourceId: 'std__DataSourceId__c',
+    versionDataSourceObjectId: 'std__DataSourceObjectId__c',
+    versionSourceObjectName: 'FlowRecordVersion',
     runObject: 'std__FlowRunDmo__dlm',
     runId: 'std__Id__c',
     runVersionId: 'std__FlowVersionId__c',
@@ -50,12 +58,16 @@ export const FLOW_DMO_SCHEMAS = [
     flowObject: 'ssot__Flow__dlm',
     flowId: 'ssot__Id__c',
     flowName: 'ssot__Name__c',
-    flowOrganizationId: 'ssot__InternalOrganizationId__c',
+    flowDataSourceId: 'ssot__DataSourceId__c',
+    flowDataSourceObjectId: 'ssot__DataSourceObjectId__c',
+    flowSourceObjectName: 'FlowRecord',
     versionObject: 'ssot__FlowVersion__dlm',
     versionId: 'ssot__Id__c',
     versionFlowId: 'ssot__FlowId__c',
     versionNumber: 'ssot__VersionNumber__c',
-    versionOrganizationId: 'ssot__InternalOrganizationId__c',
+    versionDataSourceId: 'ssot__DataSourceId__c',
+    versionDataSourceObjectId: 'ssot__DataSourceObjectId__c',
+    versionSourceObjectName: 'FlowRecordVersion',
     runObject: 'ssot__FlowRun__dlm',
     runId: 'ssot__Id__c',
     runVersionId: 'ssot__FlowVersionId__c',
