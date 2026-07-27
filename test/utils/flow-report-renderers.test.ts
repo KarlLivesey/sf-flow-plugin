@@ -159,10 +159,12 @@ describe('Flow comparison renderer structure', (): void => {
 });
 
 describe('Flow dependency renderer structure', (): void => {
-  it('uses the qualified root name when a managed Flow has no dependencies', (): void => {
-    expect(renderFlowDependencies({ ...dependencies, namespace: 'managed', dependencies: [] }, 'tree')).to.equal(
-      'managed__Order_Processing'
-    );
+  it('uses the qualified root name in every empty dependency report', (): void => {
+    const empty = { ...dependencies, namespace: 'managed', dependencies: [] };
+    expect(renderFlowDependencies(empty, 'table')).to.match(/^Root Flow\tmanaged__Order_Processing/u);
+    expect(renderFlowDependencies(empty, 'tree')).to.equal('managed__Order_Processing');
+    expect(renderFlowDependencies(empty, 'mermaid')).to.contain('["Flow:managed__Order_Processing"]');
+    expect(renderFlowDependencies(empty, 'dot')).to.contain('"Flow:managed__Order_Processing";');
   });
 
   it('identifies the source Flow on every tree edge', (): void => {

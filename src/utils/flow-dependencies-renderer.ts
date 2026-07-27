@@ -40,7 +40,7 @@ function renderTable(result: FlowDependenciesResult): string {
       dependency.componentId ?? '',
     ].join('\t')
   );
-  return [header, ...rows].join('\n');
+  return [`Root Flow\t${qualifiedFlowName(result.apiName, result.namespace)}`, '', header, ...rows].join('\n');
 }
 
 function renderTree(result: FlowDependenciesResult): string {
@@ -66,6 +66,8 @@ function nodeId(ids: Map<string, string>, label: string): string {
 function renderMermaid(result: FlowDependenciesResult): string {
   const lines = ['flowchart LR'];
   const ids = new Map<string, string>();
+  const root = `Flow:${qualifiedFlowName(result.apiName, result.namespace)}`;
+  lines.push(`  ${nodeId(ids, root)}["${escapeLabel(root)}"]`);
   for (const dependency of result.dependencies) {
     const from = sourceNode(dependency);
     const to = target(dependency);
@@ -77,6 +79,7 @@ function renderMermaid(result: FlowDependenciesResult): string {
 
 function renderDot(result: FlowDependenciesResult): string {
   const lines = ['digraph FlowDependencies {', '  rankdir=LR;'];
+  lines.push(`  "${escapeLabel(`Flow:${qualifiedFlowName(result.apiName, result.namespace)}`)}";`);
   for (const dependency of result.dependencies) {
     const from = escapeLabel(sourceNode(dependency));
     const to = escapeLabel(target(dependency));
