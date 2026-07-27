@@ -39,6 +39,7 @@ describe('FlowCheckService', (): void => {
     expect(result.checks).to.deep.equal(['metrics']);
     expect(result.flows[0]?.metrics?.flows.map((flow) => flow.apiName)).to.deep.equal(['Flow_A', 'Flow_B']);
     expect(gateway.metadataQueries).to.deep.equal(['301000000000000001', '301000000000100002']);
+    expect(gateway.versionQueries).to.deep.equal(['300000000000001', '300000000000101']);
   });
 
   it('reports dependency truncation as an error unless explicitly allowed', async (): Promise<void> => {
