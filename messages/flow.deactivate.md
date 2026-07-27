@@ -26,6 +26,10 @@ Salesforce API version to use for the Tooling API requests.
 
 Deactivate only when this version is still active immediately before the update.
 
+# flags.if-latest-version.summary
+
+Deactivate only when this version is still the latest immediately before the update.
+
 # flags.dry-run.summary
 
 Resolve and report the deactivation without changing Salesforce.

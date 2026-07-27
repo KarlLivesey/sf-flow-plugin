@@ -24,6 +24,7 @@ export interface DeactivateFlagValues {
   namespace: string | undefined;
   'api-version': string | undefined;
   'if-active-version': number | undefined;
+  'if-latest-version': number | undefined;
   'dry-run': boolean;
 }
 
@@ -34,6 +35,7 @@ function createRequest(
   return {
     ...createNamedFlowRequest(flags, context),
     ...(flags['if-active-version'] === undefined ? {} : { expectedActiveVersion: flags['if-active-version'] }),
+    ...(flags['if-latest-version'] === undefined ? {} : { expectedLatestVersion: flags['if-latest-version'] }),
     dryRun: flags['dry-run'],
   };
 }
@@ -62,6 +64,9 @@ export default class FlowDeactivate extends SfCommand<FlowDeactivationResult> {
     }),
     'if-active-version': Flags.integer({
       summary: messages.getMessage('flags.if-active-version.summary'),
+    }),
+    'if-latest-version': Flags.integer({
+      summary: messages.getMessage('flags.if-latest-version.summary'),
     }),
     'dry-run': Flags.boolean({
       default: false,

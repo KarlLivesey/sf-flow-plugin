@@ -5,12 +5,14 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import type { JsonObject, JsonValue } from '../types/flow-analysis.js';
-import type { FlowDescription, FlowElementSummary, FlowLintFinding } from '../types/flow-inspection.js';
+import type { FlowDescription, FlowElementSummary } from '../types/flow-inspection.js';
+import type { FlowLintFinding } from '../types/flow-lint.js';
+import { createFlowLintFingerprint } from './flow-lint-fingerprint.js';
 
 const SALESFORCE_ID_PATTERN = /(?<![A-Za-z0-9])[A-Za-z0-9]{15}(?:[A-Za-z0-9]{3})?(?![A-Za-z0-9])/gu;
-const DML_TYPES = new Set(['Record Create', 'Record Delete', 'Record Update']);
+export const FLOW_DML_TYPES: ReadonlySet<string> = new Set(['Record Create', 'Record Delete', 'Record Update']);
 const RESOURCE_KEYS = new Set(['formulas', 'variables']);
-const FAULT_PATH_COLLECTIONS: Readonly<Record<string, string>> = {
+export const FLOW_FAULT_PATH_COLLECTIONS: Readonly<Record<string, string>> = {
   Action: 'actionCalls',
   'Apex Plugin': 'apexPluginCalls',
   'Orchestrated Stage': 'orchestratedStages',
@@ -25,10 +27,12 @@ const FAULT_PATH_COLLECTIONS: Readonly<Record<string, string>> = {
 interface FindingLocation {
   element?: string;
   path?: string;
+  evidence?: ReadonlyArray<string>;
 }
 
 function finding(rule: FlowLintFinding['rule'], message: string, location: FindingLocation = {}): FlowLintFinding {
   return {
+    fingerprint: createFlowLintFingerprint({ rule, ...location }),
     rule,
     severity: 'warning',
     message,
@@ -104,7 +108,7 @@ function containsTargetReference(value: JsonValue): boolean {
 }
 
 function metadataElement(metadata: JsonObject, element: FlowElementSummary): JsonObject | undefined {
-  const key = FAULT_PATH_COLLECTIONS[element.type];
+  const key = FLOW_FAULT_PATH_COLLECTIONS[element.type];
   const values = key === undefined ? undefined : metadata[key];
   if (!Array.isArray(values)) {
     return undefined;
@@ -121,7 +125,7 @@ function metadataElement(metadata: JsonObject, element: FlowElementSummary): Jso
 
 function missingFaultPathFindings(metadata: JsonObject, description: FlowDescription): FlowLintFinding[] {
   return description.elements
-    .filter((element) => FAULT_PATH_COLLECTIONS[element.type] !== undefined)
+    .filter((element) => FLOW_FAULT_PATH_COLLECTIONS[element.type] !== undefined)
     .filter((element) => {
       const value = metadataElement(metadata, element);
       return value === undefined || !containsTargetReference(value.faultConnector ?? null);
@@ -139,7 +143,7 @@ function dmlInsideLoopFindings(description: FlowDescription): FlowLintFinding[] 
   const graph = adjacency(description);
   const loops = description.elements.filter((element) => element.type === 'Loop');
   return description.elements
-    .filter((element) => DML_TYPES.has(element.type))
+    .filter((element) => FLOW_DML_TYPES.has(element.type))
     .flatMap((element) =>
       loops
         .filter(
@@ -151,7 +155,7 @@ function dmlInsideLoopFindings(description: FlowDescription): FlowLintFinding[] 
           finding(
             'dml-inside-loop',
             `${element.type} "${element.label ?? element.name}" runs inside loop "${loop.label ?? loop.name}".`,
-            { element: element.name }
+            { element: element.name, evidence: [loop.name] }
           )
         )
     );
@@ -165,7 +169,12 @@ function collectHardCodedIdsFromObject(value: JsonObject, path: string, findings
 
 function addHardCodedIdFindings(value: string, path: string, findings: FlowLintFinding[]): void {
   for (const match of value.matchAll(SALESFORCE_ID_PATTERN)) {
-    findings.push(finding('hard-coded-id', `Salesforce ID "${match[0]}" is hard-coded in Flow metadata.`, { path }));
+    findings.push(
+      finding('hard-coded-id', `Salesforce ID "${match[0]}" is hard-coded in Flow metadata.`, {
+        path,
+        evidence: [match[0]],
+      })
+    );
   }
 }
 

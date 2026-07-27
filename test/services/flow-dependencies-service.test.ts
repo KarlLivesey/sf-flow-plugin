@@ -20,6 +20,7 @@ function request(overrides: Partial<FlowDependenciesRequest> = {}): FlowDependen
     recursive: false,
     maxDepth: 10,
     types: [],
+    excludeTypes: [],
     ...overrides,
   };
 }
@@ -78,6 +79,15 @@ describe('FlowDependenciesService', (): void => {
     const result = await new FlowDependenciesService(gateway()).getDependencies(request({ direction: 'uses' }));
     expect(result.dependencies).to.have.length(1);
     expect(result.dependencies[0]?.direction).to.equal('uses');
+  });
+});
+
+describe('FlowDependenciesService filtering', (): void => {
+  it('gives excluded component types precedence over included types', async (): Promise<void> => {
+    const result = await new FlowDependenciesService(gateway()).getDependencies(
+      request({ types: ['CustomObject', 'Flow'], excludeTypes: ['CustomObject'] })
+    );
+    expect(result.dependencies.map((dependency) => dependency.type)).to.deep.equal(['Flow']);
   });
 
   it('rejects invalid directions at the service boundary', async (): Promise<void> => {

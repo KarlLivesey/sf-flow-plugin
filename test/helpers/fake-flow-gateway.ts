@@ -43,9 +43,11 @@ export interface FlowDefinitionFixture {
 export class FakeFlowGateway implements FlowDefinitionGateway {
   public readonly updates: ActiveVersionUpdate[] = [];
   public readonly deletes: string[] = [];
+  public readonly definitionQueries: FlowDefinitionLookup[] = [];
   public readonly dependencies: IndexedFlowDependency[] = [];
   public readonly dependenciesByDefinition = new Map<string, IndexedFlowDependency[]>();
   public readonly dependencyQueries: DependencyQuery[] = [];
+  public readonly metadataQueries: string[] = [];
   public readonly truncatedDependencyQueries = new Set<string>();
   public readonly metadata = new Map<string, JsonObject>();
   public readonly permissionChecks: FlowMutationOperation[] = [];
@@ -77,6 +79,7 @@ export class FakeFlowGateway implements FlowDefinitionGateway {
 
   public async findDefinitions(lookup: FlowDefinitionLookup): Promise<ReadonlyArray<FlowDefinition>> {
     this.throwQueryError();
+    this.definitionQueries.push(lookup);
     return this.definitions.filter(
       (definition) =>
         definition.apiName === lookup.apiName &&
@@ -122,6 +125,7 @@ export class FakeFlowGateway implements FlowDefinitionGateway {
 
   public async getVersionMetadata(versionId: string): Promise<JsonObject> {
     this.throwQueryError();
+    this.metadataQueries.push(versionId);
     const metadata = this.metadata.get(versionId);
     if (metadata === undefined) {
       throw new Error(`Missing fake metadata for version ${versionId}.`);

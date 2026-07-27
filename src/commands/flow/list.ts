@@ -10,8 +10,10 @@ import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
 import { FlowListService } from '../../services/flow-list-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
-import type { FlowListResult } from '../../types/flow.js';
+import type { FlowListRequest, FlowListResult, FlowListSort } from '../../types/flow-list.js';
+import type { FlowSortOrder } from '../../types/flow.js';
 import { createFlowCommandContext } from '../../utils/flow-command.js';
+import { validateFlowApiName, validateNamespace } from '../../utils/flow-name-validation.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -19,7 +21,31 @@ const messages = Messages.loadMessages('sf-flow-plugin', 'flow.list');
 
 export interface ListFlagValues {
   'target-org': Org | undefined;
+  'api-name': string[] | undefined;
+  type: string[] | undefined;
+  namespace: string[] | undefined;
+  status: string[] | undefined;
+  sort: FlowListSort;
+  order: FlowSortOrder;
+  limit: number | undefined;
   'api-version': string | undefined;
+}
+
+function createRequest(flags: ListFlagValues, targetOrg: string): FlowListRequest {
+  const apiNames = flags['api-name'] ?? [];
+  const namespaces = flags.namespace ?? [];
+  apiNames.forEach(validateFlowApiName);
+  namespaces.forEach(validateNamespace);
+  return {
+    targetOrg,
+    apiNames,
+    types: flags.type ?? [],
+    namespaces,
+    statuses: flags.status ?? [],
+    sort: flags.sort,
+    order: flags.order,
+    ...(flags.limit === undefined ? {} : { limit: flags.limit }),
+  };
 }
 
 export default class FlowList extends SfCommand<FlowListResult> {
@@ -33,6 +59,36 @@ export default class FlowList extends SfCommand<FlowListResult> {
       required: false,
       summary: messages.getMessage('flags.target-org.summary'),
     }),
+    'api-name': Flags.string({
+      char: 'n',
+      multiple: true,
+      summary: messages.getMessage('flags.api-name.summary'),
+    }),
+    type: Flags.string({
+      multiple: true,
+      summary: messages.getMessage('flags.type.summary'),
+    }),
+    namespace: Flags.string({
+      multiple: true,
+      summary: messages.getMessage('flags.namespace.summary'),
+    }),
+    status: Flags.string({
+      multiple: true,
+      summary: messages.getMessage('flags.status.summary'),
+    }),
+    sort: Flags.custom<FlowListSort>({
+      default: 'api-name',
+      options: ['api-name', 'label', 'type', 'active-version', 'latest-version', 'modified'],
+      summary: messages.getMessage('flags.sort.summary'),
+    })(),
+    order: Flags.custom<FlowSortOrder>({
+      default: 'asc',
+      options: ['asc', 'desc'],
+      summary: messages.getMessage('flags.order.summary'),
+    })(),
+    limit: Flags.integer({
+      summary: messages.getMessage('flags.limit.summary'),
+    }),
     'api-version': Flags.orgApiVersion({
       summary: messages.getMessage('flags.api-version.summary'),
     }),
@@ -43,7 +99,7 @@ export default class FlowList extends SfCommand<FlowListResult> {
     const context = createFlowCommandContext(flags);
     const service = new FlowListService(new ToolingFlowDefinitionGateway(context.connection));
     const result = await withFlowProgress(this.spinner, 'list', async (progress) =>
-      service.list({ targetOrg: context.targetOrg }, progress)
+      service.list(createRequest(flags, context.targetOrg), progress)
     );
     this.writeHumanOutput(result);
     return result;

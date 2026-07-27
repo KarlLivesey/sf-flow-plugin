@@ -13,15 +13,20 @@ const messages = Messages.loadMessages('sf-flow-plugin', 'flow.progress');
 export type FlowProgressAction =
   | 'activate'
   | 'audit'
+  | 'bundle'
   | 'compare'
+  | 'check'
   | 'deactivate'
+  | 'delete-version'
   | 'dependencies'
   | 'describe'
   | 'export'
   | 'graph'
   | 'lint'
   | 'list'
+  | 'metrics'
   | 'prune'
+  | 'run'
   | 'versions';
 
 export type FlowProgressStage =
@@ -34,10 +39,15 @@ export type FlowProgressStage =
   | 'applying-change'
   | 'deleting-versions'
   | 'verifying-change'
+  | 'writing-files'
   | 'loading-dependencies'
+  | 'loading-data-cloud-metrics'
   | 'analysing-results'
   | 'comparing-metadata'
-  | 'rendering-graph';
+  | 'rendering-graph'
+  | 'validating-inputs'
+  | 'checking-org'
+  | 'invoking-flow';
 
 export type FlowProgressReporter = (stage: FlowProgressStage, detail?: string) => void;
 
@@ -46,15 +56,20 @@ export const noFlowProgress: FlowProgressReporter = () => undefined;
 const actionMessages: Record<FlowProgressAction, string> = {
   activate: messages.getMessage('actions.activate'),
   audit: messages.getMessage('actions.audit'),
+  bundle: messages.getMessage('actions.bundle'),
   compare: messages.getMessage('actions.compare'),
+  check: messages.getMessage('actions.check'),
   deactivate: messages.getMessage('actions.deactivate'),
+  'delete-version': messages.getMessage('actions.delete-version'),
   dependencies: messages.getMessage('actions.dependencies'),
   describe: messages.getMessage('actions.describe'),
   export: messages.getMessage('actions.export'),
   graph: messages.getMessage('actions.graph'),
   lint: messages.getMessage('actions.lint'),
   list: messages.getMessage('actions.list'),
+  metrics: messages.getMessage('actions.metrics'),
   prune: messages.getMessage('actions.prune'),
+  run: messages.getMessage('actions.run'),
   versions: messages.getMessage('actions.versions'),
 };
 
@@ -66,12 +81,17 @@ const stageMessages: Record<FlowProgressStage, string> = {
   'comparing-metadata': messages.getMessage('stages.comparing-metadata'),
   'deleting-versions': messages.getMessage('stages.deleting-versions'),
   'loading-dependencies': messages.getMessage('stages.loading-dependencies'),
+  'loading-data-cloud-metrics': messages.getMessage('stages.loading-data-cloud-metrics'),
   'loading-flows': messages.getMessage('stages.loading-flows'),
   'loading-metadata': messages.getMessage('stages.loading-metadata'),
   'loading-versions': messages.getMessage('stages.loading-versions'),
   'rendering-graph': messages.getMessage('stages.rendering-graph'),
   'resolving-flow': messages.getMessage('stages.resolving-flow'),
   'verifying-change': messages.getMessage('stages.verifying-change'),
+  'writing-files': messages.getMessage('stages.writing-files'),
+  'validating-inputs': messages.getMessage('stages.validating-inputs'),
+  'checking-org': messages.getMessage('stages.checking-org'),
+  'invoking-flow': messages.getMessage('stages.invoking-flow'),
 };
 
 interface FlowProgressWork<Result> {

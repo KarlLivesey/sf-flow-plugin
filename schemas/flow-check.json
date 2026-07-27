@@ -1,0 +1,554 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowCheckResult",
+  "definitions": {
+    "FlowCheckResult": {
+      "type": "object",
+      "properties": {
+        "apiNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "requestedVersion": {
+          "$ref": "#/definitions/FlowComparisonVersionSelector"
+        },
+        "subflowVersion": {
+          "$ref": "#/definitions/FlowSubflowVersionSelector"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowCheckKind"
+          }
+        },
+        "excludedChecks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowCheckKind"
+          }
+        },
+        "recursive": {
+          "type": "boolean"
+        },
+        "maxDepth": {
+          "type": "number"
+        },
+        "allowTruncated": {
+          "type": "boolean"
+        },
+        "flows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowCheckEntry"
+          }
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowCheckFinding"
+          }
+        },
+        "errors": {
+          "type": "number"
+        },
+        "warnings": {
+          "type": "number"
+        },
+        "targetOrg": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "apiNames",
+        "requestedVersion",
+        "subflowVersion",
+        "checks",
+        "excludedChecks",
+        "recursive",
+        "maxDepth",
+        "allowTruncated",
+        "flows",
+        "findings",
+        "errors",
+        "warnings",
+        "targetOrg"
+      ],
+      "additionalProperties": false
+    },
+    "FlowComparisonVersionSelector": {
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "active"
+        },
+        {
+          "type": "string",
+          "const": "latest"
+        },
+        {
+          "$ref": "#/definitions/FlowVersionNumber"
+        }
+      ]
+    },
+    "FlowVersionNumber": {
+      "type": "number"
+    },
+    "FlowSubflowVersionSelector": {
+      "type": "string",
+      "enum": ["active", "latest"]
+    },
+    "FlowCheckKind": {
+      "type": "string",
+      "enum": ["dependencies", "lint", "metrics", "subflows", "versions"]
+    },
+    "FlowCheckEntry": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "resolvedVersion": {
+          "type": "number"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowCheckKind"
+          }
+        },
+        "contracts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowInputOutputContract"
+          }
+        },
+        "metrics": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowMetricsResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowCheckFinding"
+          }
+        },
+        "errors": {
+          "type": "number"
+        },
+        "warnings": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "apiName",
+        "namespace",
+        "resolvedVersion",
+        "checks",
+        "contracts",
+        "metrics",
+        "findings",
+        "errors",
+        "warnings"
+      ],
+      "additionalProperties": false
+    },
+    "FlowInputOutputContract": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "version": {
+          "type": "number"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowVariableSummary"
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowVariableSummary"
+          }
+        }
+      },
+      "required": ["apiName", "namespace", "version", "inputs", "outputs"],
+      "additionalProperties": false
+    },
+    "FlowVariableSummary": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "dataType": {
+          "type": "string"
+        },
+        "objectType": {
+          "type": ["string", "null"]
+        },
+        "apexClass": {
+          "type": ["string", "null"]
+        },
+        "collection": {
+          "type": "boolean"
+        },
+        "input": {
+          "type": "boolean"
+        },
+        "output": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["name", "dataType", "objectType", "apexClass", "collection", "input", "output", "description"],
+      "additionalProperties": false
+    },
+    "FlowMetricsResult": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "requestedVersion": {
+          "$ref": "#/definitions/FlowComparisonVersionSelector"
+        },
+        "resolvedVersion": {
+          "type": "number"
+        },
+        "subflowVersion": {
+          "$ref": "#/definitions/FlowSubflowVersionSelector"
+        },
+        "recursive": {
+          "type": "boolean"
+        },
+        "maxDepth": {
+          "type": "number"
+        },
+        "totals": {
+          "$ref": "#/definitions/FlowMetricCounts"
+        },
+        "referencedObjects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "flows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowMetricEntry"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowTraversalWarning"
+          }
+        },
+        "targetOrg": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "apiName",
+        "namespace",
+        "requestedVersion",
+        "resolvedVersion",
+        "subflowVersion",
+        "recursive",
+        "maxDepth",
+        "totals",
+        "referencedObjects",
+        "flows",
+        "warnings",
+        "targetOrg"
+      ],
+      "additionalProperties": false
+    },
+    "FlowMetricCounts": {
+      "type": "object",
+      "properties": {
+        "executableElements": {
+          "type": "number"
+        },
+        "decisions": {
+          "type": "number"
+        },
+        "decisionOutcomes": {
+          "type": "number"
+        },
+        "loops": {
+          "type": "number"
+        },
+        "maximumLoopNestingUpperBound": {
+          "type": "number",
+          "description": "Upper bound derived after condensing each strongly connected component into one graph node."
+        },
+        "dmlElements": {
+          "type": "number"
+        },
+        "dmlInsideLoops": {
+          "type": "number"
+        },
+        "apexActions": {
+          "type": "number"
+        },
+        "subflows": {
+          "type": "number"
+        },
+        "maximumPathDepthUpperBound": {
+          "type": "number",
+          "description": "Upper bound derived after condensing each strongly connected component into one graph node."
+        },
+        "faultCapableElements": {
+          "type": "number"
+        },
+        "faultConnectedElements": {
+          "type": "number"
+        },
+        "variables": {
+          "type": "number"
+        },
+        "formulas": {
+          "type": "number"
+        },
+        "unusedResources": {
+          "type": "number"
+        },
+        "maximumFanIn": {
+          "type": "number"
+        },
+        "maximumFanOut": {
+          "type": "number"
+        },
+        "unreachableElements": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "executableElements",
+        "decisions",
+        "decisionOutcomes",
+        "loops",
+        "maximumLoopNestingUpperBound",
+        "dmlElements",
+        "dmlInsideLoops",
+        "apexActions",
+        "subflows",
+        "maximumPathDepthUpperBound",
+        "faultCapableElements",
+        "faultConnectedElements",
+        "variables",
+        "formulas",
+        "unusedResources",
+        "maximumFanIn",
+        "maximumFanOut",
+        "unreachableElements"
+      ],
+      "additionalProperties": false
+    },
+    "FlowMetricEntry": {
+      "type": "object",
+      "properties": {
+        "executableElements": {
+          "type": "number"
+        },
+        "decisions": {
+          "type": "number"
+        },
+        "decisionOutcomes": {
+          "type": "number"
+        },
+        "loops": {
+          "type": "number"
+        },
+        "maximumLoopNestingUpperBound": {
+          "type": "number",
+          "description": "Upper bound derived after condensing each strongly connected component into one graph node."
+        },
+        "dmlElements": {
+          "type": "number"
+        },
+        "dmlInsideLoops": {
+          "type": "number"
+        },
+        "apexActions": {
+          "type": "number"
+        },
+        "subflows": {
+          "type": "number"
+        },
+        "maximumPathDepthUpperBound": {
+          "type": "number",
+          "description": "Upper bound derived after condensing each strongly connected component into one graph node."
+        },
+        "faultCapableElements": {
+          "type": "number"
+        },
+        "faultConnectedElements": {
+          "type": "number"
+        },
+        "variables": {
+          "type": "number"
+        },
+        "formulas": {
+          "type": "number"
+        },
+        "unusedResources": {
+          "type": "number"
+        },
+        "maximumFanIn": {
+          "type": "number"
+        },
+        "maximumFanOut": {
+          "type": "number"
+        },
+        "unreachableElements": {
+          "type": "number"
+        },
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "version": {
+          "type": "number"
+        },
+        "depth": {
+          "type": "number"
+        },
+        "faultPathCoverage": {
+          "type": ["number", "null"]
+        },
+        "referencedObjects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unusedResourceNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unreachableElementNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "apexActions",
+        "apiName",
+        "decisionOutcomes",
+        "decisions",
+        "depth",
+        "dmlElements",
+        "dmlInsideLoops",
+        "executableElements",
+        "faultCapableElements",
+        "faultConnectedElements",
+        "faultPathCoverage",
+        "formulas",
+        "loops",
+        "maximumFanIn",
+        "maximumFanOut",
+        "maximumLoopNestingUpperBound",
+        "maximumPathDepthUpperBound",
+        "namespace",
+        "referencedObjects",
+        "subflows",
+        "unreachableElementNames",
+        "unreachableElements",
+        "unusedResourceNames",
+        "unusedResources",
+        "variables",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "FlowTraversalWarning": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/definitions/FlowTraversalWarningKind"
+        },
+        "flowName": {
+          "type": "string"
+        },
+        "path": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["kind", "flowName", "path"],
+      "additionalProperties": false
+    },
+    "FlowTraversalWarningKind": {
+      "type": "string",
+      "enum": ["depth-limit", "missing-subflow", "subflow-version-fallback", "missing-subflow-version"]
+    },
+    "FlowCheckFinding": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "version": {
+          "type": ["number", "null"]
+        },
+        "check": {
+          "$ref": "#/definitions/FlowCheckKind"
+        },
+        "code": {
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/definitions/FlowCheckSeverity"
+        },
+        "message": {
+          "type": "string"
+        },
+        "path": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["apiName", "namespace", "version", "check", "code", "severity", "message", "path"],
+      "additionalProperties": false
+    },
+    "FlowCheckSeverity": {
+      "type": "string",
+      "enum": ["error", "warning"]
+    }
+  }
+}

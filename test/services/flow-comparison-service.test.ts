@@ -23,6 +23,7 @@ function request(overrides: Partial<FlowCompareRequest> = {}): FlowCompareReques
     to: 'latest',
     scopes: [],
     ignoreOrder: false,
+    ignorePaths: [],
     ...overrides,
   };
 }
@@ -50,6 +51,14 @@ describe('FlowComparisonService', (): void => {
   it('resolves explicit version numbers', async (): Promise<void> => {
     const result = await new FlowComparisonService(gateway()).compare(request({ from: 2, to: 2 }));
     expect(result).to.include({ fromVersion: 2, toVersion: 2, different: false });
+    expect(result.changes).to.deep.equal([]);
+  });
+
+  it('excludes ignored paths and their descendants', async (): Promise<void> => {
+    const fake = gateway();
+    fake.metadata.set(versions[0]?.id ?? '', { status: 'Active', settings: { label: 'One' } });
+    fake.metadata.set(versions[1]?.id ?? '', { status: 'Draft', settings: { label: 'Two' } });
+    const result = await new FlowComparisonService(fake).compare(request({ ignorePaths: ['$.settings'] }));
     expect(result.changes).to.deep.equal([]);
   });
 
@@ -94,5 +103,30 @@ describe('FlowComparisonService cross-org comparisons', (): void => {
       toVersion: 4,
       crossOrg: true,
     });
+  });
+});
+
+describe('FlowComparisonService cross-org identity', (): void => {
+  it('rejects different qualified Flows resolved independently in each org', async (): Promise<void> => {
+    const source = gateway();
+    const targetDefinitionId = '300000000000101';
+    const targetVersion = flowVersion(targetDefinitionId, 4, 'Active');
+    const targetDefinition = {
+      ...flowDefinition({
+        id: targetDefinitionId,
+        apiName: 'Order_Processing',
+        activeVersionId: targetVersion.id,
+        latestVersionId: targetVersion.id,
+      }),
+      namespace: 'managed',
+    };
+    const target = new FakeFlowGateway([targetDefinition], [targetVersion]);
+    target.metadata.set(targetVersion.id, { status: 'Active', label: 'Target' });
+    await expectErrorName(
+      new FlowComparisonService(source, target).compare(
+        request({ fromOrg: 'developer@example.com', toOrg: 'preprod@example.com' })
+      ),
+      'FlowComparisonFailed'
+    );
   });
 });

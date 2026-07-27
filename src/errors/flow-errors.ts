@@ -6,7 +6,8 @@
  */
 import { SfError } from '@salesforce/core';
 
-import type { FlowErrorCode, FlowVersionSelector } from '../types/flow.js';
+import type { FlowErrorCode } from '../types/flow-errors.js';
+import type { FlowVersionSelector } from '../types/flow.js';
 
 interface FlowErrorOptions {
   code: FlowErrorCode;
@@ -56,6 +57,14 @@ export function flowVersionNotFound(apiName: string, version: FlowVersionSelecto
   });
 }
 
+export function flowDeleteVersionNotFound(apiName: string, version: number): SfError {
+  return createFlowError({
+    code: 'FlowVersionNotFound',
+    message: `Flow "${apiName}" does not have version "${version}".`,
+    action: 'Use sf flow versions to choose an existing inactive version number.',
+  });
+}
+
 export function flowVersionNotActivatable(apiName: string, version: number, status: string): SfError {
   return createFlowError({
     code: 'FlowVersionNotActivatable',
@@ -69,6 +78,14 @@ export function flowActiveVersionMismatch(apiName: string, expected: number, act
     code: 'FlowActiveVersionMismatch',
     message: `Flow "${apiName}" has active version ${actual ?? 'none'}; expected version ${expected}.`,
     action: 'Inspect the current Flow state and retry with the expected active version.',
+  });
+}
+
+export function flowLatestVersionMismatch(apiName: string, expected: number, actual: number | null): SfError {
+  return createFlowError({
+    code: 'FlowLatestVersionMismatch',
+    message: `Flow "${apiName}" has latest version ${actual ?? 'none'}; expected version ${expected}.`,
+    action: 'Inspect the current Flow state and retry with the expected latest version.',
   });
 }
 
@@ -217,5 +234,50 @@ export function flowPruneVerificationFailed(apiName: string): SfError {
     code: 'FlowPruneVerificationFailed',
     message: `Salesforce still reports one or more deleted versions for Flow "${apiName}".`,
     action: 'Query the Flow versions in Salesforce and retry the prune operation.',
+  });
+}
+
+export {
+  flowBundleFailed,
+  flowCheckFailed,
+  flowDataCloudMetricsFailed,
+  flowDataCloudMetricsUnavailable,
+  flowDeleteVersionFailed,
+  flowDeleteVersionVerificationFailed,
+  flowMetricsFailed,
+} from './flow-release-errors.js';
+
+export function flowInputInvalid(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowInputInvalid',
+    message,
+    action: 'Check the Flow input variables and provide values using NAME=VALUE or a JSON input file.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
+export function flowInvocationFailed(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowInvocationFailed',
+    message,
+    action: 'Review the Flow errors and authenticated user permissions, then run the command again.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
+export function flowInvocationPermissionDenied(apiName: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowInvocationPermissionDenied',
+    message: `The authenticated user cannot invoke active Flow "${apiName}" through the REST API.`,
+    action: 'Grant the user access to the Flow and its referenced data, then run the command again.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
+export function flowProductionConfirmationRequired(apiName: string): SfError {
+  return createFlowError({
+    code: 'FlowProductionConfirmationRequired',
+    message: `Flow "${apiName}" can perform irreversible side effects in a production org.`,
+    action: 'Review the Flow and rerun with --confirm to execute it in production.',
   });
 }

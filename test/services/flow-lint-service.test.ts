@@ -7,7 +7,9 @@
 import { expect } from 'chai';
 
 import { FlowLintService } from '../../src/services/flow-lint-service.js';
-import type { FlowLintRequest } from '../../src/types/flow-inspection.js';
+import type { FlowDefinition } from '../../src/types/flow.js';
+import type { FlowLintRequest } from '../../src/types/flow-lint.js';
+import { AsyncTaskLimiter } from '../../src/utils/async-task-limiter.js';
 import { FakeFlowGateway, flowDefinition, flowVersion } from '../helpers/fake-flow-gateway.js';
 
 const rootId = '300000000000001';
@@ -18,7 +20,31 @@ function lintRequest(): FlowLintRequest {
     apiName: 'Root_Flow',
     targetOrg: 'admin@example.com',
     version: 'latest',
+    rules: [],
+    excludedRules: [],
   };
+}
+
+function concurrencyGateway(): FakeFlowGateway {
+  const root = flowVersion(rootId, 1, 'Active');
+  const gateway = new FakeFlowGateway(
+    [
+      flowDefinition({
+        id: rootId,
+        apiName: 'Root_Flow',
+        activeVersionId: root.id,
+        latestVersionId: root.id,
+      }),
+    ],
+    [root]
+  );
+  gateway.metadata.set(root.id, {
+    subflows: Array.from({ length: 12 }, (_, index) => ({
+      name: `Call_Missing_${index}`,
+      flowName: `Missing_Child_${index}`,
+    })),
+  });
+  return gateway;
 }
 
 describe('FlowLintService version selection', (): void => {
@@ -73,5 +99,98 @@ describe('FlowLintService subflow rules', (): void => {
     const result = await new FlowLintService(gateway).lint(lintRequest());
     expect(result.findings.map((item) => item.rule)).to.include.members(['inactive-subflow', 'missing-subflow']);
     expect(result.errors).to.equal(1);
+  });
+});
+
+describe('FlowLintService rule selection', (): void => {
+  it('applies inclusive rules before exclusions', async (): Promise<void> => {
+    const root = flowVersion(rootId, 1, 'Active');
+    const gateway = new FakeFlowGateway(
+      [
+        flowDefinition({
+          id: rootId,
+          apiName: 'Root_Flow',
+          activeVersionId: root.id,
+          latestVersionId: root.id,
+        }),
+      ],
+      [root]
+    );
+    gateway.metadata.set(root.id, {
+      assignments: [{ name: 'Unreachable', label: 'Unreachable' }],
+      formulas: [{ name: 'UnusedFormula', dataType: 'String', expression: '"unused"' }],
+    });
+    const result = await new FlowLintService(gateway).lint({
+      ...lintRequest(),
+      rules: ['unconnected-element', 'unused-resource'],
+      excludedRules: ['unused-resource'],
+    });
+    expect(result.findings).to.have.length(1);
+    expect(result.findings[0]?.rule).to.equal('unconnected-element');
+  });
+});
+
+describe('FlowLintService subflow rule selection', (): void => {
+  it('does not inspect subflows when neither subflow rule is selected', async (): Promise<void> => {
+    const root = flowVersion(rootId, 1, 'Active');
+    const gateway = new FakeFlowGateway(
+      [
+        flowDefinition({
+          id: rootId,
+          apiName: 'Root_Flow',
+          activeVersionId: root.id,
+          latestVersionId: root.id,
+        }),
+        flowDefinition({
+          id: childId,
+          apiName: 'Ambiguous_Child',
+          activeVersionId: null,
+          latestVersionId: null,
+        }),
+        flowDefinition({
+          id: '300000000000003',
+          apiName: 'Ambiguous_Child',
+          activeVersionId: null,
+          latestVersionId: null,
+        }),
+      ],
+      [root]
+    );
+    gateway.metadata.set(root.id, {
+      subflows: [{ name: 'Call_Child', flowName: 'Ambiguous_Child' }],
+    });
+    const result = await new FlowLintService(gateway).lint({
+      ...lintRequest(),
+      rules: ['hard-coded-id'],
+    });
+    expect(result.findings).to.deep.equal([]);
+  });
+});
+
+describe('FlowLintService request concurrency', (): void => {
+  it('shares one request limit across concurrent lint operations and subflow lookups', async (): Promise<void> => {
+    const gateway = concurrencyGateway();
+    const originalFindDefinitions = gateway.findDefinitions.bind(gateway);
+    let active = 0;
+    let maximumActive = 0;
+    gateway.findDefinitions = async (lookup): Promise<ReadonlyArray<FlowDefinition>> => {
+      active += 1;
+      maximumActive = Math.max(maximumActive, active);
+      await new Promise((resolve) => {
+        setImmediate(resolve);
+      });
+      try {
+        return await originalFindDefinitions(lookup);
+      } finally {
+        active -= 1;
+      }
+    };
+    const limiter = new AsyncTaskLimiter(3);
+    const results = await Promise.all([
+      new FlowLintService(gateway, gateway, limiter).lint(lintRequest()),
+      new FlowLintService(gateway, gateway, limiter).lint(lintRequest()),
+    ]);
+    expect(maximumActive).to.equal(3);
+    expect(results.map((result) => result.errors)).to.deep.equal([12, 12]);
   });
 });

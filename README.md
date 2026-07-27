@@ -1,6 +1,9 @@
 # sf-flow-plugin
 
-`sf-flow-plugin` adds Salesforce CLI commands for inspecting, comparing, auditing, activating, deactivating and pruning Flow versions through the authenticated org's Tooling API. It can also report indexed metadata dependencies. The commands do not require a Salesforce DX project.
+`sf-flow-plugin` adds Salesforce CLI commands for inspecting, validating, measuring, exporting, invoking and safely
+managing Flow versions through an authenticated org. It can also report indexed metadata dependencies and create
+complete Flow-source bundles containing recursively referenced subflows. The commands do not require a Salesforce DX
+project.
 
 The package is implemented in strict TypeScript using the current Salesforce external-plugin template, `@salesforce/core`, `@salesforce/sf-plugins-core`, oclif, and Zod runtime validation.
 
@@ -10,6 +13,7 @@ The package is implemented in strict TypeScript using the current Salesforce ext
 - A current Salesforce CLI installation.
 - An authenticated Salesforce org whose user can read Flow Tooling API records.
 - Tooling API update or deletion access for commands that mutate `FlowDefinition` or `Flow` records.
+- Access to the selected active autolaunched Flow and its referenced data when using `sf flow run`.
 
 ## Local installation
 
@@ -51,20 +55,25 @@ If `--target-org` is omitted, the command uses the Salesforce CLI `target-org` c
 
 ## Commands
 
-| Command                | Purpose                                                         |
-| ---------------------- | --------------------------------------------------------------- |
-| `sf flow list`         | Inventory Flow definitions and their current version state.     |
-| `sf flow activate`     | Activate and verify a selected Flow version.                    |
-| `sf flow versions`     | List every version and identify the active and latest versions. |
-| `sf flow compare`      | Compare the structure of two Flow versions.                     |
-| `sf flow dependencies` | Show indexed incoming and outgoing dependencies.                |
-| `sf flow describe`     | Summarise Flow resources, elements and referenced components.   |
-| `sf flow export`       | Export a Flow version as deployable source metadata.            |
-| `sf flow graph`        | Render Flow connectors and recursive subflow calls.             |
-| `sf flow lint`         | Run static checks against a Flow version.                       |
-| `sf flow deactivate`   | Deactivate a Flow and verify the resulting state.               |
-| `sf flow audit`        | Report Flow definitions with version-state issues.              |
-| `sf flow prune`        | Safely plan or delete old inactive Flow versions.               |
+| Command                  | Purpose                                                                 |
+| ------------------------ | ----------------------------------------------------------------------- |
+| `sf flow list`           | Inventory Flow definitions and their current version state.             |
+| `sf flow activate`       | Activate and verify a selected Flow version.                            |
+| `sf flow versions`       | List every version and identify the active and latest versions.         |
+| `sf flow compare`        | Compare Flow versions in one org or across two orgs.                    |
+| `sf flow dependencies`   | Show indexed incoming and outgoing dependencies.                        |
+| `sf flow describe`       | Summarise Flow resources, elements and referenced components.           |
+| `sf flow export`         | Export one Flow version as deployable source metadata.                  |
+| `sf flow bundle`         | Export a Flow and its complete recursively resolved subflow source set. |
+| `sf flow graph`          | Render Flow connectors and recursive subflow calls.                     |
+| `sf flow lint`           | Run configurable static checks against a Flow version.                  |
+| `sf flow check`          | Aggregate read-only Flow checks for CI.                                 |
+| `sf flow metrics`        | Report structural and optional Data Cloud runtime metrics.              |
+| `sf flow run`            | Invoke the active version of an autolaunched Flow.                      |
+| `sf flow deactivate`     | Deactivate a Flow and verify the resulting state.                       |
+| `sf flow delete-version` | Safely plan or delete one explicitly numbered inactive version.         |
+| `sf flow audit`          | Report Flow definitions with version-state issues.                      |
+| `sf flow prune`          | Safely plan or delete old inactive Flow versions.                       |
 
 Commands show an automatic Salesforce-style progress spinner while they query or mutate the org. Each stage identifies the Flow and relevant version or version scope. Progress output is suppressed automatically when `--json` is used.
 
@@ -104,7 +113,40 @@ sf project deploy start \
   --source-dir force-app/main/default/flows/My_Flow.flow-meta.xml
 ```
 
-Dependencies such as Apex classes, objects and subflows are not bundled.
+Dependencies such as Apex classes, objects and subflows are not bundled by this command. Use `sf flow bundle` when
+the root Flow and its referenced subflows should be exported together.
+
+## `sf flow bundle`
+
+```bash
+sf flow bundle \
+  --api-name Order_Flow \
+  [--target-org ORG] \
+  [--flow-version active|latest|NUMBER] \
+  [--subflow-version active|latest] \
+  [--max-depth NUMBER] \
+  [--status draft|active] \
+  --output-dir force-app/main/default \
+  [--overwrite] \
+  [--namespace NAMESPACE] \
+  [--api-version VERSION] \
+  [--json]
+```
+
+The bundle contains the root Flow, recursively referenced subflows, `package.xml`, a dependency report, an external
+dependency list and a manifest recording every selected Flow version. Source status defaults to `Draft`.
+Active-or-latest subflow selection defaults to active with latest fallback. Visited-definition tracking and
+`--max-depth` prevent malformed or legacy metadata from causing unbounded traversal.
+
+The command refuses to create a bundle when traversal is incomplete because a subflow is missing, has no selectable
+version or exceeds `--max-depth`. A successful bundle therefore contains the complete selected Flow/subflow source
+set and can be deployed through the Metadata API. Apex classes, objects and other external dependencies are reported
+but are not exported; they must already exist in the destination org or be deployed separately.
+
+Existing files are refused unless `--overwrite` is supplied. Overwrite mode stages the complete bundle before
+replacing files, removes stale Flow files recorded by the previous validated manifest and restores the prior output
+if writing the replacement fails. The previous manifest must belong to the same root Flow; an unrelated bundle is
+never treated as stale. Non-regular targets and symlinked output ancestors are refused.
 
 ## `sf flow lint`
 
@@ -113,6 +155,12 @@ sf flow lint \
   --api-name Order_Processing \
   [--target-org ORG] \
   [--flow-version active|latest|NUMBER] \
+  [--fail-on warning|error] \
+  [--rule RULE ...] \
+  [--exclude-rule RULE ...] \
+  [--result-format human|sarif] \
+  [--output-file FILE] \
+  [--baseline FILE] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--json]
@@ -126,14 +174,34 @@ variables are not reported as unused because callers can reference them external
 sf flow lint --api-name Order_Processing --flow-version active
 ```
 
-The result reports stable rule names, severities, affected elements and metadata paths for scripting. Lint findings
-do not change the command exit code.
+The result reports stable rule names, severities, affected elements and metadata paths for scripting. Use repeatable
+`--rule` or `--exclude-rule` filters to select checks, `--result-format sarif` for code-scanning integrations and
+`--fail-on` to make new findings affect the process exit code.
+
+A baseline suppresses matching existing findings from the CI exit decision without hiding them. Generate one directly
+from the command's standard Salesforce CLI JSON output:
+
+```sh
+sf flow lint --api-name Order_Processing --json > flow-lint-baseline.json
+```
+
+The baseline may be that complete Salesforce CLI success envelope or its raw `result` object. In either form, the
+plugin validates both `apiName` and `namespace` before matching fingerprints. Bare findings arrays and partial
+`{ "findings": [...] }` objects are rejected because they cannot establish which Flow they belong to. Baseline
+findings remain visible separately from new findings.
 
 ## `sf flow list`
 
 ```text
 sf flow list \
   [--target-org ORG] \
+  [--api-name FLOW ...] \
+  [--type TYPE ...] \
+  [--namespace NAMESPACE ...] \
+  [--status STATUS ...] \
+  [--sort api-name|label|type|active-version|latest-version|modified] \
+  [--order asc|desc] \
+  [--limit NUMBER] \
   [--api-version VERSION] \
   [--json]
 ```
@@ -146,7 +214,8 @@ sf flow list --target-org MySandbox
 ```
 
 The label, type, status and last-modified date describe the latest version. Definitions without a latest version
-report those values as empty. Use `--json` for a stable structured inventory.
+report those values as empty. Filters are repeatable, sorting defaults to API name ascending and `--limit` is applied
+after filtering and sorting. Use `--json` for a stable structured inventory.
 
 ## `sf flow activate`
 
@@ -156,6 +225,7 @@ sf flow activate \
   [--target-org ORG] \
   [--flow-version latest|NUMBER] \
   [--if-active-version NUMBER] \
+  [--if-latest-version NUMBER] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--dry-run] \
@@ -168,6 +238,7 @@ sf flow activate \
 | `--target-org`        | `-o`  | No       | Configured target org | Authenticated org username or alias.               |
 | `--flow-version`      | —     | No       | `latest`              | Positive Flow version number or `latest`.          |
 | `--if-active-version` | —     | No       | —                     | Continue only if this version is currently active. |
+| `--if-latest-version` | —     | No       | —                     | Continue only if this is still the latest version. |
 | `--namespace`         | —     | No       | —                     | Namespace used to identify a packaged Flow.        |
 | `--api-version`       | —     | No       | Connection default    | Salesforce API version override.                   |
 | `--dry-run`           | —     | No       | `false`               | Resolve and report without changing Salesforce.    |
@@ -236,6 +307,8 @@ sf flow versions \
   [--status Active|Draft|InvalidDraft|Obsolete ...] \
   [--created-before DATE] \
   [--created-after DATE] \
+  [--modified-before DATE] \
+  [--modified-after DATE] \
   [--sort version|created|modified] \
   [--order asc|desc] \
   [--limit NUMBER] \
@@ -256,7 +329,9 @@ Use repeatable `--status` filters and `--limit` to return the newest matching ve
 sf flow versions --api-name Order_Processing --status Draft --status InvalidDraft --limit 5
 ```
 
-Creation filters accept ISO 8601 dates or date-times and use strict before/after boundaries. `--limit` selects the newest matching version numbers; `--sort` and `--order` control how that selected set is displayed.
+Creation and modification filters accept ISO 8601 dates or date-times and use strict before/after boundaries.
+`--limit` selects the newest matching version numbers; `--sort` and `--order` control how that selected set is
+displayed.
 
 ## `sf flow compare`
 
@@ -270,6 +345,9 @@ sf flow compare \
   [--fail-on-difference] \
   [--only metadata|elements|resources|connectors ...] \
   [--ignore-order] \
+  [--ignore-path PATH ...] \
+  [--format summary|unified|markdown] \
+  [--output-file FILE] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--json]
@@ -304,6 +382,9 @@ The command retrieves each version's validated `Flow.Metadata` value and reports
 
 Use repeatable `--only` values to restrict changes to top-level metadata, executable elements, resources or connector paths. Connector changes are classified separately from their owning elements. `--ignore-order` suppresses order-only differences in unnamed arrays; named Flow collections are already matched by name.
 
+Use repeatable `--ignore-path` values to omit paths using the same stable metadata-path syntax emitted by comparison
+results. Output defaults to a summary and can also be rendered as unified text or Markdown, with optional file output.
+
 ## `sf flow dependencies`
 
 ```bash
@@ -314,6 +395,9 @@ sf flow dependencies \
   [--recursive] \
   [--max-depth NUMBER] \
   [--type COMPONENT_TYPE ...] \
+  [--exclude-type COMPONENT_TYPE ...] \
+  [--format table|tree|mermaid|dot] \
+  [--output-file FILE] \
   [--fail-on-dependencies] \
   [--allow-truncated] \
   [--namespace NAMESPACE] \
@@ -337,7 +421,13 @@ When any query returns exactly 2,000 records, the result explicitly reports that
 and the command exits with status 1 by default. Use `--allow-truncated` only when incomplete dependency output is
 acceptable; the structured result still sets `truncated: true` and lists every capped query.
 
-`--type` is repeatable and filters each capped query by metadata component type. Recursive filtered traversal includes `Flow` internally so it can reach nested definitions, but only requested types appear in the result. `--fail-on-dependencies` retains the result and sets process status 1 when matching records exist.
+`--type` and `--exclude-type` are repeatable metadata component filters. Recursive filtered traversal includes `Flow`
+internally so it can reach nested definitions, but only requested types appear in the result.
+`--fail-on-dependencies` retains the result and sets process status 1 when matching records exist.
+
+Output defaults to a table and can be rendered as a tree, Mermaid dependency diagram or Graphviz DOT dependency
+diagram. These dependency diagrams are intentionally separate from the execution graph produced by `sf flow graph`.
+Use `--output-file` to write the selected representation.
 
 ## `sf flow describe`
 
@@ -485,6 +575,138 @@ Use `--output-file` to write the Mermaid or DOT source to a new file instead of 
 sf flow graph --api-name Order_Processing --format dot --output-file order-processing.dot
 ```
 
+## `sf flow metrics`
+
+```bash
+sf flow metrics \
+  --api-name Order_Flow \
+  [--target-org ORG] \
+  [--flow-version active|latest|NUMBER] \
+  [--recursive] \
+  [--subflow-version active|latest] \
+  [--max-depth NUMBER] \
+  [--data-cloud] \
+  [--data-cloud-days NUMBER] \
+  [--output-file FILE] \
+  [--namespace NAMESPACE] \
+  [--api-version VERSION] \
+  [--json]
+```
+
+Metrics include executable elements, decisions and outcomes, loops, DML, DML inside loops, Apex actions, subflows,
+fault-path coverage, variables, formulas, unused resources, referenced objects, fan-in, fan-out and unreachable
+elements. `maximumPathDepthUpperBound` and `maximumLoopNestingUpperBound` are upper bounds derived by condensing
+strongly connected components; they can exceed any individual non-repeating path through a cyclic component.
+Recursive analysis defaults to active subflows with latest fallback. The command reports facts only; policy
+thresholds belong in downstream CI or policy tooling.
+
+Static analysis is the default and does not query Data Cloud. Add `--data-cloud` to query runtime telemetry for the
+selected root Flow version, using the authenticated target org and a 30-day window by default:
+
+```bash
+sf flow metrics \
+  --api-name Order_Flow \
+  --flow-version active \
+  --data-cloud \
+  --data-cloud-days 7
+```
+
+Runtime output includes execution, successful and failed counts; average, minimum and maximum duration; first and
+last execution times; and status/error breakdowns. `--data-cloud` first checks all required Flow, Flow Version and
+Flow Run Data Model Objects in the standard or legacy schema. If every required DMO is accessible but the selected
+Flow/version record is absent, the command produces `FlowDataCloudMetricsUnavailable`. DMO capability or access
+failures, permission failures, query failures and malformed responses produce `FlowDataCloudMetricsFailed`; an
+endpoint `404` is not treated as proof that metrics are merely unavailable. An enabled Flow with no runs in the
+selected window returns zero executions.
+
+The plugin queries the Data Cloud Data Model Objects through the Data 360 Connect REST SQL Query API using the
+Salesforce CLI-authenticated target-org connection. It does not use ordinary SOQL or exchange the Salesforce access
+token for a separate Data Cloud Direct API token. The plugin does not enable Flow metrics collection: collection must
+already be enabled for the Flow in Salesforce, and ingested records can be delayed. Data Cloud collection and query
+usage remains subject to the org's Salesforce entitlements.
+
+## `sf flow check`
+
+```bash
+sf flow check \
+  --api-name Order_Flow \
+  [--api-name Renewal_Flow ...] \
+  [--target-org ORG] \
+  [--flow-version active|latest|NUMBER] \
+  [--only lint|dependencies|subflows|versions|metrics ...] \
+  [--exclude lint|dependencies|subflows|versions|metrics ...] \
+  [--recursive] \
+  [--subflow-version active|latest] \
+  [--max-depth NUMBER] \
+  [--allow-truncated] \
+  [--fail-on warning|error] \
+  [--result-format human|sarif] \
+  [--output-file FILE] \
+  [--namespace NAMESPACE] \
+  [--api-version VERSION] \
+  [--json]
+```
+
+This read-only CI command aggregates the existing lint, dependency, subflow, version-state and metrics analysis for
+one or more Flows. It reports missing or inactive subflows, dependency truncation, missing referenced components,
+active/latest state and accumulated inactive versions. Input/output `contracts` are populated whenever lint, subflow
+or metrics checks load Flow metadata. A lint-only check preserves the selected root Flow contract without recursively
+loading subflows; dependencies/versions-only checks return `contracts: []`. `metrics` is populated only when the
+metrics check is selected and is otherwise `null`. These fields provide context only: the command does not infer
+contract compatibility problems or apply complexity thresholds.
+
+The command fails on errors by default. Use `--fail-on warning` for a stricter CI gate, repeatable `--only` or
+`--exclude` flags to select checks, and SARIF output for code-scanning integrations.
+
+## `sf flow run`
+
+```bash
+sf flow run \
+  --api-name Calculate_Discount \
+  [--input NAME=VALUE ...] \
+  [--input-file FILE] \
+  [--output-file FILE] \
+  [--dry-run] \
+  [--confirm] \
+  [--fail-on-flow-error] \
+  [--namespace NAMESPACE] \
+  [--target-org ORG] \
+  [--api-version VERSION] \
+  [--json]
+```
+
+`sf flow run` invokes the active version of an autolaunched Flow through Salesforce's supported Flow REST action.
+The command discovers declared inputs and validates scalar, record and collection values with Zod. Repeatable
+`--input NAME=VALUE` values perform one invocation; `--input-file` accepts one JSON object or an array of objects for
+up to 200 invocations. All supplied invocations are sent in one REST action request. Salesforce does not guarantee
+that a multi-invocation request is all-or-none, so use the per-invocation results to determine which interviews
+succeeded.
+
+Numeric inputs use JSON decimal notation. Hexadecimal, `NaN`, `Infinity`, negative zero, whole values outside
+JavaScript's safe integer range, and fractional values with more than 15 significant digits are rejected before
+execution. Raw numeric tokens in `--input-file` JSON and JSON-formatted collection or record inputs are checked before
+JavaScript number conversion.
+
+Flow execution can perform DML, callouts, emails and other side effects. Production execution requires `--confirm`.
+`--dry-run` validates eligibility, inputs, types and the authenticated user's ability to access the action without
+executing the Flow; it does not predict runtime success. The active version is checked again immediately before the
+request, but activation can still change concurrently. The version reported by Salesforce in the invocation response
+is authoritative.
+
+Results include one top-level duration for the complete REST action request, plus outputs, errors and success for each
+invocation. In dry-run results, every invocation has `executed: false` and `success: null`, while the top-level
+`successful` value is also `null`; `--fail-on-flow-error` does not fail a dry run because no runtime outcome exists.
+Per-invocation Salesforce error text is replaced by a fixed redacted message while a validated Salesforce status code
+is retained when available. Raw transport exceptions are not retained as causes; only a validated transport status is
+exposed when available. Input and output properties whose names look sensitive are redacted on a best-effort basis;
+arbitrary values under other property names can still appear in terminal, JSON and output-file results. A transport
+failure can leave execution outcome unknown, so the command does not automatically retry a potentially non-idempotent
+Flow.
+
+`sf flow debug` is intentionally not included because Salesforce does not expose a verified supported interface for
+the requested arbitrary-version tracing, rollback, run-as and record-trigger simulation contract. Flow tests are not
+duplicated either; use Salesforce CLI's existing `sf flow run test` and `sf flow get test` commands.
+
 ## `sf flow deactivate`
 
 ```bash
@@ -492,6 +714,7 @@ sf flow deactivate \
   --api-name Order_Processing \
   [--target-org ORG] \
   [--if-active-version NUMBER] \
+  [--if-latest-version NUMBER] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--dry-run] \
@@ -509,6 +732,25 @@ Preview the same operation without sending a PATCH request:
 ```bash
 sf flow deactivate --api-name Order_Processing --dry-run --json
 ```
+
+## `sf flow delete-version`
+
+```bash
+sf flow delete-version \
+  --api-name My_Flow \
+  --flow-version 7 \
+  [--target-org ORG] \
+  [--if-active-version NUMBER] \
+  [--if-latest-version NUMBER] \
+  [--namespace NAMESPACE] \
+  [--api-version VERSION] \
+  [--no-dry-run] \
+  [--json]
+```
+
+Deletion defaults to dry-run and produces a stable deletion plan. The command refuses active or latest versions,
+checks the version state immediately before mutation, performs the deletion permission preflight even in dry-run
+mode and verifies absence after a real deletion.
 
 ## `sf flow audit`
 
@@ -555,6 +797,7 @@ sf flow prune \
   [--keep-by created|modified] \
   [--older-than DAYS] \
   [--if-active-version NUMBER] \
+  [--if-latest-version NUMBER] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--no-dry-run] \
@@ -570,6 +813,7 @@ sf flow prune \
 | `--keep-by`           | `created`             | Select the newest retained versions by creation or last-modified date.                     |
 | `--older-than`        | —                     | Protect newer versions by age without reducing the `--keep` total.                         |
 | `--if-active-version` | —                     | Continue only if this version is currently active.                                         |
+| `--if-latest-version` | —                     | Continue only if this is still the latest version.                                         |
 | `--dry-run`           | `true`                | Plan without deletion. Specify `--no-dry-run` to perform and verify the planned deletions. |
 
 Active and latest versions are always protected outside the inactive retention total. `--ignore` wins when the same version is also passed to `--keep-version`.
@@ -613,14 +857,21 @@ Before proposing or performing a change, the mutation commands validate the targ
 
 - `sf flow activate` confirms that the selected version exists, has an activatable status and is not already active.
 - `sf flow deactivate` confirms that the Flow currently has an active version.
+- `sf flow delete-version` refuses the active and latest versions and verifies the selected version immediately before deletion.
 - `sf flow prune` confirms that requested keep/ignore versions exist, protects active and latest versions, and selects only prunable statuses.
 
-Supply `--if-active-version NUMBER` to activation, deactivation or pruning when a script must stop if another user changes the active version after the script's earlier inspection. The plugin checks the expectation during planning and again immediately before a real mutation. This narrows the race window but cannot make separate Salesforce Tooling API requests atomic.
+Supply `--if-active-version NUMBER` to activation, deactivation, explicit version deletion or pruning when a script
+must stop if another user changes the active version after the script's earlier inspection. The plugin checks the
+expectation during planning and again immediately before a real mutation. This narrows the race window but cannot
+make separate Salesforce Tooling API requests atomic.
+
+Supply `--if-latest-version NUMBER` to activation, deactivation, explicit version deletion or pruning when a script
+must also stop if another user creates a newer version after inspection.
 
 When a plan contains a change, including during `--dry-run`, the plugin asks the Tooling API for the authenticated user's current object capabilities:
 
 - Activation and deactivation require `FlowDefinition.updateable`.
-- Pruning requires `Flow.deletable`.
+- Explicit deletion and pruning require `Flow.deletable`.
 
 A denied capability produces `FlowMutationPermissionDenied` before any PATCH or DELETE request. A dry run still performs this check but never sends the mutation.
 
@@ -628,27 +879,42 @@ These checks are point-in-time preflights, not an atomic guarantee. Permissions 
 
 ## Error codes
 
-| Code                                 | Meaning                                                                     |
-| ------------------------------------ | --------------------------------------------------------------------------- |
-| `FlowDefinitionNotFound`             | No definition matched the API name and namespace.                           |
-| `FlowDefinitionAmbiguous`            | Multiple definitions matched; specify a namespace.                          |
-| `FlowVersionInvalid`                 | The version flag was neither `latest` nor a positive integer.               |
-| `FlowVersionNotFound`                | The requested version does not exist.                                       |
-| `FlowVersionNotActivatable`          | The selected version has an ineligible Salesforce status.                   |
-| `FlowActiveVersionMismatch`          | The active version did not match the supplied concurrency guard.            |
-| `FlowActivationFailed`               | A validated Tooling API query or update failed.                             |
-| `FlowActivationVerificationFailed`   | Salesforce did not report the requested version as active after the update. |
-| `FlowQueryFailed`                    | A validated Tooling API query or response failed.                           |
-| `FlowMutationFailed`                 | Salesforce rejected a validated Flow mutation.                              |
-| `FlowMutationPermissionDenied`       | Tooling API reports that the user cannot perform the planned mutation.      |
-| `FlowDeactivationFailed`             | Flow deactivation could not be completed.                                   |
-| `FlowDeactivationVerificationFailed` | Salesforce still reported an active version after deactivation.             |
-| `FlowAuditFailed`                    | The org-wide Flow audit could not be completed.                             |
-| `FlowDependenciesFailed`             | Indexed Flow dependencies could not be queried.                             |
-| `FlowComparisonFailed`               | The requested versions or their Flow metadata could not be compared.        |
-| `FlowInspectionFailed`               | Flow metadata could not be described or rendered.                           |
-| `FlowPruneFailed`                    | Flow prune planning or deletion failed.                                     |
-| `FlowPruneVerificationFailed`        | Salesforce still returned a deleted version after pruning.                  |
+| Code                                  | Meaning                                                                         |
+| ------------------------------------- | ------------------------------------------------------------------------------- |
+| `FlowDefinitionNotFound`              | No definition matched the API name and namespace.                               |
+| `FlowDefinitionAmbiguous`             | Multiple definitions matched; specify a namespace.                              |
+| `FlowVersionInvalid`                  | The version flag was neither `latest` nor a positive integer.                   |
+| `FlowVersionNotFound`                 | The requested version does not exist.                                           |
+| `FlowVersionNotActivatable`           | The selected version has an ineligible Salesforce status.                       |
+| `FlowActiveVersionMismatch`           | The active version did not match the supplied concurrency guard.                |
+| `FlowLatestVersionMismatch`           | The latest version did not match the supplied concurrency guard.                |
+| `FlowActivationFailed`                | A validated Tooling API query or update failed.                                 |
+| `FlowActivationVerificationFailed`    | Salesforce did not report the requested version as active after the update.     |
+| `FlowQueryFailed`                     | A validated Tooling API query or response failed.                               |
+| `FlowMutationFailed`                  | Salesforce rejected a validated Flow mutation.                                  |
+| `FlowMutationPermissionDenied`        | Tooling API reports that the user cannot perform the planned mutation.          |
+| `FlowDeactivationFailed`              | Flow deactivation could not be completed.                                       |
+| `FlowDeactivationVerificationFailed`  | Salesforce still reported an active version after deactivation.                 |
+| `FlowAuditFailed`                     | The org-wide Flow audit could not be completed.                                 |
+| `FlowListFailed`                      | Flow definitions could not be listed.                                           |
+| `FlowDependenciesFailed`              | Indexed Flow dependencies could not be queried.                                 |
+| `FlowComparisonFailed`                | The requested versions or their Flow metadata could not be compared.            |
+| `FlowExportFailed`                    | Flow source metadata could not be exported.                                     |
+| `FlowInspectionFailed`                | Flow metadata could not be described or rendered.                               |
+| `FlowLintFailed`                      | Static Flow analysis or report output failed.                                   |
+| `FlowPruneFailed`                     | Flow prune planning or deletion failed.                                         |
+| `FlowPruneVerificationFailed`         | Salesforce still returned a deleted version after pruning.                      |
+| `FlowDeleteVersionFailed`             | Explicit version deletion planning or mutation failed.                          |
+| `FlowDeleteVersionVerificationFailed` | Salesforce still returned an explicitly deleted version.                        |
+| `FlowInputInvalid`                    | Supplied Flow inputs did not match the declared input contract.                 |
+| `FlowInvocationFailed`                | Salesforce could not execute or report the Flow invocation.                     |
+| `FlowInvocationPermissionDenied`      | The authenticated user cannot invoke the Flow action.                           |
+| `FlowProductionConfirmationRequired`  | Production Flow execution requires explicit confirmation.                       |
+| `FlowMetricsFailed`                   | Flow complexity metrics could not be calculated.                                |
+| `FlowDataCloudMetricsUnavailable`     | Required DMOs were accessible, but the selected Flow/version record was absent. |
+| `FlowDataCloudMetricsFailed`          | Data Cloud DMO access, capability, query or response validation failed.         |
+| `FlowCheckFailed`                     | The requested read-only Flow checks could not be completed.                     |
+| `FlowBundleFailed`                    | The Flow bundle was incomplete or could not be written safely.                  |
 
 ## Development
 
