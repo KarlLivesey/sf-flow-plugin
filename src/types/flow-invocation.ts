@@ -53,7 +53,7 @@ export interface FlowActionResult {
   invocationId?: string | null | undefined;
   isSuccess: boolean;
   outputValues: Record<string, JsonValue>;
-  version?: number | undefined;
+  version: number;
 }
 
 export interface FlowInvocationGateway {

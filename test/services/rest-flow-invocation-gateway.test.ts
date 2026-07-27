@@ -54,9 +54,9 @@ describe('RestFlowInvocationGateway', (): void => {
       {
         actionName: 'Calculate_Discount',
         errors: null,
-        invocationId: 'interview-1',
+        invocationId: null,
         isSuccess: true,
-        outputValues: { discount: 10 },
+        outputValues: { discount: 10, ['Flow__InterviewGuid']: 'interview-1' },
         version: 1,
       },
     ];
@@ -81,11 +81,25 @@ describe('RestFlowInvocationGateway result normalisation', (): void => {
         invocationId: null,
         isSuccess: false,
         outputValues: null,
+        version: 1,
       },
     ]);
     const result = await new RestFlowInvocationGateway(fake.connection).invokeFlow('Calculate_Discount', [{}]);
     expect(result[0]).to.include({ isSuccess: false });
     expect(result[0]?.outputValues).to.deep.equal({});
+  });
+
+  it('rejects an executed result without a positive version', async (): Promise<void> => {
+    const missing = connection([{ errors: [], isSuccess: true, outputValues: {} }]);
+    await expectErrorName(
+      new RestFlowInvocationGateway(missing.connection).invokeFlow('Calculate_Discount', [{}]),
+      'FlowInvocationFailed'
+    );
+    const invalid = connection([{ errors: [], isSuccess: true, outputValues: {}, version: 0 }]);
+    await expectErrorName(
+      new RestFlowInvocationGateway(invalid.connection).invokeFlow('Calculate_Discount', [{}]),
+      'FlowInvocationFailed'
+    );
   });
 });
 
