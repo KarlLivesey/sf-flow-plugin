@@ -682,6 +682,11 @@ up to 200 invocations. All supplied invocations are sent in one REST action requ
 that a multi-invocation request is all-or-none, so use the per-invocation results to determine which interviews
 succeeded.
 
+Numeric inputs use JSON decimal notation. Hexadecimal, `NaN`, `Infinity`, negative zero, whole values outside
+JavaScript's safe integer range, and fractional values with more than 15 significant digits are rejected before
+execution. Raw numeric tokens in `--input-file` JSON and JSON-formatted collection or record inputs are checked before
+JavaScript number conversion.
+
 Flow execution can perform DML, callouts, emails and other side effects. Production execution requires `--confirm`.
 `--dry-run` validates eligibility, inputs, types and the authenticated user's ability to access the action without
 executing the Flow; it does not predict runtime success. The active version is checked again immediately before the
