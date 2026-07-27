@@ -16,6 +16,12 @@ import type {
   FlowRuntimeMetricsGateway,
   FlowRuntimeMetricsRequest,
 } from '../types/flow-metrics.js';
+import {
+  buildFlowQuery,
+  buildMetricsQuery,
+  buildVersionQuery,
+  type VersionLookup,
+} from '../utils/data-cloud-flow-sql.js';
 import { parseFlowRuntimeBreakdown, summariseFlowRuntimeMetrics } from '../utils/flow-runtime-metrics.js';
 import { qualifiedFlowName } from '../utils/flow-state.js';
 import { DataCloudSqlQueryClient } from './data-cloud-sql-query-client.js';
@@ -29,18 +35,6 @@ interface IdentifierDetails {
   field: string;
   label: string;
   name: string;
-}
-
-interface VersionLookup {
-  name: string;
-  organizationId: string;
-  version: number;
-}
-
-interface MetricsQuery {
-  from: string;
-  organizationId: string;
-  versionId: string;
 }
 
 type DataCloudRecord = Record<string, unknown>;
@@ -71,10 +65,6 @@ function validateRuntimeMetricsRequest(request: FlowRuntimeMetricsRequest): Flow
   return validated.data;
 }
 
-function escapeSqlLiteral(value: string): string {
-  return value.replaceAll("'", "''");
-}
-
 function readText(record: DataCloudRecord, field: string, label: string): string {
   const parsed = z.string().min(1).safeParse(record[field]);
   if (!parsed.success) {
@@ -92,43 +82,6 @@ function singleIdentifier(records: ReadonlyArray<DataCloudRecord>, details: Iden
   }
   const selected = records[0];
   return selected === undefined ? null : readText(selected, details.field, `${details.label} identifier`);
-}
-
-function buildFlowQuery(schema: FlowDmoSchema, name: string, organizationId: string): string {
-  return (
-    `SELECT ${schema.flowId}, ${schema.flowName} FROM ${schema.flowObject} ` +
-    `WHERE ${schema.flowName} = '${escapeSqlLiteral(name)}' ` +
-    `AND ${schema.flowOrganizationId} = '${escapeSqlLiteral(organizationId)}' LIMIT 2`
-  );
-}
-
-function buildVersionQuery(schema: FlowDmoSchema, flowId: string, lookup: VersionLookup): string {
-  return (
-    `SELECT ${schema.versionId}, ${schema.versionNumber} FROM ${schema.versionObject} ` +
-    `WHERE ${schema.versionFlowId} = '${escapeSqlLiteral(flowId)}' ` +
-    `AND ${schema.versionNumber} = ${lookup.version} ` +
-    `AND ${schema.versionOrganizationId} = '${escapeSqlLiteral(lookup.organizationId)}' LIMIT 2`
-  );
-}
-
-function durationFields(schema: FlowDmoSchema): string {
-  return schema.runDuration === undefined
-    ? ''
-    : `, AVG(${schema.runDuration}) AS "averageDurationMilliseconds"` +
-        `, MIN(${schema.runDuration}) AS "minimumDurationMilliseconds"` +
-        `, MAX(${schema.runDuration}) AS "maximumDurationMilliseconds"`;
-}
-
-function buildMetricsQuery(schema: FlowDmoSchema, query: MetricsQuery): string {
-  return (
-    `SELECT ${schema.runStatus}, ${schema.runErrorReason}` +
-    `, COUNT(${schema.runId}) AS "executions"${durationFields(schema)}` +
-    `, MIN(${schema.runScheduled}) AS "firstExecution", MAX(${schema.runCompleted}) AS "lastExecution" ` +
-    `FROM ${schema.runObject} WHERE ${schema.runVersionId} = '${escapeSqlLiteral(query.versionId)}' ` +
-    `AND ${schema.runOrganizationId} = '${escapeSqlLiteral(query.organizationId)}' ` +
-    `AND ${schema.runScheduled} >= timestamp with time zone '${escapeSqlLiteral(query.from)}' ` +
-    `GROUP BY ${schema.runStatus}, ${schema.runErrorReason}`
-  );
 }
 
 function normaliseBreakdown(record: DataCloudRecord, schema: FlowDmoSchema): DataCloudRecord {
@@ -207,14 +160,26 @@ export class DataCloudFlowMetricsGateway implements FlowRuntimeMetricsGateway {
   ): Promise<ResolvedDataCloudVersion> {
     const name = qualifiedFlowName(request.apiName, request.namespace);
     const lookup = { name, organizationId, version: request.version };
-    if (await this.hasRequiredDmos(FLOW_DMO_SCHEMAS[0])) {
-      return requireVersion(await this.findVersion(FLOW_DMO_SCHEMAS[0], lookup), name, request.version);
+    const availability = await FLOW_DMO_SCHEMAS.reduce(
+      async (previous, schema) => [...(await previous), { schema, available: await this.hasRequiredDmos(schema) }],
+      Promise.resolve([] as Array<{ schema: FlowDmoSchema; available: boolean }>)
+    );
+    const accessibleSchemas = availability.filter(({ available }) => available).map(({ schema }) => schema);
+    if (accessibleSchemas.length === 0) {
+      throw flowDataCloudMetricsFailed(
+        'Data Cloud did not confirm access to every required Flow, Flow Version and Flow Run DMO.'
+      );
     }
-    if (await this.hasRequiredDmos(FLOW_DMO_SCHEMAS[1])) {
-      return requireVersion(await this.findVersion(FLOW_DMO_SCHEMAS[1], lookup), name, request.version);
-    }
-    throw flowDataCloudMetricsFailed(
-      'Data Cloud did not confirm access to every required Flow, Flow Version and Flow Run DMO.'
+    return requireVersion(await this.findFirstVersion(accessibleSchemas, lookup), name, request.version);
+  }
+
+  private async findFirstVersion(
+    schemas: ReadonlyArray<FlowDmoSchema>,
+    lookup: VersionLookup
+  ): Promise<ResolvedDataCloudVersion | null> {
+    return schemas.reduce(
+      async (previous, schema) => (await previous) ?? this.findVersion(schema, lookup),
+      Promise.resolve<ResolvedDataCloudVersion | null>(null)
     );
   }
 

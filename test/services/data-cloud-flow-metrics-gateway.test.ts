@@ -4,126 +4,19 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import type { Connection } from '@salesforce/core';
 import { expect } from 'chai';
-import { z } from 'zod';
 
 import { DataCloudFlowMetricsGateway } from '../../src/services/data-cloud-flow-metrics-gateway.js';
-
-interface QueryResponse {
-  data: unknown[][];
-  metadata: Array<{ name: string }>;
-  returnedRows: number;
-  status: {
-    completionStatus: string;
-    queryId: string;
-    rowCount: number;
-  };
-}
-
-interface RequestDetails {
-  method: string;
-  url: string;
-  body?: string;
-}
-
-const requestBodySchema = z.object({ sql: z.string() });
-
-class DataCloudConnectionDouble {
-  public readonly requests: Array<string | RequestDetails> = [];
-  public readonly sqlQueries: string[] = [];
-  public readonly version = '65.0';
-  private readonly organizationId = '00D000000000001';
-
-  public constructor(private readonly responses: unknown[]) {}
-
-  public asConnection(): Connection {
-    return this as unknown as Connection;
-  }
-
-  public getAuthInfoFields(): { orgId: string } {
-    return { orgId: this.organizationId };
-  }
-
-  public async request(request: string | RequestDetails): Promise<unknown> {
-    this.requests.push(request);
-    if (typeof request !== 'string' && request.body !== undefined) {
-      const body = requestBodySchema.parse(JSON.parse(request.body) as unknown);
-      this.sqlQueries.push(body.sql);
-    }
-    const response = this.responses.shift();
-    if (response instanceof Error) {
-      throw response;
-    }
-    if (response === undefined) {
-      throw new Error('Unexpected query.');
-    }
-    return response;
-  }
-}
-
-function page(records: Array<Record<string, unknown>>): QueryResponse {
-  const names = [...new Set(records.flatMap((record) => Object.keys(record)))];
-  return {
-    data: records.map((record) => names.map((name) => record[name])),
-    metadata: names.map((name) => ({ name })),
-    returnedRows: records.length,
-    status: {
-      completionStatus: 'Finished',
-      queryId: 'query-1',
-      rowCount: records.length,
-    },
-  };
-}
-
-function dmoNotFound(): Error & { data: Record<string, never>; errorCode: string } {
-  return Object.assign(new Error('Not found'), {
-    data: {},
-    errorCode: 'ERROR_HTTP_404',
-    name: 'ERROR_HTTP_404',
-  });
-}
-
-function standardFlowRecord(): Record<string, unknown> {
-  return { ['std__Id__c']: 'flow-1', ['std__NameInterfaceField__c']: 'Order_Flow' };
-}
-
-function standardVersionRecord(): Record<string, unknown> {
-  return { ['std__Id__c']: 'version-7', ['std__VersionNumber__c']: 7 };
-}
-
-function standardRunRecords(): Array<Record<string, unknown>> {
-  return [
-    {
-      ['std__FlowRunStatus__c']: 'Complete',
-      ['std__ErrorReason__c']: null,
-      executions: 2,
-      averageDurationMilliseconds: 12,
-      minimumDurationMilliseconds: 10,
-      maximumDurationMilliseconds: 14,
-      firstExecution: '2026-07-20T10:00:00.000Z',
-      lastExecution: '2026-07-21T10:00:00.000Z',
-    },
-    {
-      ['std__FlowRunStatus__c']: 'Paused-Error',
-      ['std__ErrorReason__c']: 'InternalError',
-      executions: 1,
-      averageDurationMilliseconds: 20,
-      minimumDurationMilliseconds: 20,
-      maximumDurationMilliseconds: 20,
-      firstExecution: '2026-07-22T10:00:00.000Z',
-      lastExecution: '2026-07-22T10:00:01.000Z',
-    },
-  ];
-}
-
-function legacyFlowRecord(): Record<string, unknown> {
-  return { ['ssot__Id__c']: 'flow-1', ['ssot__Name__c']: 'Order_Flow' };
-}
-
-function legacyVersionRecord(): Record<string, unknown> {
-  return { ['ssot__Id__c']: 'version-7', ['ssot__VersionNumber__c']: 7 };
-}
+import {
+  DataCloudConnectionDouble,
+  dmoNotFound,
+  legacyFlowRecord,
+  legacyVersionRecord,
+  page,
+  standardFlowRecord,
+  standardRunRecords,
+  standardVersionRecord,
+} from '../helpers/data-cloud-metrics-fixtures.js';
 
 async function expectError(promise: Promise<unknown>, name: string): Promise<void> {
   try {
@@ -144,23 +37,42 @@ function metricsRequest(): {
   return { apiName: 'Order_Flow', namespace: null, version: 7, windowDays: 30 };
 }
 
-function expectStandardQueries(connection: DataCloudConnectionDouble): void {
+function expectStandardCapabilities(connection: DataCloudConnectionDouble): void {
   expect(connection.requests[0]).to.equal('/services/data/v65.0/ssot/data-model-objects/std__FlowDmo__dlm');
   expect(connection.requests[1]).to.equal('/services/data/v65.0/ssot/data-model-objects/std__FlowVersionDmo__dlm');
   expect(connection.requests[2]).to.equal('/services/data/v65.0/ssot/data-model-objects/std__FlowRunDmo__dlm');
-  expect(connection.requests[3]).to.include({
+  expect(connection.requests[6]).to.include({
     method: 'POST',
     url: '/services/data/v65.0/ssot/query-sql',
   });
-  expect(connection.sqlQueries[0]).to.contain('FROM std__FlowDmo__dlm');
-  expect(connection.sqlQueries[0]).to.contain("std__InternalOrganizationId__c = '00D000000000001'");
-  expect(connection.sqlQueries[1]).to.contain('std__VersionNumber__c = 7');
-  expect(connection.sqlQueries[2]).to.match(/timestamp with time zone '\d{4}-\d{2}-\d{2}T/u);
+}
+
+function expectStandardSql(connection: DataCloudConnectionDouble): void {
+  expect(connection.sqlQueries[0]).to.contain('FROM "std__FlowDmo__dlm"');
+  expect(connection.sqlQueries[0]).to.contain(
+    "\"std__DataSourceId__c\" IN ('Salesforce_Home', 'Salesforce_00D000000000001')"
+  );
+  expect(connection.sqlQueries[0]).to.contain('"std__DataSourceObjectId__c" = \'FlowRecord\'');
+  expect(connection.sqlQueries[1]).to.contain('"std__VersionNumber__c" = 7');
+  expect(connection.sqlQueries[1]).to.contain('"std__DataSourceObjectId__c" = \'FlowRecordVersion\'');
+  expect(connection.sqlQueries[2]).to.contain('"std__InternalOrganizationId__c" = \'00D000000000001\'');
+  expect(connection.sqlQueries[2]).to.match(
+    /"std__ScheduledDateTime__c" >= timestamp with time zone '\d{4}-\d{2}-\d{2}T/u
+  );
+  expect(connection.sqlQueries[2]).to.contain('GROUP BY "std__FlowRunStatus__c", "std__ErrorReason__c"');
+}
+
+function expectStandardQueries(connection: DataCloudConnectionDouble): void {
+  expectStandardCapabilities(connection);
+  expectStandardSql(connection);
 }
 
 describe('DataCloudFlowMetricsGateway aggregation', (): void => {
   it('uses Connect SQL and aggregates runtime telemetry', async (): Promise<void> => {
     const connection = new DataCloudConnectionDouble([
+      {},
+      {},
+      {},
       {},
       {},
       {},
@@ -183,33 +95,53 @@ describe('DataCloudFlowMetricsGateway aggregation', (): void => {
 });
 
 describe('DataCloudFlowMetricsGateway availability', (): void => {
-  it('does not try a legacy schema when the standard DMO lacks the selected Flow', async (): Promise<void> => {
-    const connection = new DataCloudConnectionDouble([{}, {}, {}, page([])]);
-    await expectError(
-      new DataCloudFlowMetricsGateway(connection.asConnection()).getMetrics(metricsRequest()),
-      'FlowDataCloudMetricsUnavailable'
-    );
-    expect(connection.sqlQueries).to.have.length(1);
+  it('uses populated legacy DMOs when accessible standard DMOs lack the selected Flow', async (): Promise<void> => {
+    const connection = new DataCloudConnectionDouble([
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      page([]),
+      page([legacyFlowRecord()]),
+      page([legacyVersionRecord()]),
+      page([{ ['ssot__FlowRunStatus__c']: 'Complete', ['ssot__ErrorReason__c']: null, executions: '1' }]),
+    ]);
+    const result = await new DataCloudFlowMetricsGateway(connection.asConnection()).getMetrics(metricsRequest());
+    expect(result.executions).to.equal(1);
+    expect(connection.sqlQueries).to.have.length(4);
+    expect(connection.sqlQueries[1]).to.contain('FROM "ssot__Flow__dlm"');
   });
 
   it('does not try a legacy schema for a malformed response', async (): Promise<void> => {
-    const connection = new DataCloudConnectionDouble([{}, {}, {}, { records: [] }]);
+    const connection = new DataCloudConnectionDouble([{}, {}, {}, {}, {}, {}, { records: [] }]);
     await expectError(
       new DataCloudFlowMetricsGateway(connection.asConnection()).getMetrics(metricsRequest()),
       'FlowDataCloudMetricsFailed'
     );
-    expect(connection.requests).to.have.length(4);
+    expect(connection.requests).to.have.length(7);
   });
 
   it('does not try a legacy schema for duplicate Flow records', async (): Promise<void> => {
-    const connection = new DataCloudConnectionDouble([{}, {}, {}, page([standardFlowRecord(), standardFlowRecord()])]);
+    const connection = new DataCloudConnectionDouble([
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      page([standardFlowRecord(), standardFlowRecord()]),
+    ]);
     await expectError(
       new DataCloudFlowMetricsGateway(connection.asConnection()).getMetrics(metricsRequest()),
       'FlowDataCloudMetricsFailed'
     );
-    expect(connection.requests).to.have.length(4);
+    expect(connection.requests).to.have.length(7);
   });
+});
 
+describe('DataCloudFlowMetricsGateway request validation', (): void => {
   it('rejects an invalid runtime metrics request before querying Data Cloud', async (): Promise<void> => {
     const connection = new DataCloudConnectionDouble([]);
     await expectError(
@@ -239,7 +171,7 @@ describe('DataCloudFlowMetricsGateway compatibility', (): void => {
     const result = await new DataCloudFlowMetricsGateway(connection.asConnection()).getMetrics(metricsRequest());
     expect(result.executions).to.equal(1);
     expect(result.averageDurationMilliseconds).to.equal(null);
-    expect(connection.sqlQueries[0]).to.contain('FROM ssot__Flow__dlm');
+    expect(connection.sqlQueries[0]).to.contain('FROM "ssot__Flow__dlm"');
   });
 });
 
@@ -258,7 +190,7 @@ describe('DataCloudFlowMetricsGateway error aliases', (): void => {
     ]);
     const result = await new DataCloudFlowMetricsGateway(connection.asConnection()).getMetrics(metricsRequest());
     expect(result.executions).to.equal(1);
-    expect(connection.sqlQueries[0]).to.contain('FROM ssot__Flow__dlm');
+    expect(connection.sqlQueries[0]).to.contain('FROM "ssot__Flow__dlm"');
   });
 });
 

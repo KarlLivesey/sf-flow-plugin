@@ -15,7 +15,7 @@ import type {
   FlowCheckResult,
 } from '../types/flow-check.js';
 import type { FlowDefinitionGateway, FlowVersionsRequest } from '../types/flow.js';
-import type { FlowDescribeRequest, FlowDescription } from '../types/flow-inspection.js';
+import type { FlowDescribeRequest, FlowDescribeResult, FlowDescription } from '../types/flow-inspection.js';
 import type { FlowLintResult, FlowLintRule } from '../types/flow-lint.js';
 import type { FlowMetricsResult } from '../types/flow-metrics.js';
 import {
@@ -32,15 +32,17 @@ import {
   requiresFlowDescription,
   resolveFlowCheckRoot,
 } from '../utils/flow-check-resolution.js';
+import { boundedMap } from '../utils/bounded-map.js';
 import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
 import { CachingFlowMetadataGateway } from './caching-flow-metadata-gateway.js';
 import { FlowDependenciesService } from './flow-dependencies-service.js';
 import { FlowDescribeService } from './flow-describe-service.js';
 import { FlowLintService } from './flow-lint-service.js';
-import { FlowMetricsService } from './flow-metrics-service.js';
+import { calculateResolvedFlowMetrics } from './flow-metrics-service.js';
 import { FlowVersionsService } from './flow-versions-service.js';
 
 type FlowCheckGateway = FlowDefinitionGateway & FlowDependencyGateway & FlowMetadataGateway;
+const FLOW_LINT_CONCURRENCY = 4;
 
 interface CheckData {
   root: ResolvedCheckFlow;
@@ -62,6 +64,12 @@ interface FlowCheckContext {
 interface LintCheckContext extends FlowCheckContext {
   root: ResolvedCheckFlow;
   flows: ReadonlyArray<FlowDescription>;
+  metadataGateway: FlowMetadataGateway;
+}
+
+interface RunChecksContext extends FlowCheckContext {
+  root: ResolvedCheckFlow;
+  described: FlowDescribeResult | null;
   metadataGateway: FlowMetadataGateway;
 }
 
@@ -201,12 +209,7 @@ export class FlowCheckService {
         ? await resolveFlowCheckRoot(this.gateway, { request, apiName, progress })
         : { apiName: described.apiName, namespace: described.namespace, versionNumber: described.resolvedVersion };
     const descriptions = described?.flows ?? [];
-    const [lintResults, dependencyFindings, versionFindings, metrics] = await Promise.all([
-      this.lintFlows({ ...context, root, flows: descriptions, metadataGateway }),
-      this.checkDependencies(context),
-      this.checkVersions(context),
-      this.calculateMetrics(context, metadataGateway),
-    ]);
+    const analyses = await this.runChecks({ ...context, root, described, metadataGateway });
     const traversalFindings =
       described === null
         ? []
@@ -218,11 +221,27 @@ export class FlowCheckService {
       root,
       descriptions,
       traversalFindings,
-      lintResults,
-      dependencyFindings,
-      versionFindings,
-      metrics,
+      ...analyses,
     });
+  }
+
+  private async runChecks(
+    context: RunChecksContext
+  ): Promise<Pick<CheckData, 'lintResults' | 'dependencyFindings' | 'versionFindings' | 'metrics'>> {
+    const lintResults = await this.lintFlows({
+      ...context,
+      flows: context.described?.flows ?? [],
+    });
+    const dependencyFindings = await this.checkDependencies(context);
+    const versionFindings = await this.checkVersions(context);
+    if (hasCheck(context.checks, 'metrics') && context.described === null) {
+      throw flowCheckFailed('Flow metrics require a resolved Flow traversal.');
+    }
+    const metrics =
+      hasCheck(context.checks, 'metrics') && context.described !== null
+        ? await calculateResolvedFlowMetrics(context.described, context.metadataGateway, context.progress)
+        : null;
+    return { lintResults, dependencyFindings, versionFindings, metrics };
   }
 
   private async lintFlows(context: LintCheckContext): Promise<FlowLintResult[]> {
@@ -235,18 +254,16 @@ export class FlowCheckService {
       flows.length === 0
         ? [{ apiName: root.apiName, namespace: root.namespace, versionNumber: root.versionNumber }]
         : flows;
-    return Promise.all(
-      lintTargets.map(async (flow) =>
-        new FlowLintService(this.gateway, metadataGateway).lint(
-          {
-            apiName: flow.apiName,
-            targetOrg: request.targetOrg,
-            version: flow.versionNumber,
-            ...selection,
-            ...(flow.namespace === null ? {} : { namespace: flow.namespace }),
-          },
-          progress
-        )
+    return boundedMap(lintTargets, FLOW_LINT_CONCURRENCY, async (flow) =>
+      new FlowLintService(this.gateway, metadataGateway).lint(
+        {
+          apiName: flow.apiName,
+          targetOrg: request.targetOrg,
+          version: flow.versionNumber,
+          ...selection,
+          ...(flow.namespace === null ? {} : { namespace: flow.namespace }),
+        },
+        progress
       )
     );
   }
@@ -277,22 +294,5 @@ export class FlowCheckService {
           await new FlowVersionsService(this.gateway).getVersions(versionsRequest(request, apiName), progress)
         )
       : [];
-  }
-
-  private async calculateMetrics(
-    context: FlowCheckContext,
-    metadataGateway: FlowMetadataGateway
-  ): Promise<FlowMetricsResult | null> {
-    const { request, apiName, checks, progress } = context;
-    if (!hasCheck(checks, 'metrics')) {
-      return null;
-    }
-    const metrics = await new FlowMetricsService(this.gateway, undefined, metadataGateway).calculate(
-      { ...describeRequest(request, apiName), dataCloud: false, dataCloudDays: 30 },
-      progress
-    );
-    const { dataCloud: _dataCloud, ...staticMetrics } = metrics;
-    void _dataCloud;
-    return staticMetrics;
   }
 }
