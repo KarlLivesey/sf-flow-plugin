@@ -51,7 +51,7 @@ const actionResultSchema: z.ZodType<FlowActionResult> = z.object({
     .record(z.string(), z.json())
     .nullish()
     .transform((outputValues) => outputValues ?? {}),
-  version: z.number().int().positive().optional(),
+  version: z.number().int().positive(),
 });
 
 const actionResultsSchema = z.array(actionResultSchema);
