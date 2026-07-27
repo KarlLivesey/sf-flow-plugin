@@ -10,6 +10,7 @@ import { z } from 'zod';
 
 import { flowInputInvalid } from '../errors/flow-errors.js';
 import type { JsonObject } from '../types/flow-analysis.js';
+import { parseSafeFlowJson } from './flow-number.js';
 
 const inputObjectSchema: z.ZodType<JsonObject> = z.record(z.string(), z.json());
 const inputDocumentSchema = z.union([inputObjectSchema, z.array(inputObjectSchema).min(1)]);
@@ -38,9 +39,10 @@ export async function readFlowInputs(
     return [parseInputFlags(values)];
   }
   try {
-    const document = inputDocumentSchema.parse(JSON.parse(await readFile(inputFile, 'utf8')) as unknown);
+    const document = inputDocumentSchema.parse(parseSafeFlowJson(await readFile(inputFile, 'utf8')));
     return Array.isArray(document) ? document : [document];
   } catch (error: unknown) {
-    throw flowInputInvalid(`Could not read valid Flow inputs from "${inputFile}".`, error);
+    const detail = error instanceof RangeError ? ` ${error.message}` : '';
+    throw flowInputInvalid(`Could not read valid Flow inputs from "${inputFile}".${detail}`, error);
   }
 }

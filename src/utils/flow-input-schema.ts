@@ -9,13 +9,17 @@ import { z } from 'zod';
 import { flowInputInvalid } from '../errors/flow-errors.js';
 import type { JsonObject, JsonValue } from '../types/flow-analysis.js';
 import type { FlowVariableSummary } from '../types/flow-inspection.js';
+import { parseSafeFlowJson, preprocessFlowNumber } from './flow-number.js';
+
+const NUMBER_POLICY_MESSAGE =
+  'Use decimal notation, a safe whole number, or a fractional value with at most 15 significant digits.';
 
 function parseJsonString(value: unknown): unknown {
   if (typeof value !== 'string') {
     return value;
   }
   try {
-    return JSON.parse(value) as unknown;
+    return parseSafeFlowJson(value);
   } catch {
     return value;
   }
@@ -34,11 +38,20 @@ function booleanSchema(): z.ZodType<JsonValue> {
 }
 
 function numberSchema(integer: boolean): z.ZodType<JsonValue> {
-  const numeric = z.preprocess(
-    (value) => (typeof value === 'string' && value.trim().length > 0 ? Number(value) : value),
-    z.number().finite()
-  );
-  return integer ? numeric.pipe(z.number().int().safe()) : numeric;
+  return z.unknown().transform((value, context) => {
+    const parsed = preprocessFlowNumber(value, integer);
+    const valid =
+      typeof parsed === 'number' &&
+      Number.isFinite(parsed) &&
+      Math.abs(parsed) <= Number.MAX_SAFE_INTEGER &&
+      !Object.is(parsed, -0) &&
+      (!integer || Number.isSafeInteger(parsed));
+    if (!valid) {
+      context.addIssue({ code: 'custom', message: NUMBER_POLICY_MESSAGE });
+      return z.NEVER;
+    }
+    return parsed;
+  });
 }
 
 const TEXT_SCHEMA: z.ZodType<JsonValue> = z.string();

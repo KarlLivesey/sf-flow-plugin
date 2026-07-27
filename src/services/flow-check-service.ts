@@ -32,6 +32,7 @@ import {
   requiresFlowDescription,
   resolveFlowCheckRoot,
 } from '../utils/flow-check-resolution.js';
+import { AsyncTaskLimiter } from '../utils/async-task-limiter.js';
 import { boundedMap } from '../utils/bounded-map.js';
 import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
 import { CachingFlowMetadataGateway } from './caching-flow-metadata-gateway.js';
@@ -250,12 +251,13 @@ export class FlowCheckService {
       return [];
     }
     const selection = lintRules(checks);
+    const requestLimiter = new AsyncTaskLimiter(FLOW_LINT_CONCURRENCY);
     const lintTargets =
       flows.length === 0
         ? [{ apiName: root.apiName, namespace: root.namespace, versionNumber: root.versionNumber }]
         : flows;
     return boundedMap(lintTargets, FLOW_LINT_CONCURRENCY, async (flow) =>
-      new FlowLintService(this.gateway, metadataGateway).lint(
+      new FlowLintService(this.gateway, metadataGateway, requestLimiter).lint(
         {
           apiName: flow.apiName,
           targetOrg: request.targetOrg,

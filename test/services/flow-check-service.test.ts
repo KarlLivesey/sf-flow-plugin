@@ -8,6 +8,7 @@ import { expect } from 'chai';
 
 import { FlowCheckService } from '../../src/services/flow-check-service.js';
 import type { FlowCheckRequest } from '../../src/types/flow-check.js';
+import type { FlowDefinition } from '../../src/types/flow.js';
 import { nestedFlowGateway, subflowMetadata } from '../helpers/flow-inspection-fixtures.js';
 
 function request(overrides: Partial<FlowCheckRequest> = {}): FlowCheckRequest {
@@ -69,6 +70,35 @@ describe('FlowCheckService', (): void => {
     const result = await new FlowCheckService(gateway).check(request({ checks: ['dependencies'] }));
     expect(result.flows[0]).to.include({ apiName: 'Flow_A', resolvedVersion: 1 });
     expect(result.flows[0]?.contracts).to.deep.equal([]);
+  });
+});
+
+describe('FlowCheckService lint concurrency', (): void => {
+  it('bounds referenced-subflow definition lookups across Flow linting', async (): Promise<void> => {
+    const gateway = nestedFlowGateway();
+    gateway.metadata.set('301000000000000001', {
+      subflows: Array.from({ length: 12 }, (_, index) => ({
+        name: `Call_Missing_${index}`,
+        flowName: `Missing_Child_${index}`,
+      })),
+    });
+    const originalFindDefinitions = gateway.findDefinitions.bind(gateway);
+    let active = 0;
+    let maximumActive = 0;
+    gateway.findDefinitions = async (lookup): Promise<ReadonlyArray<FlowDefinition>> => {
+      active += 1;
+      maximumActive = Math.max(maximumActive, active);
+      await new Promise((resolve) => {
+        setImmediate(resolve);
+      });
+      try {
+        return await originalFindDefinitions(lookup);
+      } finally {
+        active -= 1;
+      }
+    };
+    await new FlowCheckService(gateway).check(request({ checks: ['lint', 'subflows'] }));
+    expect(maximumActive).to.equal(4);
   });
 });
 

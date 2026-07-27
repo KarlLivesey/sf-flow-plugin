@@ -10,6 +10,10 @@ Up to 200 input objects are sent together in one Flow action request. The comman
 the request and reports the version returned by Salesforce. Another activation can still occur between that check and execution.
 The reported duration measures that complete REST action request, not each individual Flow interview.
 
+Numeric inputs use JSON decimal notation. Hexadecimal, `NaN`, `Infinity`, negative zero, whole values outside JavaScript's safe
+integer range, and fractional values with more than 15 significant digits are rejected before execution. Raw numeric tokens in
+`--input-file` JSON and JSON-formatted collection or record inputs are checked before JavaScript number conversion.
+
 Input and output properties with names that look sensitive are redacted on a best-effort basis. Salesforce error message text is
 always withheld, while its stable status code is retained when available. Arbitrary values under other property names remain visible
 in terminal, JSON and output-file results.
