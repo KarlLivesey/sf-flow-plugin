@@ -666,7 +666,11 @@ sf flow run \
   [--input NAME=VALUE ...] \
   [--input-file FILE] \
   [--output-file FILE] \
-  [--dry-run] \
+  [--dry-run|--rollback] \
+  [--log-level basic|detailed|finest] \
+  [--show-values] \
+  [--raw-log-file FILE] \
+  [--wait MINUTES] \
   [--confirm] \
   [--fail-on-flow-error] \
   [--namespace NAMESPACE] \
@@ -703,9 +707,52 @@ arbitrary values under other property names can still appear in terminal, JSON a
 failure can leave execution outcome unknown, so the command does not automatically retry a potentially non-idempotent
 Flow.
 
-`sf flow debug` is intentionally not included because Salesforce does not expose a verified supported interface for
-the requested arbitrary-version tracing, rollback, run-as and record-trigger simulation contract. Flow tests are not
-duplicated either; use Salesforce CLI's existing `sf flow run test` and `sf flow get test` commands.
+### Rollback debug execution
+
+```bash
+sf flow run \
+  --api-name Calculate_Discount \
+  --rollback \
+  [--input NAME=VALUE ...] \
+  [--input-file FILE] \
+  [--log-level basic|detailed|finest] \
+  [--show-values] \
+  [--raw-log-file FILE] \
+  [--output-file FILE] \
+  [--wait MINUTES] \
+  [--confirm] \
+  [--fail-on-flow-error] \
+  [--namespace NAMESPACE] \
+  [--target-org ORG] \
+  [--api-version VERSION] \
+  [--json]
+```
+
+`sf flow run --rollback` runs one active, directly invocable autolaunched Flow through Execute Anonymous Apex,
+retrieves the related Salesforce ApexLog using an exact per-run correlation marker and displays its Flow events. It
+accepts one input object, validates declared inputs before execution and checks that the active Flow version has not
+changed during preflight.
+
+The generated Apex establishes a savepoint before starting the Flow and rolls back in a `finally` block, then emits
+markers that the command verifies in the correlated log. Rollback affects database work in the current transaction
+only: it cannot reverse external callouts or effects committed by another transaction, and Flow actions that require
+a separate transaction are not supported by rollback-mode execution. Establishing the savepoint can also prevent
+callouts from running. Production execution therefore requires `--confirm`.
+
+The command temporarily creates a DebugLevel and creates or temporarily updates the authenticated user's active
+`USER_DEBUG` TraceFlag. Existing trace settings are snapshotted and restored, and temporary tracing records are
+removed after the operation. Incomplete cleanup fails explicitly and identifies the temporary record that may need
+manual removal.
+
+Parsed variable, assignment, rule and error values are redacted by default. `--show-values` reveals those values in
+terminal and structured output. `--raw-log-file` writes the complete, unredacted Salesforce log and can therefore
+contain sensitive values. `--output-file` writes the structured result, while `--fail-on-flow-error` gives Flow
+runtime failures a non-zero CI exit status.
+
+Rollback mode supports the active version of an autolaunched Flow without a record trigger. It does not use private
+Flow Builder endpoints and does not simulate record-triggered, scheduled, screen, wait-element, arbitrary-version or
+run-as-user debugging. Salesforce CLI's existing `sf flow run test` and `sf flow get test` commands remain the Flow
+test runner.
 
 ## `sf flow deactivate`
 
