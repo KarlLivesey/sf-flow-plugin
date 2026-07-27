@@ -36,8 +36,9 @@ export function flowDebugFailed(message: string, cause?: unknown): SfError {
 export function flowDebugPermissionDenied(apiName: string, cause?: unknown): SfError {
   return createFlowError({
     code: 'FlowDebugPermissionDenied',
-    message: `The authenticated user cannot create tracing configuration or debug Flow "${apiName}".`,
-    action: 'Grant the user Author Apex and the permissions required to manage debug logs, then try again.',
+    message: `The authenticated user does not have all permissions required to debug Flow "${apiName}".`,
+    action:
+      'Grant Author Apex, temporary DebugLevel and TraceFlag management, and ApexLog query and retrieval access, then try again.',
     ...(cause === undefined ? {} : { cause }),
   });
 }
@@ -60,11 +61,12 @@ export function flowDebugCleanupFailed(message: string, cause?: unknown): SfErro
   });
 }
 
-export function flowDebugRollbackFailed(apiName: string): SfError {
+export function flowDebugRollbackFailed(apiName: string, logId?: string): SfError {
+  const logContext = logId === undefined ? '' : ` ApexLog ID: ${logId}.`;
   return createFlowError({
     code: 'FlowDebugRollbackFailed',
-    message: `Flow "${apiName}" finished without the expected database rollback confirmation marker.`,
+    message: `Flow "${apiName}" finished without the expected database rollback confirmation marker.${logContext}`,
     action:
-      'Treat the execution outcome as unsafe and inspect the retrieved debug log before running the command again.',
+      'Treat the execution outcome as unsafe and retrieve the identified log with sf apex get log before running the command again.',
   });
 }

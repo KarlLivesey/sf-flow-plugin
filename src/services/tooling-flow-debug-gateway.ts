@@ -20,10 +20,12 @@ import type {
   FlowDebugTransportProgress,
   FlowDebugTransportResult,
 } from '../types/flow-debug.js';
-import { createFlowDebugApex } from '../utils/flow-debug-apex.js';
+import { createBoundedFlowDebugApex } from '../utils/flow-debug-apex.js';
+import { qualifiedFlowName } from '../utils/flow-state.js';
 import { ToolingFlowDebugLog } from './tooling-flow-debug-log.js';
 import {
   apexExecutionSchema,
+  debugLogPermissionSchema,
   debugObjectPermissionSchema,
   identitySchema,
   isPermissionFailure,
@@ -34,6 +36,8 @@ import { ToolingFlowDebugTrace, type TraceState } from './tooling-flow-debug-tra
 
 interface ExecutionContext {
   request: FlowDebugExecutionRequest;
+  apiName: string;
+  apexSource: string;
   correlationId: string;
   userId: string;
   startedAt: Date;
@@ -48,15 +52,18 @@ interface CapturedErrors {
 
 type CapturedOperation = { success: true; result: FlowDebugTransportResult } | { success: false; error: Error };
 
-function hasDebugPermissions(debugLevel: unknown, traceFlag: unknown): boolean {
+function hasDebugPermissions(debugLevel: unknown, traceFlag: unknown, apexLog: unknown): boolean {
   const debugLevelAccess = debugObjectPermissionSchema.parse(debugLevel);
   const traceFlagAccess = debugObjectPermissionSchema.parse(traceFlag);
+  const apexLogAccess = debugLogPermissionSchema.parse(apexLog);
   return (
     debugLevelAccess.createable &&
     debugLevelAccess.deletable &&
     traceFlagAccess.createable &&
     traceFlagAccess.updateable &&
-    traceFlagAccess.deletable
+    traceFlagAccess.deletable &&
+    apexLogAccess.queryable &&
+    apexLogAccess.retrieveable
   );
 }
 
@@ -64,14 +71,33 @@ function normaliseError(error: unknown, message: string): Error {
   return error instanceof Error ? error : flowDebugFailed(message);
 }
 
+function reportProgress(
+  progress: FlowDebugTransportProgress,
+  stage: Parameters<FlowDebugTransportProgress>[0],
+  detail: string
+): void {
+  try {
+    progress(stage, detail);
+  } catch {
+    throw flowDebugFailed('Could not report Flow debug progress.');
+  }
+}
+
+function cleanupFailureDetail(error: Error): string {
+  return error.name === 'FlowDebugCleanupFailed' ? ` ${error.message}` : transportStatusSuffix(error);
+}
+
+function completedLogContext(operation: CapturedOperation): string {
+  return operation.success ? ` ApexLog ID: ${operation.result.log.id}.` : '';
+}
+
 function resolveCapturedOperation(context: CapturedErrors): FlowDebugTransportResult {
   if (context.cleanupError !== undefined) {
     throw flowDebugCleanupFailed(
-      `Could not completely restore tracing after running Flow "${
-        context.apiName
-      }" with rollback. Temporary DebugLevel ID: ${context.trace.debugLevelId}.${transportStatusSuffix(
-        context.cleanupError
-      )}`
+      `Could not completely restore tracing after running Flow "${context.apiName}" with rollback. ` +
+        `Temporary DebugLevel ID: ${context.trace.debugLevelId}; TraceFlag ID: ${context.trace.traceFlagId}.` +
+        completedLogContext(context.operation) +
+        cleanupFailureDetail(context.cleanupError)
     );
   }
   if (!context.operation.success) {
@@ -96,7 +122,9 @@ export class ToolingFlowDebugGateway {
       );
       return result.records[0]?.IsSandbox === false;
     } catch (error: unknown) {
-      throw flowQueryFailed('Could not determine whether the target org is a production org.', error);
+      throw flowQueryFailed(
+        `Could not determine whether the target org is a production org.${transportStatusSuffix(error)}`
+      );
     }
   }
 
@@ -105,8 +133,9 @@ export class ToolingFlowDebugGateway {
       const descriptions = await Promise.all([
         this.connection.tooling.describe('DebugLevel'),
         this.connection.tooling.describe('TraceFlag'),
+        this.connection.tooling.describe('ApexLog'),
       ]);
-      if (!hasDebugPermissions(descriptions[0], descriptions[1])) {
+      if (!hasDebugPermissions(descriptions[0], descriptions[1], descriptions[2])) {
         throw flowDebugPermissionDenied(apiName);
       }
     } catch (error: unknown) {
@@ -124,12 +153,21 @@ export class ToolingFlowDebugGateway {
     progress: FlowDebugTransportProgress = (): void => undefined
   ): Promise<FlowDebugTransportResult> {
     const context = await this.createContext(request);
-    progress('configuring-trace', `${request.apiName} (${request.logLevel})`);
+    reportProgress(progress, 'configuring-trace', `${context.apiName} (${request.logLevel})`);
     const trace = await this.traces.open(context.userId, request);
-    const operation = await this.captureOperation(context, progress);
-    progress('restoring-trace', request.apiName);
+    let operation = await this.captureOperation(context, progress);
+    try {
+      reportProgress(progress, 'restoring-trace', context.apiName);
+    } catch (error: unknown) {
+      if (operation.success) {
+        operation = {
+          success: false,
+          error: normaliseError(error, 'Could not report Flow debug progress.'),
+        };
+      }
+    }
     const cleanupError = await this.captureCleanup(trace);
-    return resolveCapturedOperation({ apiName: request.apiName, operation, cleanupError, trace });
+    return resolveCapturedOperation({ apiName: context.apiName, operation, cleanupError, trace });
   }
 
   private async captureCleanup(trace: TraceState): Promise<Error | undefined> {
@@ -156,17 +194,22 @@ export class ToolingFlowDebugGateway {
   }
 
   private async createContext(request: FlowDebugExecutionRequest): Promise<ExecutionContext> {
+    const correlationId = randomUUID();
+    const apexSource = createBoundedFlowDebugApex({ correlationId, ...request });
+    const apiName = qualifiedFlowName(request.apiName, request.namespace);
     try {
       const identity = identitySchema.parse(await this.connection.identity());
       return {
         request,
-        correlationId: randomUUID(),
+        apiName,
+        apexSource,
+        correlationId,
         userId: identity.userId,
         startedAt: new Date(Date.now() - 5000),
       };
     } catch (error: unknown) {
       if (isPermissionFailure(error)) {
-        throw flowDebugPermissionDenied(request.apiName);
+        throw flowDebugPermissionDenied(apiName);
       }
       throw flowDebugFailed(`Could not identify the authenticated Salesforce user.${transportStatusSuffix(error)}`);
     }
@@ -176,17 +219,17 @@ export class ToolingFlowDebugGateway {
     context: ExecutionContext,
     progress: FlowDebugTransportProgress
   ): Promise<FlowDebugTransportResult> {
-    progress('executing-apex', `${context.request.apiName} (rollback)`);
+    reportProgress(progress, 'executing-apex', `${context.apiName} (rollback)`);
     const execution = await this.executeAnonymous(context);
     if (!execution.compiled) {
       throw flowDebugFailed(
         `Salesforce could not compile the generated Flow debug transaction at line ${execution.line}, column ${execution.column}.`
       );
     }
-    progress('retrieving-log', `${context.request.apiName} (${context.correlationId})`);
+    reportProgress(progress, 'retrieving-log', `${context.apiName} (${context.correlationId})`);
     const log = await this.logs.find({
       userId: context.userId,
-      apiName: context.request.apiName,
+      apiName: context.apiName,
       correlationId: context.correlationId,
       startedAt: context.startedAt,
       waitMilliseconds: context.request.waitMilliseconds,
@@ -196,25 +239,15 @@ export class ToolingFlowDebugGateway {
 
   private async executeAnonymous(context: ExecutionContext): Promise<FlowDebugApexResult> {
     try {
-      return apexExecutionSchema.parse(
-        await this.connection.tooling.executeAnonymous(
-          createFlowDebugApex({
-            correlationId: context.correlationId,
-            apiName: context.request.apiName,
-            namespace: context.request.namespace,
-            input: context.request.input,
-            outputVariables: context.request.outputVariables,
-          })
-        )
-      );
+      return apexExecutionSchema.parse(await this.connection.tooling.executeAnonymous(context.apexSource));
     } catch (error: unknown) {
       if (isPermissionFailure(error)) {
-        throw flowDebugPermissionDenied(context.request.apiName);
+        throw flowDebugPermissionDenied(context.apiName);
       }
       throw flowDebugFailed(
-        `Salesforce could not execute the rollback transaction for Flow "${
-          context.request.apiName
-        }".${transportStatusSuffix(error)}`
+        `Salesforce could not execute the rollback transaction for Flow "${context.apiName}".${transportStatusSuffix(
+          error
+        )}`
       );
     }
   }

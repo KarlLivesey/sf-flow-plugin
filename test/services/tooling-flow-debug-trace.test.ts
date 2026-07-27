@@ -51,7 +51,17 @@ describe('ToolingFlowDebugTrace new trace lifecycle', (): void => {
     const fake = connection([]);
     const manager = new ToolingFlowDebugTrace(fake.connection);
     const trace = await manager.open('005000000000001', request());
-    expect(trace).to.deep.equal({ debugLevelId: '7dl-temp', traceFlagId: '7tf-temp', restore: null });
+    expect(trace).to.deep.include({ debugLevelId: '7dl-temp', traceFlagId: '7tf-temp', restore: null });
+    fake.query.onSecondCall().resolves({
+      records: [
+        {
+          Id: trace.traceFlagId,
+          DebugLevelId: trace.temporary.debugLevelId,
+          StartDate: trace.temporary.startDate.replace('Z', '+00:00'),
+          ExpirationDate: trace.temporary.expirationDate.replace('Z', '+00:00'),
+        },
+      ],
+    });
     await manager.close(trace);
     expect(fake.create.firstCall.args[0]).to.equal('DebugLevel');
     expect(fake.create.secondCall.args[0]).to.equal('TraceFlag');
@@ -77,6 +87,16 @@ describe('ToolingFlowDebugTrace existing trace lifecycle', (): void => {
       startDate: '2026-07-27T09:00:00.000Z',
       expirationDate: '2026-07-27T12:00:00.000Z',
     });
+    fake.query.onSecondCall().resolves({
+      records: [
+        {
+          Id: trace.traceFlagId,
+          DebugLevelId: trace.temporary.debugLevelId,
+          StartDate: trace.temporary.startDate,
+          ExpirationDate: trace.temporary.expirationDate,
+        },
+      ],
+    });
     await manager.close(trace);
     expect(fake.update.secondCall.args[0]).to.equal('TraceFlag');
     expect(fake.update.secondCall.args[1]).to.deep.equal({
@@ -87,6 +107,43 @@ describe('ToolingFlowDebugTrace existing trace lifecycle', (): void => {
     });
     expect(fake.destroy.calledWith('TraceFlag', '7tf-existing')).to.equal(false);
     expect(fake.destroy.calledWith('DebugLevel', '7dl-temp')).to.equal(true);
+  });
+});
+
+describe('ToolingFlowDebugTrace concurrency safety', (): void => {
+  it('does not overwrite a concurrently changed trace flag', async (): Promise<void> => {
+    const fake = connection([
+      {
+        Id: '7tf-existing',
+        DebugLevelId: '7dl-existing',
+        StartDate: '2026-07-27T09:00:00.000Z',
+        ExpirationDate: '2026-07-27T12:00:00.000Z',
+      },
+    ]);
+    const manager = new ToolingFlowDebugTrace(fake.connection);
+    const trace = await manager.open('005000000000001', request());
+    fake.query.onSecondCall().resolves({
+      records: [
+        {
+          Id: '7tf-existing',
+          DebugLevelId: '7dl-other',
+          StartDate: trace.temporary.startDate,
+          ExpirationDate: trace.temporary.expirationDate,
+        },
+      ],
+    });
+    const error = await manager.close(trace).catch((caught: unknown) => caught);
+    expect(error).to.have.property('name', 'FlowDebugCleanupFailed');
+    expect(fake.update.calledOnce).to.equal(true);
+    expect(fake.destroy.called).to.equal(false);
+  });
+
+  it('selects only a trace flag that is active now', async (): Promise<void> => {
+    const fake = connection([]);
+    const manager = new ToolingFlowDebugTrace(fake.connection);
+    await manager.open('005000000000001', request());
+    expect(fake.query.firstCall.args[0]).to.include('AND StartDate <=');
+    expect(fake.query.firstCall.args[0]).to.include('AND ExpirationDate >=');
   });
 });
 

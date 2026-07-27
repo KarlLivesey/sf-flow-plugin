@@ -4,7 +4,7 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -87,6 +87,11 @@ async function fileExists(file: string): Promise<boolean> {
   }
 }
 
+async function expectRejectedDestination(file: string, message: string): Promise<void> {
+  const error = await validateFlowReportDestination(file).catch((caught: unknown) => caught);
+  expect(error).to.be.an('error').with.property('message').that.contains(message);
+}
+
 function recursiveDependencies(): FlowDependenciesResult {
   const base = dependencies.dependencies[0];
   if (base === undefined) {
@@ -140,7 +145,9 @@ describe('Flow report destination preflight', (): void => {
     const directory = await mkdtemp(join(tmpdir(), 'sf-flow-report-'));
     const output = join(directory, 'nested', 'debug.log');
     try {
-      expect(await validateFlowReportDestination(output)).to.equal(output);
+      expect(await validateFlowReportDestination(output)).to.equal(
+        join(await realpath(directory), 'nested', 'debug.log')
+      );
       expect(await fileExists(output)).to.equal(false);
     } finally {
       await rm(directory, { recursive: true });
@@ -158,6 +165,31 @@ describe('Flow report destination preflight', (): void => {
       } catch (error: unknown) {
         expect(error).to.be.an('error').with.property('message').that.contains('not a directory');
       }
+    } finally {
+      await rm(directory, { recursive: true });
+    }
+  });
+});
+
+describe('Flow report symlink preflight', (): void => {
+  it('rejects a dangling destination symlink', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'sf-flow-report-'));
+    const output = join(directory, 'debug.log');
+    try {
+      await symlink(join(directory, 'missing', 'debug.log'), output);
+      const error = await validateFlowReportDestination(output).catch((caught: unknown) => caught);
+      expect(error).to.be.an('error').with.property('message').that.contains('unresolved symbolic link');
+    } finally {
+      await rm(directory, { recursive: true });
+    }
+  });
+
+  it('rejects a dangling symlink in the destination ancestry', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'sf-flow-report-link-parent-'));
+    const parent = join(directory, 'dangling');
+    try {
+      await symlink(join(directory, 'missing'), parent);
+      await expectRejectedDestination(join(parent, 'nested', 'report.json'), 'unresolved symbolic link');
     } finally {
       await rm(directory, { recursive: true });
     }

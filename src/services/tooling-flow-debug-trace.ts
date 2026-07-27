@@ -11,6 +11,8 @@ import type { z } from 'zod';
 
 import { flowDebugCleanupFailed, flowDebugFailed, flowDebugPermissionDenied } from '../errors/flow-errors.js';
 import type { FlowDebugExecutionRequest } from '../types/flow-debug.js';
+import { parseSalesforceDateTime } from '../utils/flow-date.js';
+import { qualifiedFlowName } from '../utils/flow-state.js';
 import {
   deleteResultSchema,
   isPermissionCode,
@@ -25,6 +27,7 @@ export interface TraceState {
   debugLevelId: string;
   traceFlagId: string;
   restore: TraceFlagSnapshot | null;
+  temporary: TraceFlagSnapshot;
 }
 
 interface TraceFlagSnapshot {
@@ -70,16 +73,33 @@ function snapshot(record: TraceFlagRecord): TraceFlagSnapshot {
   };
 }
 
+function temporarySnapshot(change: TraceChange): TraceFlagSnapshot {
+  return {
+    debugLevelId: change.debugLevelId,
+    startDate: change.traceDates.startDate,
+    expirationDate: change.traceDates.expirationDate,
+  };
+}
+
+function traceMatches(record: TraceFlagRecord, expected: TraceFlagSnapshot): boolean {
+  return (
+    record.DebugLevelId === expected.debugLevelId &&
+    parseSalesforceDateTime(record.StartDate) === parseSalesforceDateTime(expected.startDate) &&
+    parseSalesforceDateTime(record.ExpirationDate) === parseSalesforceDateTime(expected.expirationDate)
+  );
+}
+
 export class ToolingFlowDebugTrace {
   public constructor(private readonly connection: Connection) {}
 
   public async open(userId: string, request: FlowDebugExecutionRequest): Promise<TraceState> {
     let debugLevelId: string | undefined;
+    const apiName = qualifiedFlowName(request.apiName, request.namespace);
     try {
       debugLevelId = await this.createDebugLevel(request);
       return await this.upsertTraceFlag(userId, debugLevelId, request);
     } catch (error: unknown) {
-      return this.handleOpenFailure(error, debugLevelId, request.apiName);
+      return this.handleOpenFailure(error, debugLevelId, apiName);
     }
   }
 
@@ -123,7 +143,11 @@ export class ToolingFlowDebugTrace {
     );
     return result.success
       ? result.id
-      : saveFailure(request.apiName, `create a temporary DebugLevel for "${request.apiName}"`, result);
+      : saveFailure(
+          qualifiedFlowName(request.apiName, request.namespace),
+          `create a temporary DebugLevel for "${qualifiedFlowName(request.apiName, request.namespace)}"`,
+          result
+        );
   }
 
   private async createTraceFlag(userId: string, change: TraceChange): Promise<TraceState> {
@@ -137,18 +161,35 @@ export class ToolingFlowDebugTrace {
       })
     );
     return result.success
-      ? { debugLevelId: change.debugLevelId, traceFlagId: result.id, restore: null }
+      ? {
+          debugLevelId: change.debugLevelId,
+          traceFlagId: result.id,
+          restore: null,
+          temporary: temporarySnapshot(change),
+        }
       : saveFailure(change.apiName, `create a temporary TraceFlag for "${change.apiName}"`, result);
   }
 
   private async findActiveTraceFlag(userId: string): Promise<TraceFlagRecord | undefined> {
+    const now = new Date().toISOString();
     const query = [
       'SELECT Id, DebugLevelId, StartDate, ExpirationDate',
       'FROM TraceFlag',
       `WHERE TracedEntityId = '${userId}'`,
       "AND LogType = 'USER_DEBUG'",
-      `AND ExpirationDate >= ${new Date().toISOString()}`,
+      `AND StartDate <= ${now}`,
+      `AND ExpirationDate >= ${now}`,
       'ORDER BY ExpirationDate DESC LIMIT 1',
+    ].join(' ');
+    return traceFlagQuerySchema.parse(await this.connection.tooling.query(query)).records[0];
+  }
+
+  private async findTraceFlag(traceFlagId: string): Promise<TraceFlagRecord | undefined> {
+    const query = [
+      'SELECT Id, DebugLevelId, StartDate, ExpirationDate',
+      'FROM TraceFlag',
+      `WHERE Id = '${traceFlagId}'`,
+      'LIMIT 1',
     ].join(' ');
     return traceFlagQuerySchema.parse(await this.connection.tooling.query(query)).records[0];
   }
@@ -163,6 +204,15 @@ export class ToolingFlowDebugTrace {
   }
 
   private async restoreOrDeleteTraceFlag(trace: TraceState): Promise<void> {
+    const current = await this.findTraceFlag(trace.traceFlagId);
+    if (current === undefined && trace.restore === null) {
+      return;
+    }
+    if (current === undefined || !traceMatches(current, trace.temporary)) {
+      throw flowDebugCleanupFailed(
+        `TraceFlag "${trace.traceFlagId}" changed after temporary tracing was configured; its current settings were not overwritten.`
+      );
+    }
     const result =
       trace.restore === null
         ? deleteResultSchema.parse(await this.connection.tooling.destroy('TraceFlag', trace.traceFlagId))
@@ -189,7 +239,12 @@ export class ToolingFlowDebugTrace {
       })
     );
     return result.success
-      ? { debugLevelId: change.debugLevelId, traceFlagId: existing.Id, restore: snapshot(existing) }
+      ? {
+          debugLevelId: change.debugLevelId,
+          traceFlagId: existing.Id,
+          restore: snapshot(existing),
+          temporary: temporarySnapshot(change),
+        }
       : saveFailure(change.apiName, `temporarily update TraceFlag "${existing.Id}"`, result);
   }
 
@@ -202,7 +257,7 @@ export class ToolingFlowDebugTrace {
     const change = {
       debugLevelId,
       traceDates: dates(request.waitMilliseconds),
-      apiName: request.apiName,
+      apiName: qualifiedFlowName(request.apiName, request.namespace),
     };
     return existing === undefined ? this.createTraceFlag(userId, change) : this.updateTraceFlag(existing, change);
   }

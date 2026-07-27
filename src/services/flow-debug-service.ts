@@ -6,9 +6,15 @@
  */
 import { flowDebugFailed, flowInputInvalid, flowProductionConfirmationRequired } from '../errors/flow-errors.js';
 import type { FlowMetadataGateway, JsonObject } from '../types/flow-analysis.js';
-import type { FlowDebugArtifact, FlowDebugGateway, FlowDebugTransportStage } from '../types/flow-debug.js';
+import type {
+  FlowDebugArtifact,
+  FlowDebugGateway,
+  FlowDebugTransportResult,
+  FlowDebugTransportStage,
+} from '../types/flow-debug.js';
 import type { FlowRollbackRequest, FlowRunResult } from '../types/flow-invocation.js';
 import type { FlowDefinition, FlowDefinitionGateway, FlowDefinitionLookup, FlowVersion } from '../types/flow.js';
+import { createBoundedFlowDebugApex } from '../utils/flow-debug-apex.js';
 import { parseFlowDebugLog } from '../utils/flow-debug-log.js';
 import {
   createFlowDebugArtifact,
@@ -45,7 +51,7 @@ interface ValidatedDebugInput {
   outputVariables: string[];
 }
 
-const MAX_DEBUG_INPUT_BYTES = 20_000;
+const SIZE_CHECK_CORRELATION_ID = '00000000-0000-0000-0000-000000000000';
 const transportStages: Readonly<Record<FlowDebugTransportStage, FlowProgressStage>> = {
   'configuring-trace': 'configuring-trace',
   'executing-apex': 'invoking-flow',
@@ -62,7 +68,9 @@ function createLookup(request: FlowRollbackRequest): FlowDefinitionLookup {
 function activeVersion(definition: FlowDefinition, versions: ReadonlyArray<FlowVersion>): FlowVersion {
   const version = versions.find((candidate) => candidate.id === definition.activeVersionId);
   if (version === undefined) {
-    throw flowDebugFailed(`Flow "${definition.apiName}" does not have an active version.`);
+    throw flowDebugFailed(
+      `Flow "${qualifiedFlowName(definition.apiName, definition.namespace)}" does not have an active version.`
+    );
   }
   return version;
 }
@@ -84,13 +92,14 @@ function assertDebuggable(flow: ResolvedDebugFlow): void {
   }
 }
 
-function validateInputSize(input: JsonObject): void {
-  const bytes = Buffer.byteLength(JSON.stringify(input), 'utf8');
-  if (bytes > MAX_DEBUG_INPUT_BYTES) {
-    throw flowInputInvalid(
-      `Flow debug input must be at most ${MAX_DEBUG_INPUT_BYTES} UTF-8 bytes; received ${bytes} bytes.`
-    );
-  }
+function validateTransportSize(flow: ResolvedDebugFlow, input: JsonObject, outputVariables: string[]): void {
+  createBoundedFlowDebugApex({
+    correlationId: SIZE_CHECK_CORRELATION_ID,
+    apiName: flow.definition.apiName,
+    namespace: flow.definition.namespace,
+    input,
+    outputVariables,
+  });
 }
 
 function validateDebugInput(
@@ -104,9 +113,19 @@ function validateDebugInput(
   if (input === undefined) {
     throw flowInputInvalid('Flow debug requires one input object.');
   }
-  validateInputSize(input);
   const outputVariables = description.variables.filter((variable) => variable.output).map((variable) => variable.name);
+  validateTransportSize(flow, input, outputVariables);
   return { input, outputVariables };
+}
+
+function parseDebugLog(transport: FlowDebugTransportResult, showValues: boolean): ReturnType<typeof parseFlowDebugLog> {
+  try {
+    return parseFlowDebugLog(transport.rawLog, transport.correlationId, showValues);
+  } catch {
+    throw flowDebugFailed(
+      `The correlated Salesforce debug log was malformed or incomplete. ApexLog ID: ${transport.log.id}.`
+    );
+  }
 }
 
 async function assertActiveVersionUnchanged(gateway: FlowDefinitionGateway, flow: ResolvedDebugFlow): Promise<void> {
@@ -160,7 +179,7 @@ export class FlowDebugService {
     return {
       transport,
       durationMilliseconds: Math.round(performance.now() - started),
-      parsed: parseFlowDebugLog(transport.rawLog, transport.correlationId, request.showValues),
+      parsed: parseDebugLog(transport, request.showValues),
     };
   }
 

@@ -6,7 +6,7 @@
  */
 import { expect } from 'chai';
 
-import { createFlowDebugApex } from '../../src/utils/flow-debug-apex.js';
+import { createBoundedFlowDebugApex, createFlowDebugApex } from '../../src/utils/flow-debug-apex.js';
 import { parseFlowDebugLog } from '../../src/utils/flow-debug-log.js';
 import { correlationId, debugLog, interviewId } from '../helpers/flow-debug-fixtures.js';
 
@@ -39,9 +39,21 @@ describe('Flow debug Apex generation', (): void => {
     expect(source).to.include('Database.setSavepoint');
     expect(source).to.include('Database.rollback');
   });
+
+  it('rejects source that cannot fit safely in the REST Execute Anonymous URI', (): void => {
+    expect(() =>
+      createBoundedFlowDebugApex({
+        correlationId,
+        apiName: 'Calculate_Discount',
+        namespace: null,
+        input: { value: 'x'.repeat(12_000) },
+        outputVariables: [],
+      })
+    ).to.throw('Execute Anonymous URI');
+  });
 });
 
-describe('Flow debug log parsing', (): void => {
+describe('Flow debug log value parsing', (): void => {
   it('finds the interview, trace and output while redacting values', (): void => {
     const parsed = parseFlowDebugLog(debugLog(), correlationId, false);
     expect(parsed).to.include({ interviewId, rollbackMarker: true, endMarker: true });
@@ -61,5 +73,42 @@ describe('Flow debug log parsing', (): void => {
     const shown = parseFlowDebugLog(debugLog({ error: true }), correlationId, true);
     expect(shown.error).to.deep.equal({ type: 'System.FlowException', message: 'Sensitive Flow failure' });
     expect(shown.events.find((event) => event.event === 'FLOW_VALUE_ASSIGNMENT')?.detail).to.include('|discount|10');
+  });
+
+  it('redacts action and fault details unless values are requested', (): void => {
+    const rawLog = [
+      `10:00:00.0 (1)|FLOW_ACTIONCALL_DETAIL|${interviewId}|Action|secret-input`,
+      `10:00:00.1 (2)|FLOW_ELEMENT_FAULT|${interviewId}|Sensitive Flow failure`,
+    ].join('\n');
+    const hidden = parseFlowDebugLog(rawLog, correlationId, false);
+    expect(hidden.events.map((event) => event.detail)).to.deep.equal(['[REDACTED]', '[REDACTED]']);
+    const shown = parseFlowDebugLog(rawLog, correlationId, true);
+    expect(shown.events.map((event) => event.detail)).to.deep.equal([
+      `${interviewId}|Action|secret-input`,
+      `${interviewId}|Sensitive Flow failure`,
+    ]);
+  });
+});
+
+describe('Flow debug log integrity', (): void => {
+  it('rejects missing and duplicate output chunks', (): void => {
+    const begin = `SF_FLOW_PLUGIN_DEBUG|${correlationId}|BEGIN`;
+    const marker = `SF_FLOW_PLUGIN_DEBUG|${correlationId}|OUTPUT`;
+    expect(() => parseFlowDebugLog(`${begin}\n${marker}|1|e30=`, correlationId, false)).to.throw(
+      'missing an output chunk'
+    );
+    expect(() => parseFlowDebugLog(`${begin}\n${marker}|0|e3\n${marker}|0|0=`, correlationId, false)).to.throw(
+      'duplicate output chunk'
+    );
+  });
+
+  it('rejects out-of-order and unknown execution markers', (): void => {
+    const marker = `SF_FLOW_PLUGIN_DEBUG|${correlationId}|`;
+    expect(() => parseFlowDebugLog(`${marker}ROLLBACK\n${marker}BEGIN`, correlationId, false)).to.throw(
+      'out-of-order rollback marker'
+    );
+    expect(() => parseFlowDebugLog(`${marker}BEGIN\n${marker}UNKNOWN`, correlationId, false)).to.throw(
+      'unknown execution marker'
+    );
   });
 });

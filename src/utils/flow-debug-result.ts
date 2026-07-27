@@ -42,13 +42,20 @@ function assertCompleted(context: ResultContext): void {
   if (!executed.transport.execution.success) {
     return;
   }
-  if (!executed.parsed.endMarker) {
+  if (!executed.parsed.beginMarker || !executed.parsed.endMarker) {
     throw flowDebugFailed(
-      `The correlated log for Flow "${prepared.flow.apiName}" did not contain a completion marker.`
+      `The correlated log for Flow "${prepared.flow.apiName}" did not contain its complete execution markers. ` +
+        `ApexLog ID: ${executed.transport.log.id}.`
     );
   }
   if (!executed.parsed.rollbackMarker) {
-    throw flowDebugRollbackFailed(prepared.flow.apiName);
+    throw flowDebugRollbackFailed(prepared.flow.apiName, executed.transport.log.id);
+  }
+  if (executed.parsed.error === null && !executed.parsed.outputMarker) {
+    throw flowDebugFailed(
+      `The correlated log for Flow "${prepared.flow.apiName}" did not contain its output marker. ` +
+        `ApexLog ID: ${executed.transport.log.id}.`
+    );
   }
 }
 
@@ -99,7 +106,7 @@ export function createFlowDebugArtifact(context: ResultContext): FlowDebugArtifa
       targetOrg: request.targetOrg,
       debug: {
         correlationId: executed.transport.correlationId,
-        databaseChangesRolledBack: true,
+        databaseChangesRolledBack: executed.parsed.rollbackMarker ? true : null,
         valuesShown: request.showValues,
         error: executionError(context),
         debugLog: executed.transport.log,

@@ -23,6 +23,14 @@ current transaction and retrieve the related Salesforce ApexLog using an exact p
 mode temporarily configures tracing for the authenticated user and restores it after execution. It can prevent
 callouts from running and cannot reverse external effects or work committed by another transaction.
 
+Output destinations are validated before Salesforce execution. Structured and raw-log output must resolve to
+different files. A rollback result reports databaseChangesRolledBack as true only when the correlated log contains
+the rollback marker; it is null when Salesforce terminates before that marker can be verified.
+
+Rollback preflight also validates that the generated request stays conservatively below Salesforce's 16 KB combined
+REST URI-and-header limit. Rollback input is Base64-encoded inside the generated Apex carried by that URI; Base64 is
+not redaction, so protect HTTP diagnostic output and infrastructure logs that could capture request URLs.
+
 # flags.api-name.summary
 
 API name of the Flow definition.
@@ -45,7 +53,7 @@ Write the structured invocation result to this JSON file.
 
 # flags.raw-log-file.summary
 
-Write the complete unredacted Salesforce ApexLog to a new file. Requires --rollback; a dry run validates the destination but creates no file.
+Write the complete unredacted Salesforce ApexLog to a file. Requires --rollback; a dry run validates the destination but creates no file.
 
 # flags.dry-run.summary
 
@@ -115,6 +123,10 @@ Rollback protects database changes in the current transaction only. The savepoin
 
 The raw Salesforce debug log is unredacted and can contain sensitive values.
 
+# warnings.rollback-unconfirmed
+
+The correlated log did not confirm database rollback. Treat the execution outcome as unknown and inspect ApexLog %s.
+
 # info.title
 
 Flow %s version %s invocations
@@ -125,7 +137,7 @@ Dry run only: eligibility, declared inputs, production safety and REST action ac
 
 # info.rollback-dry-run
 
-Dry run only: rollback eligibility, inputs, production safety and tracing-object permissions were checked. Apex execution permission and runtime success cannot be proven without executing Apex.
+Dry run only: rollback eligibility, inputs, production safety, tracing-object permissions and ApexLog access were checked. Apex execution permission and runtime success cannot be proven without executing Apex.
 
 # info.request-duration
 
@@ -137,4 +149,8 @@ Correlated Flow trace from ApexLog %s
 
 # info.rollback-duration
 
-Rollback Flow transaction duration: %s ms
+Rollback debug operation duration: %s ms
+
+# info.rollback-confirmed
+
+Database rollback confirmed by the correlated log.

@@ -16,6 +16,8 @@ export interface ParsedFlowDebugLog {
   interviewId: string | null;
   outputs: Record<string, JsonValue>;
   error: FlowDebugError | null;
+  beginMarker: boolean;
+  outputMarker: boolean;
   rollbackMarker: boolean;
   endMarker: boolean;
 }
@@ -26,30 +28,14 @@ interface ParsedLogLine {
   detail?: string;
 }
 
+type MarkerPhase = 'none' | 'begun' | 'output' | 'error' | 'rolled-back' | 'ended';
+
 const markerErrorSchema = z.object({
   type: z.string().nullable().optional(),
   message: z.string(),
 });
 const outputSchema = z.record(z.string(), z.json());
-const SAFE_DETAIL_EVENTS = new Set([
-  'FLOW_ACTIONCALL_DETAIL',
-  'FLOW_BULK_ELEMENT_BEGIN',
-  'FLOW_BULK_ELEMENT_END',
-  'FLOW_CREATE_INTERVIEW_BEGIN',
-  'FLOW_CREATE_INTERVIEW_END',
-  'FLOW_ELEMENT_BEGIN',
-  'FLOW_ELEMENT_DEFERRED',
-  'FLOW_ELEMENT_END',
-  'FLOW_ELEMENT_FAULT',
-  'FLOW_ELEMENT_LIMIT_USAGE',
-  'FLOW_INTERVIEW_FINISHED',
-  'FLOW_INTERVIEW_FINISHED_LIMIT_USAGE',
-  'FLOW_START_INTERVIEW_BEGIN',
-  'FLOW_START_INTERVIEW_END',
-  'FLOW_START_INTERVIEW_LIMIT_USAGE',
-  'FLOW_START_INTERVIEWS_BEGIN',
-  'FLOW_START_INTERVIEWS_END',
-]);
+const SAFE_DETAIL_EVENTS = new Set(['FLOW_ELEMENT_BEGIN', 'FLOW_ELEMENT_END', 'FLOW_START_INTERVIEW_BEGIN']);
 
 function parseLine(line: string): ParsedLogLine | null {
   const separator = line.indexOf('|');
@@ -98,11 +84,20 @@ function displayedDetail(event: string, detail: string | undefined, showValues: 
   return '[REDACTED]';
 }
 
+function acceptBooleanMarker(current: boolean, name: string): true {
+  if (current) {
+    throw new Error(`The correlated debug log contains duplicate ${name} markers.`);
+  }
+  return true;
+}
+
 class FlowDebugLogParser {
   private readonly events: FlowDebugEvent[] = [];
   private readonly outputChunks = new Map<number, string>();
   private readonly marker: string;
   private encodedError: string | null = null;
+  private markerPhase: MarkerPhase = 'none';
+  private beginMarker = false;
   private rollbackMarker = false;
   private endMarker = false;
 
@@ -119,6 +114,8 @@ class FlowDebugLogParser {
       interviewId: this.interviewId(),
       outputs: this.outputs(),
       error: this.error(),
+      beginMarker: this.beginMarker,
+      outputMarker: this.outputChunks.size > 0,
       rollbackMarker: this.rollbackMarker,
       endMarker: this.endMarker,
     };
@@ -151,18 +148,62 @@ class FlowDebugLogParser {
     if (payload.startsWith('OUTPUT|')) {
       this.acceptOutput(payload);
     } else if (payload.startsWith('ERROR|')) {
-      this.encodedError = payload.slice('ERROR|'.length);
+      this.acceptError(payload);
+    } else if (payload === 'BEGIN') {
+      this.acceptBegin();
     } else if (payload === 'ROLLBACK') {
-      this.rollbackMarker = true;
+      this.acceptRollback();
     } else if (payload === 'END') {
-      this.endMarker = true;
+      this.acceptEnd();
+    } else {
+      throw new Error('The correlated debug log contains an unknown execution marker.');
     }
   }
 
+  private acceptBegin(): void {
+    this.assertPhase(['none'], 'begin');
+    this.beginMarker = acceptBooleanMarker(this.beginMarker, 'begin');
+    this.markerPhase = 'begun';
+  }
+
+  private acceptEnd(): void {
+    this.assertPhase(['begun', 'output', 'error', 'rolled-back'], 'completion');
+    this.endMarker = acceptBooleanMarker(this.endMarker, 'completion');
+    this.markerPhase = 'ended';
+  }
+
+  private acceptError(payload: string): void {
+    this.assertPhase(['begun'], 'error');
+    if (this.encodedError !== null) {
+      throw new Error('The correlated debug log contains duplicate error markers.');
+    }
+    this.encodedError = payload.slice('ERROR|'.length);
+    this.markerPhase = 'error';
+  }
+
   private acceptOutput(payload: string): void {
+    this.assertPhase(['begun', 'output'], 'output');
     const [, index, chunk] = payload.split('|', 3);
-    if (index !== undefined && chunk !== undefined && /^\d+$/u.test(index)) {
-      this.outputChunks.set(Number(index), chunk);
+    if (index === undefined || chunk === undefined || !/^\d+$/u.test(index)) {
+      throw new Error('The correlated debug log contains a malformed output marker.');
+    }
+    const chunkIndex = Number(index);
+    if (!Number.isSafeInteger(chunkIndex) || this.outputChunks.has(chunkIndex)) {
+      throw new Error('The correlated debug log contains an invalid or duplicate output chunk.');
+    }
+    this.outputChunks.set(chunkIndex, chunk);
+    this.markerPhase = 'output';
+  }
+
+  private acceptRollback(): void {
+    this.assertPhase(['begun', 'output', 'error'], 'rollback');
+    this.rollbackMarker = acceptBooleanMarker(this.rollbackMarker, 'rollback');
+    this.markerPhase = 'rolled-back';
+  }
+
+  private assertPhase(allowed: MarkerPhase[], marker: string): void {
+    if (!allowed.includes(this.markerPhase)) {
+      throw new Error(`The correlated debug log contains an out-of-order ${marker} marker.`);
     }
   }
 
@@ -185,10 +226,11 @@ class FlowDebugLogParser {
   }
 
   private outputs(): Record<string, JsonValue> {
-    const encoded = [...this.outputChunks.entries()]
-      .sort(([left], [right]) => left - right)
-      .map(([, chunk]) => chunk)
-      .join('');
+    const chunks = [...this.outputChunks.entries()].sort(([left], [right]) => left - right);
+    if (chunks.some(([index], position) => index !== position)) {
+      throw new Error('The correlated debug log is missing an output chunk.');
+    }
+    const encoded = chunks.map(([, chunk]) => chunk).join('');
     return encoded.length === 0 ? {} : outputSchema.parse(decodeJson(encoded));
   }
 }

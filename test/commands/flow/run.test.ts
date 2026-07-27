@@ -4,43 +4,32 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { access, mkdtemp, rm } from 'node:fs/promises';
+import { access, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { Connection } from '@salesforce/core';
 import { expect } from 'chai';
 
 import FlowRun from '../../../src/commands/flow/run.js';
 import { FlowDebugService } from '../../../src/services/flow-debug-service.js';
 import { FlowRunService } from '../../../src/services/flow-run-service.js';
-import type { FlowRunResult } from '../../../src/types/flow-invocation.js';
-import { createCommandOrg } from '../../helpers/command-org.js';
-import { commandTestContext as $$ } from '../../helpers/command-test-context.js';
+import { commandTestContext as $$, commandUx } from '../../helpers/command-test-context.js';
+import {
+  flowRunResult as result,
+  rollbackDryRunResult,
+  rollbackRunResult,
+  runFlags as flags,
+} from '../../helpers/flow-run-command-fixtures.js';
 
-const result: FlowRunResult = {
-  apiName: 'Calculate_Discount',
-  namespace: null,
-  definitionId: '300000000000001',
-  version: 1,
-  processType: 'AutoLaunchedFlow',
-  production: false,
-  dryRun: false,
-  durationMilliseconds: 25,
-  successful: true,
-  invocations: [
-    {
-      interviewId: 'interview-1',
-      version: 1,
-      success: true,
-      inputs: { percentage: 10 },
-      outputs: { discount: 10 },
-      errors: [],
-      executed: true,
-    },
-  ],
-  targetOrg: 'admin@example.com',
-};
+let temporaryDirectory: string | undefined;
+
+afterEach(async (): Promise<void> => {
+  process.exitCode = undefined;
+  if (temporaryDirectory !== undefined) {
+    await rm(temporaryDirectory, { recursive: true });
+    temporaryDirectory = undefined;
+  }
+});
 
 async function fileExists(file: string): Promise<boolean> {
   try {
@@ -49,69 +38,6 @@ async function fileExists(file: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-function rollbackDryRunResult(): FlowRunResult {
-  return {
-    ...result,
-    dryRun: true,
-    successful: null,
-    invocations: [
-      {
-        interviewId: null,
-        version: 1,
-        success: null,
-        inputs: { percentage: 10 },
-        outputs: {},
-        errors: [],
-        executed: false,
-      },
-    ],
-    debug: {
-      correlationId: null,
-      databaseChangesRolledBack: null,
-      valuesShown: false,
-      error: null,
-      debugLog: null,
-      events: [],
-    },
-  };
-}
-
-function flags(): {
-  'api-name': string;
-  'target-org': ReturnType<typeof createCommandOrg>;
-  input: string[];
-  'input-file': undefined;
-  'output-file': undefined;
-  'raw-log-file': undefined;
-  'dry-run': boolean;
-  rollback: boolean;
-  confirm: boolean;
-  'log-level': 'detailed' | undefined;
-  'show-values': boolean | undefined;
-  wait: number | undefined;
-  'fail-on-flow-error': boolean;
-  namespace: undefined;
-  'api-version': undefined;
-} {
-  return {
-    'api-name': 'Calculate_Discount',
-    'target-org': createCommandOrg({} as Connection),
-    input: ['percentage=10'],
-    'input-file': undefined,
-    'output-file': undefined,
-    'raw-log-file': undefined,
-    'dry-run': false,
-    rollback: false,
-    confirm: false,
-    'log-level': 'detailed',
-    'show-values': false,
-    wait: 2,
-    'fail-on-flow-error': false,
-    namespace: undefined,
-    'api-version': undefined,
-  };
 }
 
 describe('flow run command', (): void => {
@@ -163,30 +89,13 @@ describe('flow run rollback command', (): void => {
       'show-values': undefined,
       wait: undefined,
     };
-    const debugResult: FlowRunResult = {
-      ...result,
-      debug: {
-        correlationId: 'correlation-1',
-        databaseChangesRolledBack: true,
-        valuesShown: false,
-        error: null,
-        debugLog: {
-          id: '07L000000000001',
-          status: 'Success',
-          operation: 'executeAnonymous',
-          startTime: '2026-07-27T10:00:00.000Z',
-          durationMilliseconds: 25,
-          logLength: 1000,
-        },
-        events: [],
-      },
-    };
+    const debugResult = rollbackRunResult(true);
     $$.SANDBOX.stub(FlowRun.prototype, 'parseFlags').resolves(commandFlags);
     const debug = $$.SANDBOX.stub(FlowDebugService.prototype, 'debug').resolves({
       result: debugResult,
       rawLog: 'correlated log',
     });
-    const actual = await FlowRun.run(['--json']);
+    const actual = await FlowRun.run([]);
     expect(debug.firstCall.args[0]).to.deep.equal({
       apiName: 'Calculate_Discount',
       targetOrg: 'admin@example.com',
@@ -198,6 +107,17 @@ describe('flow run rollback command', (): void => {
       waitMilliseconds: 120_000,
     });
     expect(actual).to.equal(debugResult);
+    expect(commandUx.log.firstCall.args[0]).to.equal('Database rollback confirmed by the correlated log.');
+  });
+
+  it('warns when the correlated log cannot confirm rollback', async (): Promise<void> => {
+    $$.SANDBOX.stub(FlowRun.prototype, 'parseFlags').resolves({ ...flags(), rollback: true });
+    $$.SANDBOX.stub(FlowDebugService.prototype, 'debug').resolves({
+      result: rollbackRunResult(null),
+      rawLog: 'correlated log',
+    });
+    await FlowRun.run([]);
+    expect(commandUx.warn.lastCall.args[0]).to.include('inspect ApexLog 07L000000000001');
   });
 });
 
@@ -226,24 +146,61 @@ describe('flow run rollback dry-run command', (): void => {
   });
 
   it('validates a raw-log destination without creating a dry-run log', async (): Promise<void> => {
-    const directory = await mkdtemp(join(tmpdir(), 'sf-flow-run-'));
-    const rawLogFile = join(directory, 'nested', 'debug.log');
-    try {
-      $$.SANDBOX.stub(FlowRun.prototype, 'parseFlags').resolves({
-        ...flags(),
-        'dry-run': true,
-        rollback: true,
-        'raw-log-file': rawLogFile,
-      });
-      $$.SANDBOX.stub(FlowDebugService.prototype, 'debug').resolves({
-        result: rollbackDryRunResult(),
-        rawLog: '',
-      });
-      await FlowRun.run(['--json']);
-      expect(await fileExists(rawLogFile)).to.equal(false);
-    } finally {
-      await rm(directory, { recursive: true });
-    }
+    temporaryDirectory = await mkdtemp(join(tmpdir(), 'sf-flow-run-'));
+    const rawLogFile = join(temporaryDirectory, 'nested', 'debug.log');
+    $$.SANDBOX.stub(FlowRun.prototype, 'parseFlags').resolves({
+      ...flags(),
+      'dry-run': true,
+      rollback: true,
+      'raw-log-file': rawLogFile,
+    });
+    $$.SANDBOX.stub(FlowDebugService.prototype, 'debug').resolves({
+      result: rollbackDryRunResult(),
+      rawLog: '',
+    });
+    await FlowRun.run(['--json']);
+    expect(await fileExists(rawLogFile)).to.equal(false);
+  });
+});
+
+describe('flow run rollback destination safety', (): void => {
+  it('rejects an invalid raw-log destination before execution or partial output', async (): Promise<void> => {
+    temporaryDirectory = await mkdtemp(join(tmpdir(), 'sf-flow-run-'));
+    const blockingFile = join(temporaryDirectory, 'not-a-directory');
+    const outputFile = join(temporaryDirectory, 'result.json');
+    await writeFile(blockingFile, 'existing', 'utf8');
+    $$.SANDBOX.stub(FlowRun.prototype, 'parseFlags').resolves({
+      ...flags(),
+      'output-file': outputFile,
+      'raw-log-file': join(blockingFile, 'debug.log'),
+      rollback: true,
+    });
+    const debug = $$.SANDBOX.stub(FlowDebugService.prototype, 'debug').resolves({
+      result: rollbackDryRunResult(),
+      rawLog: '',
+    });
+    const error = await FlowRun.run(['--json']).catch((caught: unknown) => caught);
+    expect(error).to.have.property('name', 'FlowDebugFailed');
+    expect(debug.called).to.equal(false);
+    expect(await fileExists(outputFile)).to.equal(false);
+  });
+
+  it('rejects colliding structured and raw-log destinations before execution', async (): Promise<void> => {
+    temporaryDirectory = await mkdtemp(join(tmpdir(), 'sf-flow-run-'));
+    const outputFile = join(temporaryDirectory, 'result.json');
+    $$.SANDBOX.stub(FlowRun.prototype, 'parseFlags').resolves({
+      ...flags(),
+      'output-file': outputFile,
+      'raw-log-file': outputFile,
+      rollback: true,
+    });
+    const debug = $$.SANDBOX.stub(FlowDebugService.prototype, 'debug').resolves({
+      result: rollbackDryRunResult(),
+      rawLog: '',
+    });
+    const error = await FlowRun.run(['--json']).catch((caught: unknown) => caught);
+    expect(error).to.have.property('name', 'FlowInputInvalid');
+    expect(debug.called).to.equal(false);
   });
 });
 

@@ -8,18 +8,18 @@ import { Messages } from '@salesforce/core';
 import type { Org } from '@salesforce/core';
 import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
-import { flowDebugFailed, flowInputInvalid, flowInvocationFailed } from '../../errors/flow-errors.js';
+import { flowInputInvalid } from '../../errors/flow-errors.js';
 import { FlowDebugService } from '../../services/flow-debug-service.js';
 import { FlowRunService } from '../../services/flow-run-service.js';
 import { RestFlowInvocationGateway } from '../../services/rest-flow-invocation-gateway.js';
 import { ToolingFlowDebugGateway } from '../../services/tooling-flow-debug-gateway.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
-import type { FlowDebugArtifact, FlowDebugLogLevel } from '../../types/flow-debug.js';
+import type { FlowDebugLogLevel } from '../../types/flow-debug.js';
 import type { FlowRollbackRequest, FlowRunRequest, FlowRunResult } from '../../types/flow-invocation.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
 import { readFlowInputs } from '../../utils/flow-input-file.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
-import { validateFlowReportDestination, writeFlowReport } from '../../utils/flow-report-file.js';
+import { persistFlowRunFiles, prepareFlowRunFiles } from '../../utils/flow-run-files.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -77,40 +77,6 @@ async function createRollbackRequest(
     showValues: flags['show-values'] ?? false,
     waitMilliseconds: waitMinutes * 60_000,
   };
-}
-
-async function writeResult(outputFile: string, result: FlowRunResult): Promise<void> {
-  try {
-    await writeFlowReport(outputFile, JSON.stringify(result, null, 2));
-  } catch (error: unknown) {
-    throw flowInvocationFailed(`Could not write the Flow invocation result to "${outputFile}".`, error);
-  }
-}
-
-async function writeRawLog(outputFile: string, rawLog: string): Promise<void> {
-  try {
-    await writeFlowReport(outputFile, rawLog);
-  } catch (error: unknown) {
-    throw flowDebugFailed(`Could not write the raw Salesforce debug log to "${outputFile}".`, error);
-  }
-}
-
-async function validateRawLogDestination(outputFile: string): Promise<void> {
-  try {
-    await validateFlowReportDestination(outputFile);
-  } catch (error: unknown) {
-    throw flowDebugFailed(`Could not use "${outputFile}" as the raw Salesforce debug-log destination.`, error);
-  }
-}
-
-async function persistArtifact(flags: RunFlagValues, artifact: FlowDebugArtifact<FlowRunResult>): Promise<void> {
-  if (flags['output-file'] !== undefined) {
-    await writeResult(flags['output-file'], artifact.result);
-  }
-  const rawLogFile = flags['raw-log-file'];
-  if (rawLogFile !== undefined) {
-    await (artifact.result.dryRun ? validateRawLogDestination(rawLogFile) : writeRawLog(rawLogFile, artifact.rawLog));
-  }
 }
 
 export default class FlowRun extends SfCommand<FlowRunResult> {
@@ -201,6 +167,7 @@ export default class FlowRun extends SfCommand<FlowRunResult> {
     context: ReturnType<typeof createFlowCommandContext>
   ): Promise<FlowRunResult> {
     const definitionGateway = new ToolingFlowDefinitionGateway(context.connection);
+    const destinations = await prepareFlowRunFiles(flags['output-file'], flags['raw-log-file']);
     this.warnSideEffects(flags);
     const artifact = flags.rollback
       ? await withFlowProgress(this.spinner, 'run', async (progress) =>
@@ -218,7 +185,7 @@ export default class FlowRun extends SfCommand<FlowRunResult> {
           ),
           rawLog: '',
         };
-    await persistArtifact(flags, artifact);
+    await persistFlowRunFiles(destinations, artifact);
     const { result } = artifact;
     this.writeHumanOutput(result);
     if (flags['fail-on-flow-error'] && result.successful === false) {
@@ -276,9 +243,21 @@ export default class FlowRun extends SfCommand<FlowRunResult> {
           { key: 'detail', name: 'Detail' },
         ],
       });
+      this.writeRollbackStatus(result);
       this.log(messages.getMessage('info.rollback-duration', [result.durationMilliseconds]));
     } else if (!this.jsonEnabled()) {
       this.log(messages.getMessage('info.request-duration', [result.durationMilliseconds]));
+    }
+  }
+
+  private writeRollbackStatus(result: FlowRunResult): void {
+    if (this.jsonEnabled() || result.debug?.debugLog === null || result.debug?.debugLog === undefined) {
+      return;
+    }
+    if (result.debug.databaseChangesRolledBack === true) {
+      this.log(messages.getMessage('info.rollback-confirmed'));
+    } else {
+      this.warn(messages.getMessage('warnings.rollback-unconfirmed', [result.debug.debugLog.id]));
     }
   }
 }

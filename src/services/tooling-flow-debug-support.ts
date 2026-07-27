@@ -25,6 +25,11 @@ export const debugObjectPermissionSchema = z.object({
   updateable: z.boolean(),
 });
 
+export const debugLogPermissionSchema = z.object({
+  queryable: z.boolean(),
+  retrieveable: z.boolean(),
+});
+
 export const saveResultSchema = z.discriminatedUnion('success', [
   z.object({ success: z.literal(true), id: z.string().min(1), errors: z.array(z.never()) }),
   z.object({

@@ -12,7 +12,12 @@ import type { z } from 'zod';
 import { flowDebugFailed, flowDebugLogNotFound, flowDebugPermissionDenied } from '../errors/flow-errors.js';
 import type { FlowDebugLogRecord } from '../types/flow-debug.js';
 import { boundedMap } from '../utils/bounded-map.js';
-import { apexLogQuerySchema, isPermissionFailure } from './tooling-flow-debug-support.js';
+import {
+  apexLogQuerySchema,
+  isPermissionFailure,
+  transportCodes,
+  transportStatusSuffix,
+} from './tooling-flow-debug-support.js';
 
 interface LogSearch {
   userId: string;
@@ -52,6 +57,10 @@ function query(search: LogSearch): string {
   ].join(' ');
 }
 
+function isMissingLog(error: unknown): boolean {
+  return transportCodes(error).some((code) => ['404', 'ERROR_HTTP_404', 'NOT_FOUND'].includes(code));
+}
+
 export class ToolingFlowDebugLog {
   public constructor(private readonly connection: Connection) {}
 
@@ -71,18 +80,27 @@ export class ToolingFlowDebugLog {
       if (isPermissionFailure(error)) {
         throw flowDebugPermissionDenied(options.apiName);
       }
-      throw flowDebugFailed(`Could not retrieve the correlated debug log for Flow "${options.apiName}".`);
+      throw flowDebugFailed(
+        `Could not retrieve the correlated debug log for Flow "${options.apiName}".${transportStatusSuffix(error)}`
+      );
     }
   }
 
   private async fetch(record: ApexLogRecord, search: LogSearch): Promise<CorrelatedLog | null> {
-    const apiVersion = this.connection.getApiVersion();
-    const rawLog = await this.connection.request<string>(
-      `/services/data/v${apiVersion}/tooling/sobjects/ApexLog/${record.Id}/Body`
-    );
-    return typeof rawLog === 'string' && rawLog.includes(`SF_FLOW_PLUGIN_DEBUG|${search.correlationId}|`)
-      ? { log: logRecord(record), rawLog }
-      : null;
+    try {
+      const apiVersion = this.connection.getApiVersion();
+      const rawLog = await this.connection.request<string>(
+        `/services/data/v${apiVersion}/tooling/sobjects/ApexLog/${record.Id}/Body`
+      );
+      return typeof rawLog === 'string' && rawLog.includes(`SF_FLOW_PLUGIN_DEBUG|${search.correlationId}|`)
+        ? { log: logRecord(record), rawLog }
+        : null;
+    } catch (error: unknown) {
+      if (isMissingLog(error)) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   private async inspect(search: LogSearch): Promise<CorrelatedLog | null> {

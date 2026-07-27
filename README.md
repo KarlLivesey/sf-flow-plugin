@@ -733,14 +733,23 @@ sf flow run \
 `sf flow run --rollback` runs one active, directly invocable autolaunched Flow through Execute Anonymous Apex,
 retrieves the related Salesforce ApexLog using an exact per-run correlation marker and displays its Flow events. It
 accepts one input object, validates declared inputs before execution and checks that the active Flow version has not
-changed during preflight.
+changed during preflight. Because Salesforce's REST Execute Anonymous endpoint carries the generated Apex in its URI,
+the command also checks the encoded request size during preflight and keeps a conservative reserve below Salesforce's
+16 KB combined URI-and-header limit. Input JSON is Base64-encoded inside that generated Apex; Base64 is not
+redaction, so protect HTTP diagnostic output and infrastructure logs that could capture request URLs.
 
 Combine `--rollback --dry-run` to validate the Flow, the single input object, production-org context and tracing-object
-permissions without executing Apex, creating trace records or running the Flow. This is a point-in-time preflight:
-Salesforce does not expose a read-only check that conclusively proves Execute Anonymous permission or runtime success.
+permissions, including ApexLog query and retrieval access, without executing Apex, creating trace records or running
+the Flow. This is a point-in-time preflight: Salesforce does not expose a read-only check that conclusively proves
+Execute Anonymous permission or runtime success.
 `--raw-log-file` may be supplied with this combination. Its destination path is validated, including an existing
-target or the nearest existing parent directory, but no file or directory is created because the dry run produces no
-log. Like the other preflight checks, destination writability is a point-in-time check rather than a guarantee.
+target or the nearest existing parent directory. The raw-log option itself creates neither the log file nor missing
+parent directories because the dry run produces no log; `--output-file` independently writes the structured dry-run
+result when supplied. Like the other preflight checks, destination writability is a point-in-time check rather than
+a guarantee.
+When either output flag is supplied, its destination is validated before Salesforce execution begins. The structured
+result and raw log must resolve to different files. Paths that differ only by case or Unicode normalisation are
+rejected so the same command remains safe on case-insensitive filesystems.
 
 The generated Apex establishes a savepoint before starting the Flow and rolls back in a `finally` block, then emits
 markers that the command verifies in the correlated log. Rollback affects database work in the current transaction
@@ -748,15 +757,28 @@ only: it cannot reverse external callouts or effects committed by another transa
 a separate transaction are not supported by rollback-mode execution. Establishing the savepoint can also prevent
 callouts from running. Production execution therefore requires `--confirm`.
 
+`debug.databaseChangesRolledBack` is `true` only when the correlated log contains the rollback marker. It is `null`
+when Salesforce terminates Execute Anonymous before that marker can be verified; this means the rollback outcome is
+unknown to the plugin, not that Salesforce committed the failed transaction. Human output states whether rollback was
+confirmed and emits a warning with the ApexLog ID when it remains unknown.
+If correlated-log integrity validation fails, the error includes the ApexLog ID so the log can still be retrieved
+with `sf apex get log --log-id ID`.
+The top-level `durationMilliseconds` covers temporary tracing, execution, log correlation and trace cleanup.
+`debug.debugLog.durationMilliseconds` is Salesforce's duration for the correlated ApexLog operation.
+
 The command temporarily creates a DebugLevel and creates or temporarily updates the authenticated user's active
 `USER_DEBUG` TraceFlag. Existing trace settings are snapshotted and restored, and temporary tracing records are
-removed after the operation. Incomplete cleanup fails explicitly and identifies the temporary record that may need
-manual removal.
+removed after the operation. Before restoration, the command verifies that the temporary TraceFlag values have not
+been changed by another process. It refuses to overwrite a concurrent change. Incomplete cleanup fails explicitly
+and identifies the temporary record that may need manual removal. A forced process termination or host failure can
+prevent cleanup from running; the temporary TraceFlag expires, but temporary `SfFlowPlugin_*` DebugLevel records and
+the user's trace settings should be inspected afterwards.
 
 Parsed variable, assignment, rule and error values are redacted by default. `--show-values` reveals those values in
 terminal and structured output. `--raw-log-file` writes the complete, unredacted Salesforce log and can therefore
-contain sensitive values. `--output-file` writes the structured result, while `--fail-on-flow-error` gives Flow
-runtime failures a non-zero CI exit status.
+contain sensitive values. Newly created raw-log files use owner-only permissions on POSIX systems; an existing file
+retains its permissions and must already be protected appropriately. `--output-file` writes the structured result,
+while `--fail-on-flow-error` gives Flow runtime failures a non-zero CI exit status.
 
 Rollback mode supports the active version of an autolaunched Flow without a record trigger. It does not use private
 Flow Builder endpoints and does not simulate record-triggered, scheduled, screen, wait-element, arbitrary-version or
@@ -962,10 +984,15 @@ These checks are point-in-time preflights, not an atomic guarantee. Permissions 
 | `FlowPruneVerificationFailed`         | Salesforce still returned a deleted version after pruning.                      |
 | `FlowDeleteVersionFailed`             | Explicit version deletion planning or mutation failed.                          |
 | `FlowDeleteVersionVerificationFailed` | Salesforce still returned an explicitly deleted version.                        |
-| `FlowInputInvalid`                    | Supplied Flow inputs did not match the declared input contract.                 |
+| `FlowInputInvalid`                    | Supplied Flow inputs or execution parameters were invalid.                      |
 | `FlowInvocationFailed`                | Salesforce could not execute or report the Flow invocation.                     |
 | `FlowInvocationPermissionDenied`      | The authenticated user cannot invoke the Flow action.                           |
 | `FlowProductionConfirmationRequired`  | Production Flow execution requires explicit confirmation.                       |
+| `FlowDebugFailed`                     | Rollback execution or correlated-log validation failed.                         |
+| `FlowDebugPermissionDenied`           | The user lacks rollback execution, tracing or log access.                       |
+| `FlowDebugLogNotFound`                | The correlated ApexLog was not available before the timeout.                    |
+| `FlowDebugCleanupFailed`              | Temporary tracing could not be removed or safely restored.                      |
+| `FlowDebugRollbackFailed`             | The correlated log did not confirm the expected database rollback.              |
 | `FlowMetricsFailed`                   | Flow complexity metrics could not be calculated.                                |
 | `FlowDataCloudMetricsUnavailable`     | Required DMOs were accessible, but the selected Flow/version record was absent. |
 | `FlowDataCloudMetricsFailed`          | Data Cloud DMO access, capability, query or response validation failed.         |

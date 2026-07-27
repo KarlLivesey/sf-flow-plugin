@@ -54,6 +54,23 @@ describe('ToolingFlowDebugLog correlation', (): void => {
     expect(fake.request.calledTwice).to.equal(true);
   });
 
+  it('ignores an unrelated log deleted during correlation', async (): Promise<void> => {
+    const fake = connection();
+    fake.request.withArgs(sinon.match(/07L-wrong/u)).rejects(
+      Object.assign(new Error('Not Found'), {
+        errorCode: 'NOT_FOUND',
+      })
+    );
+    const result = await new ToolingFlowDebugLog(fake.connection).find({
+      userId: '005000000000001',
+      apiName: 'Calculate_Discount',
+      correlationId: 'correlation-1',
+      startedAt: new Date('2026-07-27T09:59:55.000Z'),
+      waitMilliseconds: 1000,
+    });
+    expect(result.log.id).to.equal('07L-related');
+  });
+
   it('fails clearly when no correlated log is available', async (): Promise<void> => {
     const fake = connection();
     fake.request.resolves('unrelated log');
@@ -68,7 +85,9 @@ describe('ToolingFlowDebugLog correlation', (): void => {
       'FlowDebugLogNotFound'
     );
   });
+});
 
+describe('ToolingFlowDebugLog access failures', (): void => {
   it('maps Salesforce log access failures to the stable permission error', async (): Promise<void> => {
     const fake = connection();
     fake.query.rejects(Object.assign(new Error('redacted'), { errorCode: 'INSUFFICIENT_ACCESS' }));

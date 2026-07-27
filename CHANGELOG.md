@@ -12,17 +12,26 @@ All notable user-visible changes to this project will be documented in this file
 - Added production confirmation, configurable debug detail, structured and raw-log file output, value redaction and
   CI failure control for rollback execution.
 - Added `sf flow run --rollback --dry-run` to validate rollback eligibility, inputs, org context and tracing-object
-  permissions without executing Apex, creating temporary trace records or running the Flow. It accepts
+  permissions, including ApexLog query and retrieval access, without executing Apex, creating temporary trace records
+  or running the Flow. It accepts
   `--raw-log-file` and validates that destination without creating a file because there is no dry-run log.
 
 ### Safety and compatibility
 
 - Rollback uses an Apex savepoint and verified completion markers. It affects database work in the current transaction
   only, can prevent callouts from running and cannot reverse external effects committed by another transaction.
-- Temporary DebugLevel and TraceFlag configuration is removed after execution. An existing active `USER_DEBUG`
-  TraceFlag is snapshotted, temporarily updated and restored; incomplete cleanup is reported explicitly.
+- Temporary DebugLevel and TraceFlag configuration is removed after normal execution and handled errors. An existing
+  active `USER_DEBUG` TraceFlag is snapshotted, temporarily updated and restored only if no concurrent process changed
+  it; incomplete cleanup is reported explicitly. Forced process termination can still require manual cleanup.
+- Structured and raw-log destinations are validated before Salesforce execution and cannot resolve to the same file.
+  Rollback dry runs may write their structured result but never create the raw-log file. Rollback is reported as
+  confirmed only when its correlated marker is present.
+- Rollback dry-run and execution reject generated Execute Anonymous requests that cannot fit safely below
+  Salesforce's 16 KB combined REST URI-and-header limit.
 - Complete raw debug logs are never shown by default. `--raw-log-file` and `--show-values` can expose sensitive Flow
-  values and must be handled accordingly.
+  values and must be handled accordingly. Newly created raw-log files use owner-only permissions on POSIX systems.
+- Production-org and rollback transport failures expose only validated status codes and do not retain raw Salesforce
+  transport errors as causes.
 - Flow debugging is restricted to the active version of an autolaunched Flow without a record trigger. It does not
   use private Flow Builder endpoints or simulate record-triggered, scheduled, screen, wait-element, arbitrary-version
   or run-as-user debugging.

@@ -6,9 +6,10 @@
  */
 import { Buffer } from 'node:buffer';
 
+import { flowInputInvalid } from '../errors/flow-errors.js';
 import type { JsonObject } from '../types/flow-analysis.js';
 
-interface FlowDebugApexOptions {
+export interface FlowDebugApexOptions {
   correlationId: string;
   apiName: string;
   namespace: string | null;
@@ -17,6 +18,7 @@ interface FlowDebugApexOptions {
 }
 
 const OUTPUT_CHUNK_SIZE = 1000;
+const MAX_EXECUTE_ANONYMOUS_URI_BYTES = 12_000;
 
 function apexString(value: string): string {
   return `'${value.replaceAll('\\', '\\\\').replaceAll(/'/gu, "\\'")}'`;
@@ -70,4 +72,16 @@ try {
   System.debug(LoggingLevel.ERROR, sfFlowMarker + '|ROLLBACK');
   System.debug(LoggingLevel.ERROR, sfFlowMarker + '|END');
 }`;
+}
+
+export function createBoundedFlowDebugApex(options: FlowDebugApexOptions): string {
+  const source = createFlowDebugApex(options);
+  const uri = `/executeAnonymous?anonymousBody=${encodeURIComponent(source)}`;
+  const bytes = Buffer.byteLength(uri, 'utf8');
+  if (bytes > MAX_EXECUTE_ANONYMOUS_URI_BYTES) {
+    throw flowInputInvalid(
+      `Flow rollback input produces a ${bytes}-byte Execute Anonymous URI; the safe maximum is ${MAX_EXECUTE_ANONYMOUS_URI_BYTES} bytes.`
+    );
+  }
+  return source;
 }
