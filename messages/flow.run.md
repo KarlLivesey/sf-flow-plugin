@@ -45,7 +45,7 @@ Write the structured invocation result to this JSON file.
 
 # flags.raw-log-file.summary
 
-Write the complete unredacted Salesforce ApexLog to a new file. Requires --rollback.
+Write the complete unredacted Salesforce ApexLog to a new file. Requires --rollback; a dry run validates the destination but creates no file.
 
 # flags.dry-run.summary
 

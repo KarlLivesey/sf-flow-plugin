@@ -4,6 +4,10 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+import { access, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import type { Connection } from '@salesforce/core';
 import { expect } from 'chai';
 
@@ -37,6 +41,42 @@ const result: FlowRunResult = {
   ],
   targetOrg: 'admin@example.com',
 };
+
+async function fileExists(file: string): Promise<boolean> {
+  try {
+    await access(file);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function rollbackDryRunResult(): FlowRunResult {
+  return {
+    ...result,
+    dryRun: true,
+    successful: null,
+    invocations: [
+      {
+        interviewId: null,
+        version: 1,
+        success: null,
+        inputs: { percentage: 10 },
+        outputs: {},
+        errors: [],
+        executed: false,
+      },
+    ],
+    debug: {
+      correlationId: null,
+      databaseChangesRolledBack: null,
+      valuesShown: false,
+      error: null,
+      debugLog: null,
+      events: [],
+    },
+  };
+}
 
 function flags(): {
   'api-name': string;
@@ -83,7 +123,7 @@ describe('flow run command', (): void => {
     expect(FlowRun.flags['dry-run'].default).to.equal(false);
     expect(FlowRun.flags.rollback.default).to.equal(false);
     expect(FlowRun.flags.rollback.exclusive).to.equal(undefined);
-    expect(FlowRun.flags['raw-log-file'].exclusive).to.deep.equal(['dry-run']);
+    expect(FlowRun.flags['raw-log-file'].exclusive).to.equal(undefined);
     expect(FlowRun.flags.confirm.default).to.equal(false);
   });
 
@@ -171,30 +211,7 @@ describe('flow run rollback dry-run command', (): void => {
       'show-values': undefined,
       wait: undefined,
     };
-    const debugResult: FlowRunResult = {
-      ...result,
-      dryRun: true,
-      successful: null,
-      invocations: [
-        {
-          interviewId: null,
-          version: 1,
-          success: null,
-          inputs: { percentage: 10 },
-          outputs: {},
-          errors: [],
-          executed: false,
-        },
-      ],
-      debug: {
-        correlationId: null,
-        databaseChangesRolledBack: null,
-        valuesShown: false,
-        error: null,
-        debugLog: null,
-        events: [],
-      },
-    };
+    const debugResult = rollbackDryRunResult();
     $$.SANDBOX.stub(FlowRun.prototype, 'parseFlags').resolves(commandFlags);
     const debug = $$.SANDBOX.stub(FlowDebugService.prototype, 'debug').resolves({
       result: debugResult,
@@ -206,6 +223,27 @@ describe('flow run rollback dry-run command', (): void => {
       dryRun: true,
     });
     expect(actual).to.equal(debugResult);
+  });
+
+  it('validates a raw-log destination without creating a dry-run log', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'sf-flow-run-'));
+    const rawLogFile = join(directory, 'nested', 'debug.log');
+    try {
+      $$.SANDBOX.stub(FlowRun.prototype, 'parseFlags').resolves({
+        ...flags(),
+        'dry-run': true,
+        rollback: true,
+        'raw-log-file': rawLogFile,
+      });
+      $$.SANDBOX.stub(FlowDebugService.prototype, 'debug').resolves({
+        result: rollbackDryRunResult(),
+        rawLog: '',
+      });
+      await FlowRun.run(['--json']);
+      expect(await fileExists(rawLogFile)).to.equal(false);
+    } finally {
+      await rm(directory, { recursive: true });
+    }
   });
 });
 

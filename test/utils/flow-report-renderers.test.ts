@@ -4,7 +4,7 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -12,7 +12,7 @@ import { expect } from 'chai';
 
 import { renderFlowComparison } from '../../src/utils/flow-comparison-renderer.js';
 import { renderFlowDependencies } from '../../src/utils/flow-dependencies-renderer.js';
-import { writeFlowReport } from '../../src/utils/flow-report-file.js';
+import { validateFlowReportDestination, writeFlowReport } from '../../src/utils/flow-report-file.js';
 import type { FlowCompareResult, FlowDependenciesResult } from '../../src/types/flow-analysis.js';
 
 const comparison: FlowCompareResult = {
@@ -78,6 +78,15 @@ const dependencies: FlowDependenciesResult = {
   targetOrg: 'admin@example.com',
 };
 
+async function fileExists(file: string): Promise<boolean> {
+  try {
+    await access(file);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function recursiveDependencies(): FlowDependenciesResult {
   const base = dependencies.dependencies[0];
   if (base === undefined) {
@@ -120,6 +129,35 @@ describe('Flow report renderers', (): void => {
     try {
       expect(await writeFlowReport(output, 'report')).to.equal(output);
       expect(await readFile(output, 'utf8')).to.equal('report\n');
+    } finally {
+      await rm(directory, { recursive: true });
+    }
+  });
+});
+
+describe('Flow report destination preflight', (): void => {
+  it('validates a missing nested destination without creating it', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'sf-flow-report-'));
+    const output = join(directory, 'nested', 'debug.log');
+    try {
+      expect(await validateFlowReportDestination(output)).to.equal(output);
+      expect(await fileExists(output)).to.equal(false);
+    } finally {
+      await rm(directory, { recursive: true });
+    }
+  });
+
+  it('rejects a destination whose parent path is a file', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'sf-flow-report-'));
+    const parent = join(directory, 'not-a-directory');
+    try {
+      await writeFile(parent, 'content', 'utf8');
+      try {
+        await validateFlowReportDestination(join(parent, 'debug.log'));
+        expect.fail('Expected a file parent to be rejected.');
+      } catch (error: unknown) {
+        expect(error).to.be.an('error').with.property('message').that.contains('not a directory');
+      }
     } finally {
       await rm(directory, { recursive: true });
     }

@@ -19,7 +19,7 @@ import type { FlowRollbackRequest, FlowRunRequest, FlowRunResult } from '../../t
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
 import { readFlowInputs } from '../../utils/flow-input-file.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
-import { writeFlowReport } from '../../utils/flow-report-file.js';
+import { validateFlowReportDestination, writeFlowReport } from '../../utils/flow-report-file.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -95,12 +95,21 @@ async function writeRawLog(outputFile: string, rawLog: string): Promise<void> {
   }
 }
 
+async function validateRawLogDestination(outputFile: string): Promise<void> {
+  try {
+    await validateFlowReportDestination(outputFile);
+  } catch (error: unknown) {
+    throw flowDebugFailed(`Could not use "${outputFile}" as the raw Salesforce debug-log destination.`, error);
+  }
+}
+
 async function persistArtifact(flags: RunFlagValues, artifact: FlowDebugArtifact<FlowRunResult>): Promise<void> {
   if (flags['output-file'] !== undefined) {
     await writeResult(flags['output-file'], artifact.result);
   }
-  if (flags['raw-log-file'] !== undefined) {
-    await writeRawLog(flags['raw-log-file'], artifact.rawLog);
+  const rawLogFile = flags['raw-log-file'];
+  if (rawLogFile !== undefined) {
+    await (artifact.result.dryRun ? validateRawLogDestination(rawLogFile) : writeRawLog(rawLogFile, artifact.rawLog));
   }
 }
 
@@ -135,7 +144,6 @@ export default class FlowRun extends SfCommand<FlowRunResult> {
       summary: messages.getMessage('flags.output-file.summary'),
     }),
     'raw-log-file': Flags.file({
-      exclusive: ['dry-run'],
       relationships: [{ type: 'some', flags: ['rollback'] }],
       summary: messages.getMessage('flags.raw-log-file.summary'),
     }),

@@ -738,6 +738,9 @@ changed during preflight.
 Combine `--rollback --dry-run` to validate the Flow, the single input object, production-org context and tracing-object
 permissions without executing Apex, creating trace records or running the Flow. This is a point-in-time preflight:
 Salesforce does not expose a read-only check that conclusively proves Execute Anonymous permission or runtime success.
+`--raw-log-file` may be supplied with this combination. Its destination path is validated, including an existing
+target or the nearest existing parent directory, but no file or directory is created because the dry run produces no
+log. Like the other preflight checks, destination writability is a point-in-time check rather than a guarantee.
 
 The generated Apex establishes a savepoint before starting the Flow and rolls back in a `finally` block, then emits
 markers that the command verifies in the correlated log. Rollback affects database work in the current transaction
