@@ -85,6 +85,11 @@ function invocationFailureMessage(apiName: string, error: unknown): string {
   return `Salesforce could not invoke Flow "${apiName}".${code === null ? '' : ` Status: ${code}.`}`;
 }
 
+function organisationFailureMessage(error: unknown): string {
+  const code = safeTransportCode(error);
+  return `Could not determine whether the target org is a production org.${code === null ? '' : ` Status: ${code}.`}`;
+}
+
 function isPermissionFailure(error: unknown): boolean {
   return transportCodes(error).some(
     (code) => code === 401 || code === 403 || (typeof code === 'string' && permissionErrorCodes.has(code))
@@ -101,7 +106,7 @@ export class RestFlowInvocationGateway implements FlowInvocationGateway {
       );
       return result.records[0]?.IsSandbox === false;
     } catch (error: unknown) {
-      throw flowQueryFailed('Could not determine whether the target org is a production org.', error);
+      throw flowQueryFailed(organisationFailureMessage(error));
     }
   }
 

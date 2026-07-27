@@ -47,7 +47,10 @@ export type FlowProgressStage =
   | 'rendering-graph'
   | 'validating-inputs'
   | 'checking-org'
-  | 'invoking-flow';
+  | 'invoking-flow'
+  | 'configuring-trace'
+  | 'retrieving-debug-log'
+  | 'restoring-trace';
 
 export type FlowProgressReporter = (stage: FlowProgressStage, detail?: string) => void;
 
@@ -92,6 +95,9 @@ const stageMessages: Record<FlowProgressStage, string> = {
   'validating-inputs': messages.getMessage('stages.validating-inputs'),
   'checking-org': messages.getMessage('stages.checking-org'),
   'invoking-flow': messages.getMessage('stages.invoking-flow'),
+  'configuring-trace': messages.getMessage('stages.configuring-trace'),
+  'retrieving-debug-log': messages.getMessage('stages.retrieving-debug-log'),
+  'restoring-trace': messages.getMessage('stages.restoring-trace'),
 };
 
 interface FlowProgressWork<Result> {

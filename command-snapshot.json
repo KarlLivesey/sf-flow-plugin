@@ -349,9 +349,14 @@
       "input",
       "input-file",
       "json",
+      "log-level",
       "namespace",
       "output-file",
-      "target-org"
+      "raw-log-file",
+      "rollback",
+      "show-values",
+      "target-org",
+      "wait"
     ],
     "plugin": "sf-flow-plugin"
   },

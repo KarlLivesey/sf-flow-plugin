@@ -137,3 +137,15 @@ Checking target org safety
 # stages.invoking-flow
 
 Invoking Flow
+
+# stages.configuring-trace
+
+Configuring temporary trace
+
+# stages.retrieving-debug-log
+
+Retrieving correlated debug log
+
+# stages.restoring-trace
+
+Restoring trace configuration
