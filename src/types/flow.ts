@@ -5,11 +5,8 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 export type FlowVersionNumber = number;
-
 export type FlowVersionSelector = 'latest' | FlowVersionNumber;
-
 export type FlowPruneOrder = 'created' | 'modified';
-
 export type FlowVersionStatusFilter = 'Active' | 'Draft' | 'InvalidDraft' | 'Obsolete';
 
 export type FlowVersionSort = 'version' | 'created' | 'modified';
@@ -17,30 +14,6 @@ export type FlowVersionSort = 'version' | 'created' | 'modified';
 export type FlowSortOrder = 'asc' | 'desc';
 
 export type FlowMutationOperation = 'update-definition' | 'delete-version';
-
-export type FlowErrorCode =
-  | 'FlowDefinitionNotFound'
-  | 'FlowDefinitionAmbiguous'
-  | 'FlowVersionInvalid'
-  | 'FlowVersionNotFound'
-  | 'FlowVersionNotActivatable'
-  | 'FlowActiveVersionMismatch'
-  | 'FlowQueryFailed'
-  | 'FlowMutationFailed'
-  | 'FlowMutationPermissionDenied'
-  | 'FlowActivationFailed'
-  | 'FlowActivationVerificationFailed'
-  | 'FlowDeactivationFailed'
-  | 'FlowDeactivationVerificationFailed'
-  | 'FlowAuditFailed'
-  | 'FlowListFailed'
-  | 'FlowDependenciesFailed'
-  | 'FlowComparisonFailed'
-  | 'FlowExportFailed'
-  | 'FlowInspectionFailed'
-  | 'FlowLintFailed'
-  | 'FlowPruneFailed'
-  | 'FlowPruneVerificationFailed';
 
 export interface NamedFlowRequest {
   apiName: string;
@@ -52,6 +25,7 @@ export interface NamedFlowRequest {
 export interface FlowActivationRequest extends NamedFlowRequest {
   requestedVersion: FlowVersionSelector;
   expectedActiveVersion?: FlowVersionNumber;
+  expectedLatestVersion?: FlowVersionNumber;
   dryRun: boolean;
 }
 
@@ -105,6 +79,7 @@ export interface FlowActivationPlan {
   requestedVersion: FlowVersionSelector;
   selectedVersion: FlowVersion;
   previousActiveVersion: FlowVersionNumber | null;
+  latestVersion: FlowVersionNumber | null;
   changeRequired: boolean;
 }
 
@@ -159,27 +134,6 @@ export interface FlowVersionSummary {
   latest: boolean;
 }
 
-export interface FlowListRequest {
-  targetOrg: string;
-}
-
-export interface FlowListEntry {
-  apiName: string;
-  namespace: string | null;
-  definitionId: string;
-  label: string | null;
-  processType: string | null;
-  activeVersion: FlowVersionNumber | null;
-  latestVersion: FlowVersionNumber | null;
-  status: string | null;
-  lastModifiedDate: string | null;
-}
-
-export interface FlowListResult {
-  targetOrg: string;
-  definitions: FlowListEntry[];
-}
-
 export interface FlowVersionsResult {
   apiName: string;
   namespace: string | null;
@@ -189,6 +143,8 @@ export interface FlowVersionsResult {
   statuses: FlowVersionStatusFilter[];
   createdBefore: string | null;
   createdAfter: string | null;
+  modifiedBefore: string | null;
+  modifiedAfter: string | null;
   sort: FlowVersionSort;
   order: FlowSortOrder;
   versions: FlowVersionSummary[];
@@ -199,6 +155,8 @@ export interface FlowVersionsRequest extends NamedFlowRequest {
   statuses: FlowVersionStatusFilter[];
   createdBefore?: string;
   createdAfter?: string;
+  modifiedBefore?: string;
+  modifiedAfter?: string;
   sort: FlowVersionSort;
   order: FlowSortOrder;
   limit?: number;
@@ -206,6 +164,7 @@ export interface FlowVersionsRequest extends NamedFlowRequest {
 
 export interface FlowDeactivationRequest extends NamedFlowRequest {
   expectedActiveVersion?: FlowVersionNumber;
+  expectedLatestVersion?: FlowVersionNumber;
   dryRun: boolean;
 }
 
@@ -265,6 +224,7 @@ export interface FlowPruneRequest extends NamedFlowRequest {
   keepBy: FlowPruneOrder;
   olderThanDays?: number;
   expectedActiveVersion?: FlowVersionNumber;
+  expectedLatestVersion?: FlowVersionNumber;
   dryRun: boolean;
 }
 

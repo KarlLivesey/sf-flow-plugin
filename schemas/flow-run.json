@@ -1,0 +1,136 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowRunResult",
+  "definitions": {
+    "FlowRunResult": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "definitionId": {
+          "type": "string"
+        },
+        "version": {
+          "$ref": "#/definitions/FlowVersionNumber"
+        },
+        "processType": {
+          "type": "string"
+        },
+        "production": {
+          "type": "boolean"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "durationMilliseconds": {
+          "type": "number"
+        },
+        "successful": {
+          "type": ["boolean", "null"]
+        },
+        "invocations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowInvocation"
+          }
+        },
+        "targetOrg": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "apiName",
+        "namespace",
+        "definitionId",
+        "version",
+        "processType",
+        "production",
+        "dryRun",
+        "durationMilliseconds",
+        "successful",
+        "invocations",
+        "targetOrg"
+      ],
+      "additionalProperties": false
+    },
+    "FlowVersionNumber": {
+      "type": "number"
+    },
+    "FlowInvocation": {
+      "type": "object",
+      "properties": {
+        "interviewId": {
+          "type": ["string", "null"]
+        },
+        "version": {
+          "$ref": "#/definitions/FlowVersionNumber"
+        },
+        "success": {
+          "type": ["boolean", "null"]
+        },
+        "inputs": {
+          "$ref": "#/definitions/JsonObject"
+        },
+        "outputs": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/JsonValue"
+          }
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowInvocationError"
+          }
+        },
+        "executed": {
+          "type": "boolean"
+        }
+      },
+      "required": ["interviewId", "version", "success", "inputs", "outputs", "errors", "executed"],
+      "additionalProperties": false
+    },
+    "JsonObject": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/JsonValue"
+      }
+    },
+    "JsonValue": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/JsonPrimitive"
+        },
+        {
+          "$ref": "#/definitions/JsonObject"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/JsonValue"
+          }
+        }
+      ]
+    },
+    "JsonPrimitive": {
+      "type": ["boolean", "null", "number", "string"]
+    },
+    "FlowInvocationError": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "code": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["message", "code"],
+      "additionalProperties": false
+    }
+  }
+}

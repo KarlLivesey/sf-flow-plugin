@@ -8,6 +8,46 @@
         "targetOrg": {
           "type": "string"
         },
+        "filters": {
+          "type": "object",
+          "properties": {
+            "apiNames": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "types": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "namespaces": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "statuses": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["apiNames", "types", "namespaces", "statuses"],
+          "additionalProperties": false
+        },
+        "sort": {
+          "$ref": "#/definitions/FlowListSort"
+        },
+        "order": {
+          "$ref": "#/definitions/FlowSortOrder"
+        },
+        "limit": {
+          "type": ["number", "null"]
+        },
         "definitions": {
           "type": "array",
           "items": {
@@ -15,8 +55,16 @@
           }
         }
       },
-      "required": ["targetOrg", "definitions"],
+      "required": ["targetOrg", "filters", "sort", "order", "limit", "definitions"],
       "additionalProperties": false
+    },
+    "FlowListSort": {
+      "type": "string",
+      "enum": ["active-version", "api-name", "label", "latest-version", "modified", "type"]
+    },
+    "FlowSortOrder": {
+      "type": "string",
+      "enum": ["asc", "desc"]
     },
     "FlowListEntry": {
       "type": "object",

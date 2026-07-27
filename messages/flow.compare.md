@@ -42,6 +42,18 @@ Comparison scope to include: metadata, elements, resources, or connectors. Repea
 
 Ignore ordering changes in unnamed metadata arrays.
 
+# flags.ignore-path.summary
+
+Stable metadata path to exclude, including its descendants. Repeat to exclude multiple paths.
+
+# flags.format.summary
+
+Human-readable comparison format: summary, unified, or markdown.
+
+# flags.output-file.summary
+
+Write the selected human-readable comparison format to this file.
+
 # flags.namespace.summary
 
 Namespace that identifies a packaged Flow.

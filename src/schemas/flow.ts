@@ -36,11 +36,14 @@ import type {
   FlowVersionRecord,
   FlowVersionStatusFilter,
 } from '../types/flow.js';
+import { isFlowVersionDateFilter, isSalesforceDateTime } from '../utils/flow-date.js';
 
 const FLOW_API_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
 const NAMESPACE_PATTERN = /^[A-Za-z][A-Za-z0-9]{0,14}$/;
 const SALESFORCE_ID_PATTERN = /^[A-Za-z0-9]{15}(?:[A-Za-z0-9]{3})?$/;
 const SALESFORCE_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:?\d{2})$/;
+const FLOW_VERSION_DATE_FILTER_PATTERN =
+  /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:?\d{2}))?$/;
 const HEX_COLOR_PATTERN = /^#[\dA-Fa-f]{3}(?:[\dA-Fa-f]{3})?$/;
 const FONT_FAMILY_PATTERN = /^[\w ,'-]+$/u;
 
@@ -53,15 +56,12 @@ export const namespaceSchema = z.string().regex(NAMESPACE_PATTERN);
 
 export const salesforceIdSchema = z.string().regex(SALESFORCE_ID_PATTERN);
 
-export const salesforceDateTimeSchema = z
-  .string()
-  .regex(SALESFORCE_DATETIME_PATTERN)
-  .refine((value) => !Number.isNaN(Date.parse(value)));
+export const salesforceDateTimeSchema = z.string().regex(SALESFORCE_DATETIME_PATTERN).refine(isSalesforceDateTime);
 
 export const flowVersionDateFilterSchema = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:?\d{2}))?$/)
-  .refine((value) => !Number.isNaN(Date.parse(value.length === 10 ? `${value}T00:00:00.000Z` : value)));
+  .regex(FLOW_VERSION_DATE_FILTER_PATTERN)
+  .refine(isFlowVersionDateFilter);
 
 export const positiveFlowVersionSchema = z.number().int().positive().safe();
 

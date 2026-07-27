@@ -214,6 +214,15 @@ describe('FlowDefinitionService activation preflight', (): void => {
     );
     expect(gateway.updates).to.deep.equal([]);
   });
+
+  it('rejects a stale expected latest version', async (): Promise<void> => {
+    const gateway = new FakeGateway([[definition()]], [[version(1), version(2)]]);
+    await expectError(
+      new FlowDefinitionService(gateway).activate(request({ expectedLatestVersion: 1 })),
+      'FlowLatestVersionMismatch'
+    );
+    expect(gateway.updates).to.deep.equal([]);
+  });
 });
 
 describe('FlowDefinitionService activation mutation', (): void => {
@@ -250,7 +259,9 @@ describe('FlowDefinitionService activation mutation', (): void => {
     const activation = new FlowDefinitionService(gateway).activate(request());
     await expectError(activation, 'FlowActivationVerificationFailed');
   });
+});
 
+describe('FlowDefinitionService mutation concurrency guards', (): void => {
   it('rechecks the expected active version immediately before updating', async (): Promise<void> => {
     const gateway = new FakeGateway(
       [[definition()], [definition('301000000000002')]],
@@ -262,6 +273,22 @@ describe('FlowDefinitionService activation mutation', (): void => {
     await expectError(
       new FlowDefinitionService(gateway).activate(request({ expectedActiveVersion: 1 })),
       'FlowActiveVersionMismatch'
+    );
+    expect(gateway.updates).to.deep.equal([]);
+  });
+
+  it('rechecks the expected latest version immediately before updating', async (): Promise<void> => {
+    const changedLatest = { ...definition(), latestVersionId: version(3).id };
+    const gateway = new FakeGateway(
+      [[definition()], [changedLatest]],
+      [
+        [version(1), version(2)],
+        [version(1), version(2), version(3)],
+      ]
+    );
+    await expectError(
+      new FlowDefinitionService(gateway).activate(request({ expectedLatestVersion: 2 })),
+      'FlowLatestVersionMismatch'
     );
     expect(gateway.updates).to.deep.equal([]);
   });

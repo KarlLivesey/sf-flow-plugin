@@ -4,7 +4,7 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { flowPruneFailed, flowPruneVerificationFailed } from '../errors/flow-errors.js';
+import { flowPruneFailed } from '../errors/flow-errors.js';
 import { flowPruneOrderSchema, nonnegativeIntegerSchema, positiveFlowVersionSchema } from '../schemas/flow.js';
 import type {
   FlowDefinition,
@@ -16,7 +16,8 @@ import type {
   FlowVersion,
 } from '../types/flow.js';
 import { noFlowProgress, type FlowProgressReporter, withFlowProgressStage } from '../utils/flow-progress.js';
-import { assertExpectedActiveVersion } from '../utils/flow-concurrency.js';
+import { assertExpectedActiveVersion, assertExpectedLatestVersion } from '../utils/flow-concurrency.js';
+import { deletePrunedVersions, verifyPrunedVersions } from '../utils/flow-prune-mutation.js';
 import { qualifiedFlowName, resolveVersionNumber, selectFlowDefinition } from '../utils/flow-state.js';
 
 const PRUNABLE_STATUSES = new Set(['Draft', 'Obsolete', 'InvalidDraft']);
@@ -126,6 +127,8 @@ function validPruneRequest(request: FlowPruneRequest): boolean {
     (request.olderThanDays === undefined || positiveFlowVersionSchema.safeParse(request.olderThanDays).success) &&
     (request.expectedActiveVersion === undefined ||
       positiveFlowVersionSchema.safeParse(request.expectedActiveVersion).success) &&
+    (request.expectedLatestVersion === undefined ||
+      positiveFlowVersionSchema.safeParse(request.expectedLatestVersion).success) &&
     [...request.keepVersions, ...request.ignoreVersions].every(
       (version) => positiveFlowVersionSchema.safeParse(version).success
     )
@@ -139,6 +142,8 @@ function pruneCandidates(
 ): PruneCandidates {
   const activeVersion = resolveVersionNumber(definition.apiName, definition.activeVersionId, versions);
   assertExpectedActiveVersion(request.apiName, request.expectedActiveVersion, activeVersion);
+  const latestVersion = resolveVersionNumber(definition.apiName, definition.latestVersionId, versions);
+  assertExpectedLatestVersion(request.apiName, request.expectedLatestVersion, latestVersion);
   return classifyVersions(definition, versions, new Set(request.statuses));
 }
 
@@ -233,26 +238,29 @@ export class FlowPruneService {
     }
     await withFlowProgressStage(progress, {
       stage: 'checking-current-state',
-      detail: `${name} (expected active v${request.expectedActiveVersion ?? 'any'})`,
-      operation: async () => this.assertCurrentActiveVersion(request),
+      detail: `${name} (checking deletion eligibility)`,
+      operation: async () => this.assertCurrentVersions(request, plan),
     });
-    await this.deleteVersions(plan, progress);
+    await deletePrunedVersions(this.gateway, plan, progress);
     await withFlowProgressStage(progress, {
       stage: 'verifying-change',
       detail: `${name} (${plan.plannedDeletions.length} deleted versions)`,
-      operation: async () => this.verify(plan),
+      operation: async () => verifyPrunedVersions(this.gateway, plan),
     });
     return plan.plannedDeletions;
   }
 
-  private async assertCurrentActiveVersion(request: FlowPruneRequest): Promise<void> {
-    if (request.expectedActiveVersion === undefined) {
-      return;
-    }
+  private async assertCurrentVersions(request: FlowPruneRequest, plan: PrunePlan): Promise<void> {
     const definition = selectFlowDefinition(request.apiName, await this.gateway.findDefinitions(createLookup(request)));
     const versions = await this.gateway.findVersions(definition.id);
-    const activeVersion = resolveVersionNumber(definition.apiName, definition.activeVersionId, versions);
-    assertExpectedActiveVersion(request.apiName, request.expectedActiveVersion, activeVersion);
+    const currentPlan = createPlan(definition, versions, { request, now: this.now() });
+    const currentDeletionIds = new Set(currentPlan.plannedDeletions.map((version) => version.id));
+    const ineligible = plan.plannedDeletions.find((version) => !currentDeletionIds.has(version.id));
+    if (ineligible !== undefined) {
+      throw flowPruneFailed(
+        `Refusing to delete Flow "${request.apiName}" version ${ineligible.versionNumber} because it is no longer eligible.`
+      );
+    }
   }
 
   private async plan(request: FlowPruneRequest, progress: FlowProgressReporter): Promise<PrunePlan> {
@@ -265,34 +273,16 @@ export class FlowPruneService {
     } catch (error: unknown) {
       if (
         error instanceof Error &&
-        ['FlowDefinitionNotFound', 'FlowDefinitionAmbiguous', 'FlowActiveVersionMismatch'].includes(error.name)
+        [
+          'FlowDefinitionNotFound',
+          'FlowDefinitionAmbiguous',
+          'FlowActiveVersionMismatch',
+          'FlowLatestVersionMismatch',
+        ].includes(error.name)
       ) {
         throw error;
       }
       throw flowPruneFailed(`Failed to plan pruning for Flow "${request.apiName}".`, error);
-    }
-  }
-
-  private async deleteVersions(plan: PrunePlan, progress: FlowProgressReporter): Promise<void> {
-    try {
-      await plan.plannedDeletions.reduce(async (previous, version) => {
-        await previous;
-        progress(
-          'deleting-versions',
-          `${qualifiedFlowName(plan.definition.apiName, plan.definition.namespace)} v${version.versionNumber}`
-        );
-        await this.gateway.deleteVersion(version.id);
-      }, Promise.resolve());
-    } catch (error: unknown) {
-      throw flowPruneFailed(`Failed to prune Flow "${plan.definition.apiName}".`, error);
-    }
-  }
-
-  private async verify(plan: PrunePlan): Promise<void> {
-    const remaining = await this.gateway.findVersions(plan.definition.id);
-    const remainingIds = new Set(remaining.map((version) => version.id));
-    if (plan.plannedDeletions.some((version) => remainingIds.has(version.id))) {
-      throw flowPruneVerificationFailed(plan.definition.apiName);
     }
   }
 }

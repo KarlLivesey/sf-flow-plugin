@@ -934,6 +934,13 @@
     "@jridgewell/resolve-uri" "^3.0.3"
     "@jridgewell/sourcemap-codec" "^1.4.10"
 
+"@js-temporal/polyfill@^0.5.1":
+  version "0.5.1"
+  resolved "https://registry.yarnpkg.com/@js-temporal/polyfill/-/polyfill-0.5.1.tgz#c9726fdb7fbdbc6419292ba94294b10a08852c32"
+  integrity sha512-hloP58zRVCRSpgDxmqCWJNlizAlUgJFqG2ypq79DCvyv9tHjRYMDOcPFjzfl/A1/YxDvRCZz8wvZvmapQnKwFQ==
+  dependencies:
+    jsbi "^4.3.0"
+
 "@jsforce/jsforce-node@^3.10.17":
   version "3.10.19"
   resolved "https://registry.npmjs.org/@jsforce/jsforce-node/-/jsforce-node-3.10.19.tgz"
@@ -3456,12 +3463,12 @@ file-entry-cache@^6.0.1:
   dependencies:
     flat-cache "^3.0.4"
 
-filelist@^1.0.4:
-  version "1.0.6"
-  resolved "https://registry.npmjs.org/filelist/-/filelist-1.0.6.tgz"
-  integrity sha512-5giy2PkLYY1cP39p17Ech+2xlpTRL9HLspOfEgm0L6CwBXBTgsK5ou0JtzYuepxkaQ/tvhCFIJ5uXo0OrM2DxA==
+filelist@^1.0.4, filelist@1.0.5:
+  version "1.0.5"
+  resolved "https://registry.npmjs.org/filelist/-/filelist-1.0.5.tgz"
+  integrity sha512-ct/ckWBV/9Dg3MlvCXsLcSUyoWwv9mCKqlhLNB2DAuXR/NZolSXlQqP5dyy6guWlPXBhodZyZ5lGPQcbQDxrEQ==
   dependencies:
-    minimatch "^5.0.1"
+    minimatch "^10.2.1"
 
 fill-range@^7.1.1:
   version "7.1.1"
@@ -4623,6 +4630,11 @@ js2xmlparser@^4.0.1:
   dependencies:
     xmlcreate "^2.0.4"
 
+jsbi@^4.3.0:
+  version "4.3.2"
+  resolved "https://registry.yarnpkg.com/jsbi/-/jsbi-4.3.2.tgz#8a4d05d4e09907d73042135b6aa55a6d161ee955"
+  integrity sha512-9fqMSQbhJykSeii05nxKl4m6Eqn2P6rOlYiS+C5Dr/HPIU/7yZxu5qzbs40tgaFORiw2Amd0mirjxatXYMkIew==
+
 jsdoc-type-pratt-parser@~4.0.0:
   version "4.0.0"
   resolved "https://registry.npmjs.org/jsdoc-type-pratt-parser/-/jsdoc-type-pratt-parser-4.0.0.tgz"
@@ -5205,6 +5217,13 @@ min-indent@^1.0.0:
   version "1.0.1"
   resolved "https://registry.npmjs.org/min-indent/-/min-indent-1.0.1.tgz"
   integrity sha512-I9jwMn07Sy/IwOj3zVkVik2JTvgpaykDZEigL6Rx6N9LbMywwUSMtxET+7lVoDLLd3O3IXwJwvuuns8UB/HeAg==
+
+minimatch@^10.2.1:
+  version "10.2.5"
+  resolved "https://registry.npmjs.org/minimatch/-/minimatch-10.2.5.tgz"
+  integrity sha512-MULkVLfKGYDFYejP07QOurDLLQpcjk7Fw+7jXS2R2czRQzR56yHRveU5NDJEOviH+hETZKSkIk5c+T23GjFUMg==
+  dependencies:
+    brace-expansion "^5.0.5"
 
 minimatch@^10.2.2:
   version "10.2.5"

@@ -12,6 +12,10 @@ export type FlowDependencyDirection = 'uses' | 'used-by' | 'both';
 
 export type FlowDependencyQueryDirection = Exclude<FlowDependencyDirection, 'both'>;
 
+export type FlowDependencyFormat = 'table' | 'tree' | 'mermaid' | 'dot';
+
+export type FlowComparisonFormat = 'summary' | 'unified' | 'markdown';
+
 export type FlowComparisonScope = 'metadata' | 'elements' | 'resources' | 'connectors';
 
 export type JsonPrimitive = boolean | null | number | string;
@@ -57,6 +61,7 @@ export interface FlowDependenciesRequest extends NamedFlowRequest {
   recursive: boolean;
   maxDepth: number;
   types: string[];
+  excludeTypes: string[];
 }
 
 export interface IndexedFlowDependency {
@@ -97,6 +102,7 @@ export interface FlowDependenciesResult {
   recursive: boolean;
   maxDepth: number;
   types: string[];
+  excludeTypes: string[];
   definitionsScanned: number;
   dependencies: FlowDependency[];
   truncated: boolean;
@@ -111,6 +117,7 @@ export interface FlowCompareRequest extends NamedFlowRequest {
   toOrg: string;
   scopes: FlowComparisonScope[];
   ignoreOrder: boolean;
+  ignorePaths: string[];
 }
 
 export type FlowComparisonChangeKind = 'added' | 'removed' | 'changed';
@@ -132,6 +139,7 @@ export interface FlowCompareResult {
   requestedTo: FlowComparisonVersionSelector;
   scopes: FlowComparisonScope[];
   ignoreOrder: boolean;
+  ignorePaths: string[];
   fromVersion: FlowVersionNumber;
   toVersion: FlowVersionNumber;
   changes: FlowComparisonChange[];

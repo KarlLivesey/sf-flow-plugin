@@ -6,13 +6,25 @@ Activating Flow
 
 Auditing Flows
 
+# actions.bundle
+
+Bundling Flow source
+
 # actions.compare
 
 Comparing Flow versions
 
+# actions.check
+
+Checking Flows
+
 # actions.deactivate
 
 Deactivating Flow
+
+# actions.delete-version
+
+Deleting Flow version
 
 # actions.dependencies
 
@@ -38,9 +50,17 @@ Linting Flow
 
 Listing Flows
 
+# actions.metrics
+
+Calculating Flow metrics
+
 # actions.prune
 
 Pruning Flow versions
+
+# actions.run
+
+Running Flow
 
 # actions.versions
 
@@ -82,9 +102,17 @@ Deleting Flow versions
 
 Verifying result
 
+# stages.writing-files
+
+Writing files
+
 # stages.loading-dependencies
 
 Loading dependencies
+
+# stages.loading-data-cloud-metrics
+
+Loading Data Cloud Flow metrics
 
 # stages.analysing-results
 
@@ -97,3 +125,15 @@ Comparing metadata
 # stages.rendering-graph
 
 Rendering graph
+
+# stages.validating-inputs
+
+Validating Flow inputs
+
+# stages.checking-org
+
+Checking target org safety
+
+# stages.invoking-flow
+
+Invoking Flow

@@ -90,6 +90,16 @@ function versionSelectorLabel(selector: FlowComparisonVersionSelector): string {
   return typeof selector === 'number' ? `v${selector}` : selector;
 }
 
+function assertMatchingFlowIdentity(contexts: { from: VersionContext; to: VersionContext }): void {
+  const fromName = qualifiedFlowName(contexts.from.definition.apiName, contexts.from.definition.namespace);
+  const toName = qualifiedFlowName(contexts.to.definition.apiName, contexts.to.definition.namespace);
+  if (fromName !== toName) {
+    throw flowComparisonFailed(
+      `The comparison resolved different Flows: "${fromName}" in the source org and "${toName}" in the target org. Specify --namespace to select the same qualified Flow in both orgs.`
+    );
+  }
+}
+
 function changeCount(changes: ReadonlyArray<FlowComparisonChange>, kind: FlowComparisonChange['kind']): number {
   return changes.filter((change) => change.kind === kind).length;
 }
@@ -106,6 +116,7 @@ function createResult(request: FlowCompareRequest, comparison: ResolvedCompariso
     requestedTo: request.to,
     scopes: request.scopes,
     ignoreOrder: request.ignoreOrder,
+    ignorePaths: request.ignorePaths,
     fromVersion: fromVersion.versionNumber,
     toVersion: toVersion.versionNumber,
     changes,
@@ -118,6 +129,12 @@ function createResult(request: FlowCompareRequest, comparison: ResolvedCompariso
     toOrg: request.toOrg,
     crossOrg: request.fromOrg !== request.toOrg,
   };
+}
+
+function ignoredPath(path: string, ignored: ReadonlyArray<string>): boolean {
+  return ignored.some(
+    (candidate) => path === candidate || path.startsWith(`${candidate}.`) || path.startsWith(`${candidate}[`)
+  );
 }
 
 function shouldRethrow(error: unknown): boolean {
@@ -140,7 +157,7 @@ async function resolveComparison(
   const changes = compareFlowMetadata(fromMetadata, toMetadata, {
     scopes: request.scopes,
     ignoreOrder: request.ignoreOrder,
-  });
+  }).filter((change) => !ignoredPath(change.path, request.ignorePaths));
   return {
     fromDefinition: sides.from.definition,
     toDefinition: sides.to.definition,
@@ -192,6 +209,7 @@ async function resolveSides(
   progress: FlowProgressReporter
 ): Promise<ResolvedSides> {
   const contexts = await resolveContexts(gateways, request, progress);
+  assertMatchingFlowIdentity(contexts);
   const fromVersion = selectVersion(contexts.from, request.from);
   const toVersion = selectVersion(contexts.to, request.to);
   const fromName = qualifiedFlowName(contexts.from.definition.apiName, contexts.from.definition.namespace);
@@ -226,7 +244,10 @@ export class FlowComparisonService {
     request: FlowCompareRequest,
     progress: FlowProgressReporter = noFlowProgress
   ): Promise<FlowCompareResult> {
-    if (!request.scopes.every((scope) => flowComparisonScopeSchema.safeParse(scope).success)) {
+    if (
+      !request.scopes.every((scope) => flowComparisonScopeSchema.safeParse(scope).success) ||
+      request.ignorePaths.some((path) => path.trim().length === 0)
+    ) {
       throw flowComparisonFailed('The Flow comparison scope is invalid.');
     }
     try {

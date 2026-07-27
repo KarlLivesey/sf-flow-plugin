@@ -23,6 +23,7 @@ export interface ActivateFlagValues {
   'target-org': Org | undefined;
   'flow-version': FlowVersionSelector;
   'if-active-version': number | undefined;
+  'if-latest-version': number | undefined;
   namespace: string | undefined;
   'api-version': string | undefined;
   'dry-run': boolean;
@@ -70,6 +71,7 @@ function createRequest(flags: ActivateFlagValues, targetOrg: Org): FlowActivatio
     targetOrg: username,
     requestedVersion: flags['flow-version'],
     ...(flags['if-active-version'] === undefined ? {} : { expectedActiveVersion: flags['if-active-version'] }),
+    ...(flags['if-latest-version'] === undefined ? {} : { expectedLatestVersion: flags['if-latest-version'] }),
     dryRun: flags['dry-run'],
   };
   const withNamespace = flags.namespace === undefined ? base : { ...base, namespace: flags.namespace };
@@ -99,6 +101,9 @@ export default class FlowActivate extends SfCommand<FlowActivationResult> {
     })(),
     'if-active-version': Flags.integer({
       summary: messages.getMessage('flags.if-active-version.summary'),
+    }),
+    'if-latest-version': Flags.integer({
+      summary: messages.getMessage('flags.if-latest-version.summary'),
     }),
     namespace: Flags.string({
       summary: messages.getMessage('flags.namespace.summary'),

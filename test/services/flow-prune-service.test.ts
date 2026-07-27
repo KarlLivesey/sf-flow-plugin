@@ -112,6 +112,15 @@ describe('FlowPruneService status and concurrency guards', (): void => {
     );
     expect(fake.deletes).to.deep.equal([]);
   });
+
+  it('rejects a stale expected latest version before deleting', async (): Promise<void> => {
+    const fake = gateway();
+    await expectErrorName(
+      new FlowPruneService(fake).prune(request({ keep: 0, dryRun: false, expectedLatestVersion: 6 })),
+      'FlowLatestVersionMismatch'
+    );
+    expect(fake.deletes).to.deep.equal([]);
+  });
 });
 
 describe('FlowPruneService age protection', (): void => {
@@ -138,6 +147,19 @@ describe('FlowPruneService deletion', (): void => {
     expect(fake.deletes).to.deep.equal(result.deletedVersions.map((version) => version.id));
     expect(fake.permissionChecks).to.deep.equal(['delete-version']);
     expect(result.changed).to.equal(true);
+  });
+
+  it('revalidates every planned version immediately before the first deletion', async (): Promise<void> => {
+    class ActiveVersionChangingGateway extends FakeFlowGateway {
+      public override async assertMutationAllowed(operation: 'delete-version' | 'update-definition'): Promise<void> {
+        await super.assertMutationAllowed(operation);
+        await this.setActiveVersion(definitionId, 1);
+      }
+    }
+    const original = gateway();
+    const fake = new ActiveVersionChangingGateway(await original.findAllDefinitions(), versions());
+    await expectErrorName(new FlowPruneService(fake).prune(request({ keep: 1, dryRun: false })), 'FlowPruneFailed');
+    expect(fake.deletes).to.deep.equal([]);
   });
 
   it('fails verification when Salesforce still returns a deleted version', async (): Promise<void> => {

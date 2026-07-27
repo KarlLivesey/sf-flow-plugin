@@ -10,8 +10,9 @@ import { expect } from 'chai';
 import FlowCompare, { parseComparisonVersionSelector } from '../../../src/commands/flow/compare.js';
 import { FlowComparisonService } from '../../../src/services/flow-comparison-service.js';
 import type { FlowCompareResult } from '../../../src/types/flow-analysis.js';
+import { renderFlowComparison } from '../../../src/utils/flow-comparison-renderer.js';
 import { createCommandOrg } from '../../helpers/command-org.js';
-import { commandTestContext as $$ } from '../../helpers/command-test-context.js';
+import { commandTestContext as $$, commandUx } from '../../helpers/command-test-context.js';
 
 const result: FlowCompareResult = {
   apiName: 'Order_Processing',
@@ -23,6 +24,7 @@ const result: FlowCompareResult = {
   requestedTo: 'latest',
   scopes: [],
   ignoreOrder: false,
+  ignorePaths: [],
   fromVersion: 1,
   toVersion: 2,
   changes: [{ kind: 'changed', path: '$.label', before: 'One', after: 'Two' }],
@@ -73,6 +75,9 @@ describe('flow compare request execution', (): void => {
       'fail-on-difference': false,
       only: ['elements' as const, 'resources' as const],
       'ignore-order': true,
+      'ignore-path': ['$.metadata.description'],
+      format: 'summary' as const,
+      'output-file': undefined,
       namespace: 'example',
       'api-version': undefined,
     };
@@ -89,8 +94,34 @@ describe('flow compare request execution', (): void => {
       toOrg: 'admin@example.com',
       scopes: ['elements', 'resources'],
       ignoreOrder: true,
+      ignorePaths: ['$.metadata.description'],
     });
     expect(actual).to.equal(result);
+  });
+});
+
+describe('flow compare interactive output', (): void => {
+  it('prints the summary renderer for interactive output', async (): Promise<void> => {
+    const flags = {
+      'api-name': 'Order_Processing',
+      'target-org': createCommandOrg({} as Connection),
+      'from-org': undefined,
+      'to-org': undefined,
+      from: 'active' as const,
+      to: 'latest' as const,
+      'fail-on-difference': false,
+      only: undefined,
+      'ignore-order': false,
+      'ignore-path': undefined,
+      format: 'summary' as const,
+      'output-file': undefined,
+      namespace: undefined,
+      'api-version': undefined,
+    };
+    $$.SANDBOX.stub(FlowCompare.prototype, 'parseFlags').resolves(flags);
+    $$.SANDBOX.stub(FlowComparisonService.prototype, 'compare').resolves(result);
+    await FlowCompare.run([]);
+    expect(commandUx.log.firstCall.args[0]).to.equal(renderFlowComparison(result, 'summary'));
   });
 });
 
@@ -106,6 +137,9 @@ describe('flow compare exit status', (): void => {
       'fail-on-difference': true,
       only: undefined,
       'ignore-order': false,
+      'ignore-path': undefined,
+      format: 'summary' as const,
+      'output-file': undefined,
       namespace: undefined,
       'api-version': undefined,
     };
@@ -132,6 +166,9 @@ describe('flow compare cross-org execution', (): void => {
       'fail-on-difference': false,
       only: undefined,
       'ignore-order': false,
+      'ignore-path': undefined,
+      format: 'summary' as const,
+      'output-file': undefined,
       namespace: undefined,
       'api-version': undefined,
     };

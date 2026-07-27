@@ -63,6 +63,7 @@ describe('flow prune command execution', (): void => {
       'keep-by': 'modified' as const,
       'older-than': { days: 30 },
       'if-active-version': 4,
+      'if-latest-version': 6,
       namespace: undefined,
       'api-version': undefined,
       'dry-run': true,
@@ -80,6 +81,7 @@ describe('flow prune command execution', (): void => {
       keepBy: 'modified',
       olderThanDays: 30,
       expectedActiveVersion: 4,
+      expectedLatestVersion: 6,
       dryRun: true,
     });
     expect(actual).to.equal(result);

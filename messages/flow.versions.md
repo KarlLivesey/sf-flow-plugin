@@ -30,6 +30,14 @@ Include versions created before this ISO 8601 date or date-time.
 
 Include versions created after this ISO 8601 date or date-time.
 
+# flags.modified-before.summary
+
+Include versions modified before this ISO 8601 date or date-time.
+
+# flags.modified-after.summary
+
+Include versions modified after this ISO 8601 date or date-time.
+
 # flags.sort.summary
 
 Field used to sort returned versions: version, created, or modified.

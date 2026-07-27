@@ -19,6 +19,30 @@ Username or alias of the target Salesforce org. Uses the configured default `tar
 
 Flow version to lint: `active`, `latest`, or a positive version number.
 
+# flags.fail-on.summary
+
+Set a failing exit code when a new finding has this severity or worse.
+
+# flags.rule.summary
+
+Run only this lint rule. Repeat the flag to select multiple rules.
+
+# flags.exclude-rule.summary
+
+Exclude this lint rule. Repeat the flag to exclude multiple rules. Exclusions take precedence over `--rule`.
+
+# flags.result-format.summary
+
+Output format for lint findings.
+
+# flags.output-file.summary
+
+Write the human-readable or SARIF lint report to this file.
+
+# flags.baseline.summary
+
+Complete JSON lint result for the same qualified Flow, either raw or in the Salesforce CLI success envelope, whose matching findings are excluded from the CI exit decision.
+
 # flags.namespace.summary
 
 Namespace of the Flow. Use this to disambiguate managed-package Flows.
@@ -37,10 +61,26 @@ Salesforce API version to use for the Tooling API requests.
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --flow-version active --json
 
+- Fail CI for new warnings while retaining known findings in a baseline:
+
+  <%= config.bin %> <%= command.id %> --api-name Order_Processing --fail-on warning --baseline flow-lint-baseline.json
+
+- Write a SARIF report containing new and unchanged baseline findings:
+
+  <%= config.bin %> <%= command.id %> --api-name Order_Processing --result-format sarif --output-file flow-lint.sarif
+
 # info.clean
 
 No lint findings for %s v%s.
 
-# info.title
+# info.new-title
 
-Lint findings for %s v%s (%s)
+New lint findings for %s v%s (%s)
+
+# info.baseline-title
+
+Existing baseline findings (%s)
+
+# info.wrote-output
+
+Wrote Flow lint report to %s.

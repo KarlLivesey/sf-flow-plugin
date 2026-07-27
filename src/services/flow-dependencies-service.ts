@@ -62,6 +62,7 @@ function createResult(
     recursive: request.recursive,
     maxDepth: request.maxDepth,
     types: request.types,
+    excludeTypes: request.excludeTypes,
     definitionsScanned: traversal.definitionsScanned,
     dependencies: uniqueDependencies(traversal.dependencies),
     truncated: traversal.truncations.length > 0,
@@ -157,7 +158,10 @@ function decorateDependency(scope: DependencyScope, dependency: IndexedFlowDepen
 }
 
 function requestedDependency(request: FlowDependenciesRequest, dependency: IndexedFlowDependency): boolean {
-  return request.types.length === 0 || (dependency.type !== null && request.types.includes(dependency.type));
+  return (
+    !request.excludeTypes.includes(dependency.type ?? '') &&
+    (request.types.length === 0 || (dependency.type !== null && request.types.includes(dependency.type)))
+  );
 }
 
 function flowReferenceKey(dependency: IndexedFlowDependency): string | null {
@@ -267,7 +271,7 @@ export class FlowDependenciesService {
     if (
       !flowDependencyDirectionSchema.safeParse(request.direction).success ||
       !nonnegativeIntegerSchema.safeParse(request.maxDepth).success ||
-      !request.types.every((type) => flowDependencyTypeSchema.safeParse(type).success)
+      ![...request.types, ...request.excludeTypes].every((type) => flowDependencyTypeSchema.safeParse(type).success)
     ) {
       throw flowDependenciesFailed('The Flow dependency traversal options are invalid.');
     }

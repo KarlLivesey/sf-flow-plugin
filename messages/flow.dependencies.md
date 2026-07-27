@@ -30,6 +30,18 @@ Maximum number of Flow dependency levels to follow when `--recursive` is enabled
 
 Metadata component type to include. Repeat the flag to include multiple types.
 
+# flags.exclude-type.summary
+
+Metadata component type to exclude. Repeat the flag to exclude multiple types; exclusion takes precedence.
+
+# flags.format.summary
+
+Human-readable dependency format: table, tree, mermaid, or dot.
+
+# flags.output-file.summary
+
+Write the selected human-readable dependency format to this file.
+
 # flags.fail-on-dependencies.summary
 
 Exit with status 1 when matching dependencies are found.

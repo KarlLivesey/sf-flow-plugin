@@ -30,6 +30,8 @@ export interface VersionsFlagValues {
   status: FlowVersionStatusFilter[] | undefined;
   'created-before': string | undefined;
   'created-after': string | undefined;
+  'modified-before': string | undefined;
+  'modified-after': string | undefined;
   sort: FlowVersionSort;
   order: FlowSortOrder;
   limit: number | undefined;
@@ -46,6 +48,8 @@ function createRequest(
     statuses: flags.status ?? [],
     ...(flags['created-before'] === undefined ? {} : { createdBefore: flags['created-before'] }),
     ...(flags['created-after'] === undefined ? {} : { createdAfter: flags['created-after'] }),
+    ...(flags['modified-before'] === undefined ? {} : { modifiedBefore: flags['modified-before'] }),
+    ...(flags['modified-after'] === undefined ? {} : { modifiedAfter: flags['modified-after'] }),
     sort: flags.sort,
     order: flags.order,
     ...(flags.limit === undefined ? {} : { limit: flags.limit }),
@@ -78,6 +82,12 @@ export default class FlowVersions extends SfCommand<FlowVersionsResult> {
     }),
     'created-after': Flags.string({
       summary: messages.getMessage('flags.created-after.summary'),
+    }),
+    'modified-before': Flags.string({
+      summary: messages.getMessage('flags.modified-before.summary'),
+    }),
+    'modified-after': Flags.string({
+      summary: messages.getMessage('flags.modified-after.summary'),
     }),
     sort: Flags.custom<FlowVersionSort>({
       default: 'version',

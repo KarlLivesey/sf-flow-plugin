@@ -22,6 +22,7 @@ const result: FlowDependenciesResult = {
   recursive: false,
   maxDepth: 10,
   types: [],
+  excludeTypes: [],
   definitionsScanned: 1,
   dependencies: [],
   truncated: false,
@@ -37,6 +38,9 @@ function truncationFlags(allowTruncated: boolean): DependenciesFlagValues {
     recursive: false,
     'max-depth': 10,
     type: undefined,
+    'exclude-type': undefined,
+    format: 'table',
+    'output-file': undefined,
     'fail-on-dependencies': false,
     'allow-truncated': allowTruncated,
     namespace: undefined,
@@ -79,6 +83,9 @@ describe('flow dependencies command execution', (): void => {
       recursive: true,
       'max-depth': 4,
       type: ['ApexClass', 'CustomObject'],
+      'exclude-type': ['CustomObject'],
+      format: 'table' as const,
+      'output-file': undefined,
       'fail-on-dependencies': false,
       'allow-truncated': false,
       namespace: undefined,
@@ -94,8 +101,33 @@ describe('flow dependencies command execution', (): void => {
       recursive: true,
       maxDepth: 4,
       types: ['ApexClass', 'CustomObject'],
+      excludeTypes: ['CustomObject'],
     });
     expect(actual).to.equal(result);
+  });
+});
+
+describe('flow dependencies interactive output', (): void => {
+  it('qualifies recursive source Flow names in the interactive table', async (): Promise<void> => {
+    $$.SANDBOX.stub(FlowDependencies.prototype, 'parseFlags').resolves(truncationFlags(true));
+    $$.SANDBOX.stub(FlowDependenciesService.prototype, 'getDependencies').resolves({
+      ...result,
+      dependencies: [
+        {
+          sourceDefinitionId: 'managed-definition',
+          sourceApiName: 'Order_Processing',
+          sourceNamespace: 'managed',
+          depth: 1,
+          direction: 'uses',
+          componentId: 'object',
+          name: 'Account',
+          namespace: null,
+          type: 'CustomObject',
+        },
+      ],
+    });
+    await FlowDependencies.run([]);
+    expect(commandUx.table.firstCall.args[0].data[0]).to.include({ sourceFlow: 'managed__Order_Processing' });
   });
 });
 
@@ -108,6 +140,9 @@ describe('flow dependencies CI execution', (): void => {
       recursive: false,
       'max-depth': 10,
       type: undefined,
+      'exclude-type': undefined,
+      format: 'table' as const,
+      'output-file': undefined,
       'fail-on-dependencies': true,
       'allow-truncated': false,
       namespace: undefined,

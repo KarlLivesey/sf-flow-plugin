@@ -97,3 +97,48 @@ describe('FlowVersionsService filtering', (): void => {
     expect(result.versions.map((version) => version.versionNumber)).to.deep.equal([3, 2]);
   });
 });
+
+describe('FlowVersionsService modification filters', (): void => {
+  it('filters by modification date', async (): Promise<void> => {
+    const versions = [1, 2, 3, 4].map((number) => flowVersion(definitionId, number, 'Draft'));
+    const definition = flowDefinition({
+      id: definitionId,
+      apiName: 'Order_Processing',
+      activeVersionId: null,
+      latestVersionId: versions[3]?.id ?? null,
+    });
+    const result = await new FlowVersionsService(new FakeFlowGateway([definition], versions)).getVersions({
+      apiName: 'Order_Processing',
+      targetOrg: 'admin@example.com',
+      statuses: [],
+      modifiedAfter: '2026-02-01',
+      modifiedBefore: '2026-02-04',
+      sort: 'version',
+      order: 'asc',
+    });
+    expect(result.versions.map((version) => version.versionNumber)).to.deep.equal([2, 3]);
+  });
+});
+
+describe('FlowVersionsService date validation', (): void => {
+  const invalidFilters = [
+    { label: 'an invalid created-before day', filter: { createdBefore: '2026-02-30' } },
+    { label: 'an invalid created-after month', filter: { createdAfter: '2026-13-01' } },
+    { label: 'a non-leap modified-before day', filter: { modifiedBefore: '2025-02-29' } },
+    { label: 'an invalid modified-after datetime', filter: { modifiedAfter: '2026-04-31T12:00:00Z' } },
+  ];
+
+  for (const { label, filter } of invalidFilters) {
+    it(`rejects ${label}`, async (): Promise<void> => {
+      const promise = new FlowVersionsService(new FakeFlowGateway([], [])).getVersions({
+        apiName: 'Order_Processing',
+        targetOrg: 'admin@example.com',
+        statuses: [],
+        sort: 'version',
+        order: 'asc',
+        ...filter,
+      });
+      await expectErrorName(promise, 'FlowQueryFailed');
+    });
+  }
+});

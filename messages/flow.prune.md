@@ -42,6 +42,10 @@ Minimum age in days for a version to be eligible for deletion. Recent versions d
 
 Prune only when this version is still active immediately before deletion.
 
+# flags.if-latest-version.summary
+
+Prune only when this version is still the latest immediately before deletion.
+
 # flags.namespace.summary
 
 Namespace that identifies a packaged Flow.
