@@ -38,4 +38,9 @@ export type FlowErrorCode =
   | 'FlowInputInvalid'
   | 'FlowInvocationFailed'
   | 'FlowInvocationPermissionDenied'
-  | 'FlowProductionConfirmationRequired';
+  | 'FlowProductionConfirmationRequired'
+  | 'FlowDebugFailed'
+  | 'FlowDebugPermissionDenied'
+  | 'FlowDebugLogNotFound'
+  | 'FlowDebugCleanupFailed'
+  | 'FlowDebugRollbackFailed';

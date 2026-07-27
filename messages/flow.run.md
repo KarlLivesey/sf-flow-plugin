@@ -18,6 +18,11 @@ Input and output properties with names that look sensitive are redacted on a bes
 always withheld, while its stable status code is retained when available. Arbitrary values under other property names remain visible
 in terminal, JSON and output-file results.
 
+Add `--rollback` to run exactly one input object through Execute Anonymous Apex, roll back database changes in the
+current transaction and retrieve the related Salesforce ApexLog using an exact per-run correlation marker. Rollback
+mode temporarily configures tracing for the authenticated user and restores it after execution. It can prevent
+callouts from running and cannot reverse external effects or work committed by another transaction.
+
 # flags.api-name.summary
 
 API name of the Flow definition.
@@ -32,19 +37,39 @@ Flow input using `NAME=VALUE` syntax. Repeat to provide multiple inputs.
 
 # flags.input-file.summary
 
-JSON file containing one input object or an array of up to 200 input objects for one action request.
+JSON file containing one input object or an array of up to 200 input objects for one action request. --rollback requires exactly one object.
 
 # flags.output-file.summary
 
 Write the structured invocation result to this JSON file.
 
+# flags.raw-log-file.summary
+
+Write the complete unredacted Salesforce ApexLog to a new file. Requires --rollback.
+
 # flags.dry-run.summary
 
 Validate eligibility, inputs, org safety and invocation access without executing the Flow.
 
+# flags.rollback.summary
+
+Run one invocation, roll back its database changes and retrieve its correlated Salesforce debug log.
+
 # flags.confirm.summary
 
 Confirm execution in a production org after reviewing the Flow's potential side effects.
+
+# flags.log-level.summary
+
+Temporary Salesforce debug level for --rollback: basic, detailed or finest. Defaults to detailed.
+
+# flags.show-values.summary
+
+Show Flow values and full caught error messages in rollback trace output.
+
+# flags.wait.summary
+
+Minutes to wait for Salesforce to make the correlated ApexLog available. Defaults to 2; range 1 to 10.
 
 # flags.fail-on-flow-error.summary
 
@@ -72,11 +97,23 @@ Salesforce API version to use for Tooling and REST API requests.
 
   <%= config.bin %> <%= command.id %> --api-name Calculate_Discount --input-file inputs.json --fail-on-flow-error --json
 
+- Run one invocation, roll back database changes and show its correlated Flow trace:
+
+  <%= config.bin %> <%= command.id %> --api-name Calculate_Discount --input accountId=001000000000001 --rollback
+
 # warnings.side-effects
 
 This Flow can perform DML, callouts, email and other side effects. All inputs are submitted in one REST action request, but the
 plugin does not promise all-or-none rollback across Flow interviews. A transport failure can leave execution outcome unknown; do not
 automatically retry a non-idempotent Flow.
+
+# warnings.rollback
+
+Rollback protects database changes in the current transaction only. The savepoint can prevent callouts from running and cannot reverse external or separately committed effects.
+
+# warnings.raw-log
+
+The raw Salesforce debug log is unredacted and can contain sensitive values.
 
 # info.title
 
@@ -89,3 +126,11 @@ Dry run only: eligibility, declared inputs, production safety and REST action ac
 # info.request-duration
 
 REST action request duration: %s ms
+
+# info.trace-title
+
+Correlated Flow trace from ApexLog %s
+
+# info.rollback-duration
+
+Rollback Flow transaction duration: %s ms
