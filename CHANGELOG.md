@@ -2,7 +2,7 @@
 
 All notable user-visible changes to this project will be documented in this file.
 
-## 1.4.0 - 2026-07-26
+## 1.4.0 - 2026-07-27
 
 ### Added
 
@@ -35,9 +35,15 @@ All notable user-visible changes to this project will be documented in this file
 - Flow invocation is restricted to active autolaunched Flows and warns about DML, callouts, emails and other side
   effects. Production execution requires explicit confirmation. Multiple invocations use one REST request but are not
   guaranteed to be all-or-none, and an uncertain transport failure is not retried automatically.
+- Numeric Flow inputs accept JSON decimal notation only. Unsafe whole numbers, fractional values with more than 15
+  significant digits, negative zero and loss-prone numeric tokens in JSON input files are rejected before execution.
 - `sf flow run --dry-run` validates eligibility, inputs, types and action access without claiming to predict runtime
   success. The active version is rechecked immediately before invocation, while Salesforce's returned version remains
   authoritative.
+- Flow linting and aggregated checks share a bounded Salesforce request budget across root Flows and referenced
+  subflows to avoid unbounded request bursts.
+- Flow version date filters reject impossible calendar dates. Native `Temporal` is used when available, with
+  `@js-temporal/polyfill` providing the same validation contract on currently supported Node.js releases.
 - Data Cloud preflight checks every required Flow, Flow Version and Flow Run DMO. An absent selected Flow/version
   record after successful DMO access is reported as unavailable; DMO capability/access, permission, query and
   response failures are reported as failed. Runtime records are scoped to the authenticated source organisation.
