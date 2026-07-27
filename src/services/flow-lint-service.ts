@@ -9,10 +9,19 @@ import { flowApiNameSchema, namespaceSchema } from '../schemas/flow.js';
 import type { FlowComparisonVersionSelector, FlowMetadataGateway } from '../types/flow-analysis.js';
 import type { FlowDefinition, FlowDefinitionGateway, FlowDefinitionLookup, FlowVersion } from '../types/flow.js';
 import type { FlowLintFinding, FlowLintRequest, FlowLintResult } from '../types/flow-inspection.js';
+import { AsyncTaskLimiter } from '../utils/async-task-limiter.js';
 import { analyseFlowLintMetadata } from '../utils/flow-lint-analysis.js';
 import { analyseFlowMetadata } from '../utils/flow-metadata-analysis.js';
 import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
 import { selectFlowDefinition } from '../utils/flow-state.js';
+
+const FLOW_LINT_REQUEST_CONCURRENCY = 4;
+
+interface LintGateways {
+  definitions: FlowDefinitionGateway;
+  metadata: FlowMetadataGateway;
+  requests: AsyncTaskLimiter;
+}
 
 function lookup(request: Pick<FlowLintRequest, 'apiName' | 'namespace'>): FlowDefinitionLookup {
   return request.namespace === undefined
@@ -64,12 +73,12 @@ function subflowFinding(rule: 'inactive-subflow' | 'missing-subflow', flowName: 
   };
 }
 
-async function inspectSubflow(gateway: FlowDefinitionGateway, flowName: string): Promise<FlowLintFinding | undefined> {
+async function inspectSubflow(gateways: LintGateways, flowName: string): Promise<FlowLintFinding | undefined> {
   const target = subflowLookup(flowName);
   if (target === null) {
     return subflowFinding('missing-subflow', flowName);
   }
-  const definitions = await gateway.findDefinitions(target);
+  const definitions = await gateways.requests.run(async () => gateways.definitions.findDefinitions(target));
   if (definitions.length === 0) {
     return subflowFinding('missing-subflow', flowName);
   }
@@ -80,14 +89,14 @@ async function inspectSubflow(gateway: FlowDefinitionGateway, flowName: string):
 }
 
 async function inspectSubflows(
-  gateway: FlowDefinitionGateway,
+  gateways: LintGateways,
   flowNames: ReadonlyArray<string>,
   progress: FlowProgressReporter
 ): Promise<FlowLintFinding[]> {
   const findings = await Promise.all(
     [...new Set(flowNames)].sort().map(async (flowName) => {
       progress('resolving-flow', `${flowName} (referenced subflow)`);
-      return inspectSubflow(gateway, flowName);
+      return inspectSubflow(gateways, flowName);
     })
   );
   return findings.filter((item): item is FlowLintFinding => item !== undefined);
@@ -117,22 +126,29 @@ function createResult(context: LintResultContext): FlowLintResult {
 }
 
 async function runLint(
-  gateways: { definitions: FlowDefinitionGateway; metadata: FlowMetadataGateway },
+  gateways: LintGateways,
   request: FlowLintRequest,
   progress: FlowProgressReporter
 ): Promise<FlowLintResult> {
   progress('resolving-flow', request.apiName);
-  const definition = selectFlowDefinition(request.apiName, await gateways.definitions.findDefinitions(lookup(request)));
+  const definition = selectFlowDefinition(
+    request.apiName,
+    await gateways.requests.run(async () => gateways.definitions.findDefinitions(lookup(request)))
+  );
   progress('loading-versions', `${request.apiName} (${String(request.version)})`);
-  const version = selectVersion(definition, await gateways.definitions.findVersions(definition.id), request.version);
+  const version = selectVersion(
+    definition,
+    await gateways.requests.run(async () => gateways.definitions.findVersions(definition.id)),
+    request.version
+  );
   progress('loading-metadata', `${request.apiName} v${version.versionNumber}`);
-  const metadata = await gateways.metadata.getVersionMetadata(version.id);
+  const metadata = await gateways.requests.run(async () => gateways.metadata.getVersionMetadata(version.id));
   const description = analyseFlowMetadata({ definition, version, metadata, depth: 0 });
   progress('analysing-results', `${request.apiName} v${version.versionNumber}`);
   const findings = [
     ...analyseFlowLintMetadata(metadata, description),
     ...(await inspectSubflows(
-      gateways.definitions,
+      gateways,
       description.subflows.map((subflow) => subflow.flowName),
       progress
     )),
@@ -143,7 +159,8 @@ async function runLint(
 export class FlowLintService {
   public constructor(
     private readonly gateway: FlowDefinitionGateway & FlowMetadataGateway,
-    private readonly metadataGateway: FlowMetadataGateway = gateway
+    private readonly metadataGateway: FlowMetadataGateway = gateway,
+    private readonly requestLimiter = new AsyncTaskLimiter(FLOW_LINT_REQUEST_CONCURRENCY)
   ) {}
 
   public async lint(
@@ -151,7 +168,11 @@ export class FlowLintService {
     progress: FlowProgressReporter = noFlowProgress
   ): Promise<FlowLintResult> {
     try {
-      return await runLint({ definitions: this.gateway, metadata: this.metadataGateway }, request, progress);
+      return await runLint(
+        { definitions: this.gateway, metadata: this.metadataGateway, requests: this.requestLimiter },
+        request,
+        progress
+      );
     } catch (error: unknown) {
       if (error instanceof Error && error.name.startsWith('Flow')) {
         throw error;
