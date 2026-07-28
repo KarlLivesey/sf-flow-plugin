@@ -14,6 +14,7 @@ The package is implemented in strict TypeScript using the current Salesforce ext
 - A current Salesforce CLI installation.
 - An authenticated Salesforce org whose user can read Flow Tooling API records, except for local `--source-file`
   analysis.
+- Salesforce Code Analyzer and Python 3.10 or later when local source analysis includes lint.
 - Tooling API update or deletion access for commands that mutate `FlowDefinition` or `Flow` records.
 - Access to the selected active autolaunched Flow and its referenced data when using `sf flow run`.
 
@@ -97,9 +98,14 @@ qualified Flow `managed__Order_Processing`. Source metadata is parsed as strict 
 API namespace and is limited to 20 MiB.
 
 One source file cannot provide org state or referenced subflow metadata. Source mode therefore rejects target-org,
-version, namespace, recursive and depth flags. Local lint supports `dml-inside-loop`, `hard-coded-id`,
-`missing-fault-path`, `unconnected-element` and `unused-resource`; the `inactive-subflow` and `missing-subflow` rules
-remain org-only. Local `flow check` supports `lint` and `metrics`, defaulting to `lint`, while dependency, subflow and
+version, namespace, recursive and depth flags. Local lint delegates to Salesforce Code Analyzer's official Flow
+Scanner and runs all rules in its `flow` engine by default. It honours `code-analyzer.yml`, preserves Analyzer rule
+names, severities, tags and source locations, and does not run this plugin's separate org-backed lint rules.
+
+If `@salesforce/plugin-code-analyzer` is missing, an interactive command offers to install the official plugin. JSON,
+non-interactive and `--no-prompt` runs instead fail with the exact
+`sf plugins install @salesforce/plugin-code-analyzer` command. Python 3.10 or later must also be available. Local
+`flow check` supports Flow Scanner lint and structural metrics, defaulting to lint, while dependency, subflow and
 version-state checks remain org-only.
 
 Structured local results set `sourceFile` to the resolved absolute path. Salesforce-only organisation, version and
@@ -118,6 +124,7 @@ sf flow export \
   --output-file force-app/main/default/flows/My_Flow.flow-meta.xml \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
+  [--no-prompt] \
   [--json]
 ```
 
@@ -204,7 +211,7 @@ variables are not reported as unused because callers can reference them external
 sf flow lint --api-name Order_Processing --flow-version active
 ```
 
-Analyse deployable source in a pull request without authenticating to Salesforce:
+Analyse deployable source with Salesforce Code Analyzer's Flow Scanner without authenticating to Salesforce:
 
 ```bash
 sf flow lint \
@@ -212,9 +219,14 @@ sf flow lint \
   --fail-on warning
 ```
 
-The result reports stable rule names, severities, affected elements and metadata paths for scripting. Use repeatable
-`--rule` or `--exclude-rule` filters to select checks, `--result-format sarif` for code-scanning integrations and
-`--fail-on` to make new findings affect the process exit code.
+For local source, repeatable `--rule` values are Salesforce Code Analyzer rule selectors automatically constrained to
+the `flow` engine; for example, `--rule MissingDescription`. Repeatable `--exclude-rule` values remove matching
+Analyzer rule names from the result. Analyzer severities 1–2 map to `error` and 3–5 map to `warning` for
+`--fail-on`. Org-backed lint continues to accept this plugin's documented rule names.
+
+The result reports stable rule names, severities, tags and complete source locations for scripting. Use
+`--result-format sarif` for code-scanning integrations and `--fail-on` to make new findings affect the process exit
+code.
 
 A baseline suppresses matching existing findings from the CI exit decision without hiding them. Generate one directly
 from the command's standard Salesforce CLI JSON output:
@@ -352,6 +364,7 @@ sf flow versions \
   [--limit NUMBER] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
+  [--no-prompt] \
   [--json]
 ```
 
@@ -715,7 +728,8 @@ loading subflows; dependencies/versions-only checks return `contracts: []`. `met
 metrics check is selected and is otherwise `null`. These fields provide context only: the command does not infer
 contract compatibility problems or apply complexity thresholds.
 
-For a local source file, the command supports static lint and structural metrics only and defaults to lint:
+For a local source file, the command supports Salesforce Code Analyzer Flow Scanner lint and structural metrics only
+and defaults to lint:
 
 ```bash
 sf flow check \
@@ -1050,6 +1064,8 @@ These checks are point-in-time preflights, not an atomic guarantee. Permissions 
 | `FlowExportFailed`                    | Flow source metadata could not be exported.                                     |
 | `FlowInspectionFailed`                | Flow metadata could not be described or rendered.                               |
 | `FlowSourceInvalid`                   | A local Flow source file or source-mode flag combination was invalid.           |
+| `FlowCodeAnalyzerUnavailable`         | Salesforce Code Analyzer is required but is not installed.                      |
+| `FlowCodeAnalyzerFailed`              | Salesforce Code Analyzer failed or returned an invalid Flow Scanner result.     |
 | `FlowLintFailed`                      | Static Flow analysis or report output failed.                                   |
 | `FlowPruneFailed`                     | Flow prune planning or deletion failed.                                         |
 | `FlowPruneVerificationFailed`         | Salesforce still returned a deleted version after pruning.                      |

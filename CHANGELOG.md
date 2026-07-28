@@ -8,8 +8,8 @@ All notable user-visible changes to this project will be documented in this file
 
 - Added local `.flow-meta.xml` analysis to `sf flow lint`, `sf flow check`, `sf flow describe` and `sf flow graph`
   through `--source-file`, without requiring an authenticated org.
-- Added strict local XML validation, static lint and metrics support, local graph rendering and source-file locations
-  in SARIF reports.
+- Added strict local XML validation, Salesforce Code Analyzer Flow Scanner linting with installation consent,
+  structural metrics, local graph rendering and complete source-file locations in SARIF reports.
 
 ## 1.4.1 - 2026-07-27
 
