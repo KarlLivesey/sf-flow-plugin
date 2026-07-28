@@ -12,7 +12,7 @@ import type {
   FlowGraphRenderRequest,
   FlowGraphResult,
 } from '../types/flow-inspection.js';
-import type { FlowLintFinding, FlowLintResult } from '../types/flow-lint.js';
+import type { FlowLintDirectoryResult, FlowLintFinding, FlowLintResult } from '../types/flow-lint.js';
 import type { FlowSourceMetricsResult } from '../types/flow-metrics.js';
 import type { FlowSource } from '../types/flow-source.js';
 import { filterFlowDescriptionSections } from '../utils/flow-description-sections.js';
@@ -20,8 +20,11 @@ import { flowContracts, lintCheckFindings } from '../utils/flow-check-analysis.j
 import { analyseFlowMetrics, totalFlowMetrics } from '../utils/flow-metrics-analysis.js';
 import { type FlowProgressReporter, noFlowProgress } from '../utils/flow-progress.js';
 import { renderDescribedFlowGraph } from './flow-graph-service.js';
+import type { FlowSourceDirectory } from './flow-source-directory-service.js';
+import { traverseLocalSubflows } from './flow-source-directory-service.js';
 
 export const FLOW_SOURCE_CHECK_KINDS: FlowCheckKind[] = ['lint', 'metrics'];
+export const FLOW_SOURCE_DIRECTORY_CHECK_KINDS: FlowCheckKind[] = ['lint', 'subflows', 'metrics'];
 
 function sourceTraversal(source: FlowSource): Omit<FlowDescribeResult, 'sections'> {
   return {
@@ -72,6 +75,35 @@ export function lintFlowSource(
   };
 }
 
+function primaryFile(finding: FlowLintFinding): string | undefined {
+  return finding.locations?.find((location) => location.primary)?.file;
+}
+
+export function lintFlowSourceDirectory(
+  directory: FlowSourceDirectory,
+  findings: FlowLintFinding[],
+  progress: FlowProgressReporter = noFlowProgress
+): FlowLintDirectoryResult {
+  const flows = directory.sources.map((source) =>
+    lintFlowSource(
+      source,
+      findings.filter((finding) => primaryFile(finding) === source.sourceFile),
+      progress
+    )
+  );
+  return {
+    sourceDirectory: directory.directory,
+    flows,
+    findings: flows.flatMap((flow) => flow.findings),
+    newFindings: flows.flatMap((flow) => flow.newFindings),
+    baselineFindings: [],
+    errors: flows.reduce((sum, flow) => sum + flow.errors, 0),
+    warnings: flows.reduce((sum, flow) => sum + flow.warnings, 0),
+    newErrors: flows.reduce((sum, flow) => sum + flow.newErrors, 0),
+    newWarnings: flows.reduce((sum, flow) => sum + flow.newWarnings, 0),
+  };
+}
+
 export function graphFlowSource(
   source: FlowSource,
   request: FlowGraphRenderRequest,
@@ -94,6 +126,20 @@ export function selectedSourceChecks(requested: FlowCheckKind[], excluded: FlowC
   const checks = FLOW_SOURCE_CHECK_KINDS.filter((check) => selected.has(check));
   if (checks.length === 0) {
     throw flowCheckFailed('At least one local-source check is required.');
+  }
+  return checks;
+}
+
+export function selectedSourceDirectoryChecks(requested: FlowCheckKind[], excluded: FlowCheckKind[]): FlowCheckKind[] {
+  const unsupported = requested.filter((check) => !FLOW_SOURCE_DIRECTORY_CHECK_KINDS.includes(check));
+  if (unsupported.length > 0) {
+    throw flowCheckFailed(`Local Flow directories cannot run org-dependent checks: ${unsupported.join(', ')}.`);
+  }
+  const selected = new Set<FlowCheckKind>(requested.length === 0 ? ['lint', 'subflows'] : requested);
+  excluded.forEach((check) => selected.delete(check));
+  const checks = FLOW_SOURCE_DIRECTORY_CHECK_KINDS.filter((check) => selected.has(check));
+  if (checks.length === 0) {
+    throw flowCheckFailed('At least one local-directory check is required.');
   }
   return checks;
 }
@@ -153,5 +199,93 @@ export function checkFlowSource(
     warnings: flow.warnings,
     targetOrg: null,
     sourceFile: source.sourceFile,
+  };
+}
+
+function directorySubflowFindings(
+  source: FlowSource,
+  directory: FlowSourceDirectory,
+  maxDepth: number
+): FlowCheckResult['findings'] {
+  return traverseLocalSubflows(source, directory.sources, maxDepth).warnings.map((warning) => ({
+    apiName: source.apiName,
+    namespace: source.namespace,
+    version: null,
+    check: 'subflows',
+    code: warning.kind,
+    severity: 'error',
+    message: `${warning.kind}: ${warning.path.join(' -> ')}`,
+    path: warning.path.join(' -> '),
+  }));
+}
+
+interface DirectoryCheckSelection {
+  checks: FlowCheckKind[];
+  excluded: FlowCheckKind[];
+  lintFindings: FlowLintFinding[];
+  recursive: boolean;
+  maxDepth: number;
+}
+
+function directoryCheckEntry(
+  source: FlowSource,
+  context: {
+    directory: FlowSourceDirectory;
+    selection: DirectoryCheckSelection;
+    progress: FlowProgressReporter;
+  }
+): FlowCheckResult['flows'][number] {
+  const { directory, selection, progress } = context;
+  const result = checkFlowSource(
+    source,
+    {
+      checks: selection.checks,
+      excluded: selection.excluded,
+      lintFindings: selection.lintFindings.filter((finding) => primaryFile(finding) === source.sourceFile),
+    },
+    progress
+  );
+  const subflowFindings = selection.checks.includes('subflows')
+    ? directorySubflowFindings(source, directory, selection.recursive ? selection.maxDepth : 0)
+    : [];
+  const flow = result.flows[0];
+  if (flow === undefined) {
+    throw flowCheckFailed(`Local Flow check did not produce an entry for "${source.apiName}".`);
+  }
+  const traversal = selection.recursive
+    ? traverseLocalSubflows(source, directory.sources, selection.maxDepth).sources
+    : [source];
+  const findings = [...result.findings, ...subflowFindings];
+  return {
+    ...flow,
+    contracts: flowContracts(traversal.map((item) => item.description)),
+    findings,
+    errors: findings.filter((finding) => finding.severity === 'error').length,
+    warnings: findings.filter((finding) => finding.severity === 'warning').length,
+  };
+}
+
+export function checkFlowSourceDirectory(
+  directory: FlowSourceDirectory,
+  selection: DirectoryCheckSelection,
+  progress: FlowProgressReporter = noFlowProgress
+): FlowCheckResult {
+  const results = directory.sources.map((source) => directoryCheckEntry(source, { directory, selection, progress }));
+  const findings = results.flatMap((flow) => flow.findings);
+  return {
+    apiNames: results.map((flow) => flow.apiName),
+    requestedVersion: null,
+    subflowVersion: 'active',
+    checks: selection.checks,
+    excludedChecks: selection.excluded,
+    recursive: selection.recursive,
+    maxDepth: selection.maxDepth,
+    allowTruncated: false,
+    flows: results,
+    findings,
+    errors: findings.filter((finding) => finding.severity === 'error').length,
+    warnings: findings.filter((finding) => finding.severity === 'warning').length,
+    targetOrg: null,
+    sourceDirectory: directory.directory,
   };
 }

@@ -15,6 +15,10 @@ API name of the Flow to lint.
 
 Local .flow-meta.xml file to lint without authenticating to an org.
 
+# flags.source-dir.summary
+
+Directory to scan recursively for local .flow-meta.xml files.
+
 # flags.target-org.summary
 
 Username or alias of the target Salesforce org. Uses the configured default `target-org` when omitted.

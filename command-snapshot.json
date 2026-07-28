@@ -79,6 +79,7 @@
       "output-file",
       "recursive",
       "result-format",
+      "source-dir",
       "source-file",
       "subflow-version",
       "target-org"
@@ -271,6 +272,7 @@
       "output-file",
       "result-format",
       "rule",
+      "source-dir",
       "source-file",
       "target-org"
     ],

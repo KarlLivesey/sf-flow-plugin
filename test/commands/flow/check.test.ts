@@ -40,6 +40,7 @@ describe('flow check command', (): void => {
     const flags = {
       'api-name': ['Flow_A', 'Flow_B'],
       'source-file': undefined,
+      'source-dir': undefined,
       'target-org': createCommandOrg({} as Connection),
       'flow-version': 'latest' as const,
       only: ['lint', 'metrics'] as const,
@@ -81,6 +82,7 @@ describe('flow check command qualified output', (): void => {
     const flags = {
       'api-name': ['Flow_A'],
       'source-file': undefined,
+      'source-dir': undefined,
       'target-org': createCommandOrg({} as Connection),
       'flow-version': 'latest' as const,
       only: undefined,

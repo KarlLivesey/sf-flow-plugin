@@ -26,6 +26,7 @@ import { commandTestContext as $$ } from '../../helpers/command-test-context.js'
 import { expectErrorName } from '../../helpers/fake-flow-gateway.js';
 
 const fixture = resolve('test/nuts/fixtures/project/v3/main/default/flows/Plugin_Test_Flow.flow-meta.xml');
+const fixtureDirectory = resolve('test/nuts/fixtures/project/v3/main/default/flows');
 
 describe('local Flow source commands', (): void => {
   it('runs lint without calling an org-backed service', async (): Promise<void> => {
@@ -158,5 +159,23 @@ describe('local Flow source inspection commands', (): void => {
     })
       .to.throw()
       .with.property('name', 'FlowSourceInvalid');
+  });
+});
+
+describe('local Flow source directory commands', (): void => {
+  it('lints every Flow in a source directory with one Analyzer run', async (): Promise<void> => {
+    $$.SANDBOX.stub(SalesforceCodeAnalyzerFlowService.prototype, 'isInstalled').resolves(true);
+    const analyse = $$.SANDBOX.stub(SalesforceCodeAnalyzerFlowService.prototype, 'analyse').resolves([]);
+    const result = await FlowLint.run(['--source-dir', fixtureDirectory, '--json']);
+    expect('flows' in result && result.flows).to.have.length(1);
+    expect(analyse.calledOnce).to.equal(true);
+    expect(analyse.firstCall.args[0].sourceFile).to.equal(fixtureDirectory);
+  });
+
+  it('checks structural metrics for every Flow without requiring an org or Analyzer', async (): Promise<void> => {
+    const result = await FlowCheck.run(['--source-dir', fixtureDirectory, '--only', 'metrics', '--json']);
+    expect(result.targetOrg).to.equal(null);
+    expect(result.sourceDirectory).to.equal(fixtureDirectory);
+    expect(result.flows).to.have.length(1);
   });
 });

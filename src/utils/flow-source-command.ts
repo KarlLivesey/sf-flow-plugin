@@ -22,12 +22,18 @@ function wasProvided(argv: ReadonlyArray<string>, flag: string): boolean {
   );
 }
 
-export function validateFlowSourceFlags(argv: ReadonlyArray<string>, unsupported: ReadonlyArray<string>): void {
-  if (!wasProvided(argv, 'source-file')) {
+export function validateFlowSourceFlags(
+  argv: ReadonlyArray<string>,
+  unsupported: ReadonlyArray<string>,
+  sourceFlag = 'source-file'
+): void {
+  if (!wasProvided(argv, sourceFlag)) {
     return;
   }
   const provided = unsupported.filter((flag) => wasProvided(argv, flag));
   if (provided.length > 0) {
-    throw flowSourceInvalid(`--source-file cannot be combined with ${provided.map((flag) => `--${flag}`).join(', ')}.`);
+    throw flowSourceInvalid(
+      `--${sourceFlag} cannot be combined with ${provided.map((flag) => `--${flag}`).join(', ')}.`
+    );
   }
 }

@@ -85,13 +85,26 @@ automatically when `--json` is used.
 ## Local source analysis
 
 `sf flow lint`, `sf flow check`, `sf flow describe` and `sf flow graph` accept exactly one of `--api-name` or
-`--source-file`. Source mode reads one deployable `.flow-meta.xml` file directly and does not resolve a default org,
+`--source-file`. `sf flow lint` and `sf flow check` also accept `--source-dir` for project-wide analysis. Source mode
+reads deployable `.flow-meta.xml` directly and does not resolve a default org,
 make a Salesforce request or require authentication:
 
 ```bash
 sf flow lint \
   --source-file force-app/main/default/flows/Order_Processing.flow-meta.xml
 ```
+
+Scan a complete source tree with one Salesforce Code Analyzer run:
+
+```bash
+sf flow lint --source-dir force-app/main/default/flows --fail-on warning
+sf flow check --source-dir force-app/main/default/flows --recursive --only lint --only subflows --only metrics
+```
+
+Directory discovery is recursive, ignores symlinks, is limited to 2,000 Flow files and rejects duplicate qualified
+Flow names. `flow check --recursive` resolves subflow references from the discovered local files up to `--max-depth`;
+missing references and depth limits are findings. Directory mode supports lint, subflow and structural-metrics checks.
+Org-state checks remain unavailable, and lint baselines remain scoped to single-Flow lint results.
 
 The filename supplies the Flow identity. For example, `managed__Order_Processing.flow-meta.xml` is reported as the
 qualified Flow `managed__Order_Processing`. Source metadata is parsed as strict XML, must use the Salesforce Metadata
@@ -189,6 +202,7 @@ never treated as stale. Non-regular targets and symlinked output ancestors are r
 sf flow lint \
   [--api-name Order_Processing] \
   [--source-file FILE] \
+  [--source-dir DIR] \
   [--target-org ORG] \
   [--flow-version active|latest|NUMBER] \
   [--fail-on warning|error] \
@@ -721,6 +735,7 @@ sf flow check \
   [--api-name Order_Flow] \
   [--api-name Renewal_Flow ...] \
   [--source-file FILE] \
+  [--source-dir DIR] \
   [--target-org ORG] \
   [--flow-version active|latest|NUMBER] \
   [--only lint|dependencies|subflows|versions|metrics ...] \
