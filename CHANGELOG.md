@@ -2,39 +2,23 @@
 
 All notable user-visible changes to this project will be documented in this file.
 
+## 1.5.0 - 2026-07-28
+
+### Added
+
+- Added local `.flow-meta.xml` analysis to `sf flow lint`, `sf flow check`, `sf flow describe` and `sf flow graph`
+  through `--source-file`, without requiring an authenticated org.
+- Added strict local XML validation, static lint and metrics support, local graph rendering and source-file locations
+  in SARIF reports.
+
 ## 1.4.1 - 2026-07-27
 
 ### Added
 
-- Added `sf flow run --rollback` for one active, directly invocable autolaunched Flow. It validates inputs, executes
-  the Flow through Execute Anonymous Apex, rolls back database changes, retrieves the related Salesforce ApexLog using
-  an exact per-run correlation marker and displays parsed Flow events.
-- Added production confirmation, configurable debug detail, structured and raw-log file output, value redaction and
-  CI failure control for rollback execution.
-- Added `sf flow run --rollback --dry-run` to validate rollback eligibility, inputs, org context and tracing-object
-  permissions, including ApexLog query and retrieval access, without executing Apex, creating temporary trace records
-  or running the Flow. It accepts
-  `--raw-log-file` and validates that destination without creating a file because there is no dry-run log.
-
-### Safety and compatibility
-
-- Rollback uses an Apex savepoint and verified completion markers. It affects database work in the current transaction
-  only, can prevent callouts from running and cannot reverse external effects committed by another transaction.
-- Temporary DebugLevel and TraceFlag configuration is removed after normal execution and handled errors. An existing
-  active `USER_DEBUG` TraceFlag is snapshotted, temporarily updated and restored only if no concurrent process changed
-  it; incomplete cleanup is reported explicitly. Forced process termination can still require manual cleanup.
-- Structured and raw-log destinations are validated before Salesforce execution and cannot resolve to the same file.
-  Rollback dry runs may write their structured result but never create the raw-log file. Rollback is reported as
-  confirmed only when its correlated marker is present.
-- Rollback dry-run and execution reject generated Execute Anonymous requests that cannot fit safely below
-  Salesforce's 16 KB combined REST URI-and-header limit.
-- Complete raw debug logs are never shown by default. `--raw-log-file` and `--show-values` can expose sensitive Flow
-  values and must be handled accordingly. Newly created raw-log files use owner-only permissions on POSIX systems.
-- Production-org and rollback transport failures expose only validated status codes and do not retain raw Salesforce
-  transport errors as causes.
-- Flow debugging is restricted to the active version of an autolaunched Flow without a record trigger. It does not
-  use private Flow Builder endpoints or simulate record-triggered, scheduled, screen, wait-element, arbitrary-version
-  or run-as-user debugging.
+- Added `sf flow run --rollback` to execute one active autolaunched Flow through Execute Anonymous, roll back database
+  changes, retrieve its correlated Apex debug log and report parsed Flow events.
+- Added rollback dry-run preflight, production confirmation, configurable log detail, redacted structured output,
+  raw-log file output and CI failure controls.
 
 ## 1.4.0 - 2026-07-27
 
@@ -63,30 +47,6 @@ All notable user-visible changes to this project will be documented in this file
 - Added last-modified date filters to Flow version listings.
 - Added stable-path exclusions and summary, unified and Markdown output to Flow comparison.
 - Added component exclusions and table, tree, Mermaid and Graphviz DOT output to dependency reporting.
-
-### Safety and compatibility
-
-- Flow invocation is restricted to active autolaunched Flows and warns about DML, callouts, emails and other side
-  effects. Production execution requires explicit confirmation. Multiple invocations use one REST request but are not
-  guaranteed to be all-or-none, and an uncertain transport failure is not retried automatically.
-- Numeric Flow inputs accept JSON decimal notation only. Unsafe whole numbers, fractional values with more than 15
-  significant digits, negative zero and loss-prone numeric tokens in JSON input files are rejected before execution.
-- `sf flow run --dry-run` validates eligibility, inputs, types and action access without claiming to predict runtime
-  success. The active version is rechecked immediately before invocation, while Salesforce's returned version remains
-  authoritative.
-- Flow linting and aggregated checks share a bounded Salesforce request budget across root Flows and referenced
-  subflows to avoid unbounded request bursts.
-- Flow version date filters reject impossible calendar dates. Native `Temporal` is used when available, with
-  `@js-temporal/polyfill` providing the same validation contract on currently supported Node.js releases.
-- Data Cloud preflight checks every required Flow, Flow Version and Flow Run DMO. An absent selected Flow/version
-  record after successful DMO access is reported as unavailable; DMO capability/access, permission, query and
-  response failures are reported as failed. Runtime records are scoped to the authenticated source organisation.
-- The production dependency tree resolves the patched `brace-expansion` release through an in-range direct pin of
-  oclif's existing transitive dependency.
-- `sf flow debug` is not included because the requested trace, rollback, run-as and record-trigger behaviour does not
-  have a verified supported Salesforce interface.
-- Salesforce CLI's existing `sf flow run test` and `sf flow get test` commands remain the supported Flow test runner;
-  this plugin does not duplicate them.
 
 ## 1.3.0 - 2026-07-26
 

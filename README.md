@@ -1,9 +1,10 @@
 # sf-flow-plugin
 
 `sf-flow-plugin` adds Salesforce CLI commands for inspecting, validating, measuring, exporting, invoking and safely
-managing Flow versions through an authenticated org. It can also report indexed metadata dependencies and create
-complete Flow-source bundles containing recursively referenced subflows. The commands do not require a Salesforce DX
-project.
+managing Flow versions. Most commands use an authenticated org; `flow lint`, `flow check`, `flow describe` and
+`flow graph` can instead analyse a local `.flow-meta.xml` file. The plugin can also report indexed metadata
+dependencies and create complete Flow-source bundles containing recursively referenced subflows. The commands do not
+require a Salesforce DX project.
 
 The package is implemented in strict TypeScript using the current Salesforce external-plugin template, `@salesforce/core`, `@salesforce/sf-plugins-core`, oclif, and Zod runtime validation.
 
@@ -11,7 +12,8 @@ The package is implemented in strict TypeScript using the current Salesforce ext
 
 - Node.js 22.19 or later.
 - A current Salesforce CLI installation.
-- An authenticated Salesforce org whose user can read Flow Tooling API records.
+- An authenticated Salesforce org whose user can read Flow Tooling API records, except for local `--source-file`
+  analysis.
 - Tooling API update or deletion access for commands that mutate `FlowDefinition` or `Flow` records.
 - Access to the selected active autolaunched Flow and its referenced data when using `sf flow run`.
 
@@ -75,7 +77,34 @@ If `--target-org` is omitted, the command uses the Salesforce CLI `target-org` c
 | `sf flow audit`          | Report Flow definitions with version-state issues.                      |
 | `sf flow prune`          | Safely plan or delete old inactive Flow versions.                       |
 
-Commands show an automatic Salesforce-style progress spinner while they query or mutate the org. Each stage identifies the Flow and relevant version or version scope. Progress output is suppressed automatically when `--json` is used.
+Commands show an automatic Salesforce-style progress spinner while they load, analyse, query or mutate Flow data.
+Each stage identifies the Flow, source file and relevant version or version scope. Progress output is suppressed
+automatically when `--json` is used.
+
+## Local source analysis
+
+`sf flow lint`, `sf flow check`, `sf flow describe` and `sf flow graph` accept exactly one of `--api-name` or
+`--source-file`. Source mode reads one deployable `.flow-meta.xml` file directly and does not resolve a default org,
+make a Salesforce request or require authentication:
+
+```bash
+sf flow lint \
+  --source-file force-app/main/default/flows/Order_Processing.flow-meta.xml
+```
+
+The filename supplies the Flow identity. For example, `managed__Order_Processing.flow-meta.xml` is reported as the
+qualified Flow `managed__Order_Processing`. Source metadata is parsed as strict XML, must use the Salesforce Metadata
+API namespace and is limited to 20 MiB.
+
+One source file cannot provide org state or referenced subflow metadata. Source mode therefore rejects target-org,
+version, namespace, recursive and depth flags. Local lint supports `dml-inside-loop`, `hard-coded-id`,
+`missing-fault-path`, `unconnected-element` and `unused-resource`; the `inactive-subflow` and `missing-subflow` rules
+remain org-only. Local `flow check` supports `lint` and `metrics`, defaulting to `lint`, while dependency, subflow and
+version-state checks remain org-only.
+
+Structured local results set `sourceFile` to the resolved absolute path. Salesforce-only organisation, version and
+record identifiers are `null`, including `targetOrg`, `requestedVersion`, `resolvedVersion`, `definitionId` and
+`versionId` where those fields exist. SARIF reports include the local file URI.
 
 ## `sf flow export`
 
@@ -152,7 +181,8 @@ never treated as stale. Non-regular targets and symlinked output ancestors are r
 
 ```bash
 sf flow lint \
-  --api-name Order_Processing \
+  [--api-name Order_Processing] \
+  [--source-file FILE] \
   [--target-org ORG] \
   [--flow-version active|latest|NUMBER] \
   [--fail-on warning|error] \
@@ -172,6 +202,14 @@ variables are not reported as unused because callers can reference them external
 
 ```bash
 sf flow lint --api-name Order_Processing --flow-version active
+```
+
+Analyse deployable source in a pull request without authenticating to Salesforce:
+
+```bash
+sf flow lint \
+  --source-file force-app/main/default/flows/Order_Processing.flow-meta.xml \
+  --fail-on warning
 ```
 
 The result reports stable rule names, severities, affected elements and metadata paths for scripting. Use repeatable
@@ -433,7 +471,8 @@ Use `--output-file` to write the selected representation.
 
 ```bash
 sf flow describe \
-  --api-name Order_Processing \
+  [--api-name Order_Processing] \
+  [--source-file FILE] \
   [--target-org ORG] \
   [--flow-version active|latest|NUMBER] \
   [--recursive] \
@@ -449,6 +488,16 @@ The command summarises inputs, outputs, variables, formulas, executable elements
 
 ```bash
 sf flow describe --api-name Order_Processing
+```
+
+Use `--source-file` to describe one local Flow without an org. Section selection remains available, but recursive and
+version selection are org-only:
+
+```bash
+sf flow describe \
+  --source-file force-app/main/default/flows/Order_Processing.flow-meta.xml \
+  --only inputs \
+  --only outputs
 ```
 
 Repeat `--only` to return selected sections and remove unrelated columns and structured arrays:
@@ -479,7 +528,8 @@ Recursive traversal reports missing subflows, active-to-latest fallbacks and dep
 
 ```bash
 sf flow graph \
-  --api-name Order_Processing \
+  [--api-name Order_Processing] \
+  [--source-file FILE] \
   [--target-org ORG] \
   [--flow-version active|latest|NUMBER] \
   [--format mermaid|dot] \
@@ -513,6 +563,15 @@ The default output is a Mermaid flowchart containing executable elements and the
 
 ```bash
 sf flow graph --api-name Order_Processing
+```
+
+Local source supports the same Mermaid, DOT, styling, layout, resource and output-file options:
+
+```bash
+sf flow graph \
+  --source-file force-app/main/default/flows/Order_Processing.flow-meta.xml \
+  --include-variables \
+  --output-file order-processing.mmd
 ```
 
 Generate recursive Graphviz DOT with resource annotations:
@@ -629,8 +688,9 @@ usage remains subject to the org's Salesforce entitlements.
 
 ```bash
 sf flow check \
-  --api-name Order_Flow \
+  [--api-name Order_Flow] \
   [--api-name Renewal_Flow ...] \
+  [--source-file FILE] \
   [--target-org ORG] \
   [--flow-version active|latest|NUMBER] \
   [--only lint|dependencies|subflows|versions|metrics ...] \
@@ -654,6 +714,16 @@ or metrics checks load Flow metadata. A lint-only check preserves the selected r
 loading subflows; dependencies/versions-only checks return `contracts: []`. `metrics` is populated only when the
 metrics check is selected and is otherwise `null`. These fields provide context only: the command does not infer
 contract compatibility problems or apply complexity thresholds.
+
+For a local source file, the command supports static lint and structural metrics only and defaults to lint:
+
+```bash
+sf flow check \
+  --source-file force-app/main/default/flows/Order_Processing.flow-meta.xml \
+  --only lint \
+  --only metrics \
+  --fail-on warning
+```
 
 The command fails on errors by default. Use `--fail-on warning` for a stricter CI gate, repeatable `--only` or
 `--exclude` flags to select checks, and SARIF output for code-scanning integrations.
@@ -979,6 +1049,7 @@ These checks are point-in-time preflights, not an atomic guarantee. Permissions 
 | `FlowComparisonFailed`                | The requested versions or their Flow metadata could not be compared.            |
 | `FlowExportFailed`                    | Flow source metadata could not be exported.                                     |
 | `FlowInspectionFailed`                | Flow metadata could not be described or rendered.                               |
+| `FlowSourceInvalid`                   | A local Flow source file or source-mode flag combination was invalid.           |
 | `FlowLintFailed`                      | Static Flow analysis or report output failed.                                   |
 | `FlowPruneFailed`                     | Flow prune planning or deletion failed.                                         |
 | `FlowPruneVerificationFailed`         | Salesforce still returned a deleted version after pruning.                      |
