@@ -13,10 +13,11 @@ interface BenchmarkResultContext {
   prepared: PreparedFlowDebug;
   samples: FlowBenchmarkSample[];
   totalWallClockMilliseconds: number;
+  measuredWallClockMilliseconds: number;
 }
 
 export function createFlowBenchmarkResult(context: BenchmarkResultContext): FlowBenchmarkResult {
-  const { request, prepared, samples, totalWallClockMilliseconds } = context;
+  const { request, prepared, samples, totalWallClockMilliseconds, measuredWallClockMilliseconds } = context;
   const measured = samples.filter((sample) => sample.phase === 'measured');
   const included = measured.filter((sample) => sample.successful || request.includeFailed);
   const cpuValues = included
@@ -40,10 +41,13 @@ export function createFlowBenchmarkResult(context: BenchmarkResultContext): Flow
     failedSamples,
     includedSamples: included.length,
     totalWallClockMilliseconds,
+    measuredWallClockMilliseconds,
     throughputPerSecond:
-      request.dryRun || totalWallClockMilliseconds === 0 ? null : measured.length / (totalWallClockMilliseconds / 1000),
+      request.dryRun || measuredWallClockMilliseconds === 0
+        ? null
+        : measured.length / (measuredWallClockMilliseconds / 1000),
     wallClock: calculateBenchmarkStatistics(
-      included.map((sample) => sample.wallClockMilliseconds),
+      included.map((sample) => sample.wallClockMilliseconds).filter((value): value is number => value !== null),
       request.percentiles
     ),
     cpuTime: calculateBenchmarkStatistics(cpuValues, request.percentiles),

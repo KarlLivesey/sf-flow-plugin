@@ -22,16 +22,23 @@ export interface FlowBenchmarkRequest extends NamedFlowRequest {
   confirm: boolean;
   logLevel: FlowDebugLogLevel;
   waitMilliseconds: number;
+  rawLogDirectory?: string;
+  retainWarmupLogs: boolean;
   expectedActiveVersion?: FlowVersionNumber;
+}
+
+export interface FlowBenchmarkSessionRequest extends FlowDebugExecutionRequest {
+  traceDurationMilliseconds: number;
 }
 
 export interface FlowBenchmarkSession {
   close(): Promise<void>;
   execute(request: FlowDebugExecutionRequest): Promise<FlowBenchmarkTransportSample>;
+  prepareBatch(): Promise<void>;
 }
 
 export interface FlowBenchmarkSessionGateway {
-  open(request: FlowDebugExecutionRequest): Promise<FlowBenchmarkSession>;
+  open(request: FlowBenchmarkSessionRequest): Promise<FlowBenchmarkSession>;
 }
 
 export interface FlowBenchmarkTransportSample {
@@ -58,7 +65,7 @@ export interface FlowBenchmarkSample {
   inputIndex: number;
   successful: boolean;
   rollbackConfirmed: boolean;
-  wallClockMilliseconds: number;
+  wallClockMilliseconds: number | null;
   cpuTimeMilliseconds: number | null;
   apexLogId: string | null;
   errorCode: string | null;
@@ -81,19 +88,14 @@ export interface FlowBenchmarkResult {
   failedSamples: number;
   includedSamples: number;
   totalWallClockMilliseconds: number;
+  measuredWallClockMilliseconds: number;
   throughputPerSecond: number | null;
   wallClock: FlowBenchmarkStatistics | null;
   cpuTime: FlowBenchmarkStatistics | null;
   samples: FlowBenchmarkSample[];
 }
 
-export interface FlowBenchmarkRawLog {
-  sample: number;
-  phase: FlowBenchmarkPhase;
-  rawLog: string;
-}
-
 export interface FlowBenchmarkArtifact {
   result: FlowBenchmarkResult;
-  rawLogs: FlowBenchmarkRawLog[];
+  rawLogStage: string | null;
 }

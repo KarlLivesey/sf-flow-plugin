@@ -8,6 +8,7 @@ import type {
   FlowBenchmarkRequest,
   FlowBenchmarkSession,
   FlowBenchmarkSessionGateway,
+  FlowBenchmarkSessionRequest,
   FlowBenchmarkTransportSample,
 } from '../../src/types/flow-benchmark.js';
 import type { FlowDebugExecutionRequest } from '../../src/types/flow-debug.js';
@@ -18,6 +19,8 @@ export class FakeBenchmarkSession implements FlowBenchmarkSession {
   public closed = false;
   public failAt: number | undefined;
   public malformedAt: number | undefined;
+  public preparedBatches = 0;
+  public onExecute: ((sample: number) => Promise<void>) | undefined;
 
   public async close(): Promise<void> {
     this.closed = true;
@@ -26,6 +29,7 @@ export class FakeBenchmarkSession implements FlowBenchmarkSession {
   public async execute(request: FlowDebugExecutionRequest): Promise<FlowBenchmarkTransportSample> {
     this.executed.push(request);
     const sample = this.executed.length;
+    await this.onExecute?.(sample);
     if (sample === this.failAt) {
       throw new Error('sensitive benchmark failure');
     }
@@ -51,13 +55,17 @@ export class FakeBenchmarkSession implements FlowBenchmarkSession {
       },
     };
   }
+
+  public async prepareBatch(): Promise<void> {
+    this.preparedBatches += 1;
+  }
 }
 
 export class FakeBenchmarkGateway implements FlowBenchmarkSessionGateway {
   public readonly session = new FakeBenchmarkSession();
-  public opened: FlowDebugExecutionRequest[] = [];
+  public opened: FlowBenchmarkSessionRequest[] = [];
 
-  public async open(request: FlowDebugExecutionRequest): Promise<FlowBenchmarkSession> {
+  public async open(request: FlowBenchmarkSessionRequest): Promise<FlowBenchmarkSession> {
     this.opened.push(request);
     return this.session;
   }
@@ -84,6 +92,7 @@ export function flowBenchmarkRequest(overrides: Partial<FlowBenchmarkRequest> = 
     confirm: false,
     logLevel: 'detailed',
     waitMilliseconds: 120_000,
+    retainWarmupLogs: true,
     ...overrides,
   };
 }

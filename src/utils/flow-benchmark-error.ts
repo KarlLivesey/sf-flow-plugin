@@ -1,0 +1,12 @@
+/*
+ * Copyright (c) 2026, Karl Livesey.
+ * All rights reserved.
+ * Licensed under the BSD 3-Clause license.
+ * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
+export class FlowBenchmarkExecutionError extends Error {
+  public constructor(public readonly errorCode: string, public readonly executionDurationMilliseconds: number | null) {
+    super(errorCode);
+    this.name = 'FlowBenchmarkExecutionError';
+  }
+}

@@ -11,7 +11,12 @@ import { join } from 'node:path';
 import { expect } from 'chai';
 
 import type { FlowBenchmarkArtifact } from '../../src/types/flow-benchmark.js';
-import { persistFlowBenchmark, prepareFlowBenchmarkDestinations } from '../../src/utils/flow-benchmark-files.js';
+import {
+  createFlowBenchmarkLogStage,
+  persistFlowBenchmark,
+  prepareFlowBenchmarkDestinations,
+  writeFlowBenchmarkRawLog,
+} from '../../src/utils/flow-benchmark-files.js';
 
 const result: FlowBenchmarkArtifact['result'] = {
   apiName: 'Calculate_Discount',
@@ -30,6 +35,7 @@ const result: FlowBenchmarkArtifact['result'] = {
   failedSamples: 0,
   includedSamples: 1,
   totalWallClockMilliseconds: 10,
+  measuredWallClockMilliseconds: 10,
   throughputPerSecond: 100,
   wallClock: null,
   cpuTime: null,
@@ -51,19 +57,25 @@ async function expectOwnerOnly(file: string): Promise<void> {
   }
 }
 
+async function writeMeasuredLog(
+  destinations: Awaited<ReturnType<typeof prepareFlowBenchmarkDestinations>>
+): Promise<string> {
+  const stage = await createFlowBenchmarkLogStage(destinations.rawLogDir);
+  if (stage === null) {
+    throw new Error('Expected a raw benchmark log stage.');
+  }
+  await writeFlowBenchmarkRawLog(stage, { phase: 'measured', sample: 1, rawLog: 'measured log' });
+  await persistFlowBenchmark(destinations, { result, rawLogStage: stage });
+  return destinations.rawLogDir ?? '';
+}
+
 describe('Flow benchmark files', (): void => {
   it('writes owner-only Apex logs and can exclude warm-up logs', async (): Promise<void> => {
     const directory = await mkdtemp(join(tmpdir(), 'sf-flow-benchmark-'));
     const logDirectory = join(directory, 'nested', 'logs');
     try {
       const destinations = await prepareFlowBenchmarkDestinations(undefined, logDirectory, true);
-      await persistFlowBenchmark(destinations, {
-        result,
-        rawLogs: [
-          { phase: 'warmup', sample: 1, rawLog: 'warmup log' },
-          { phase: 'measured', sample: 1, rawLog: 'measured log' },
-        ],
-      });
+      await writeMeasuredLog(destinations);
       const measured = join(logDirectory, 'measured-000001.log');
       expect(await readFile(measured, 'utf8')).to.equal('measured log\n');
       expect(await exists(join(logDirectory, 'warmup-000001.log'))).to.equal(false);
@@ -72,13 +84,18 @@ describe('Flow benchmark files', (): void => {
       await rm(directory, { recursive: true });
     }
   });
+});
 
+describe('Flow benchmark destination safety', (): void => {
   it('does not create a raw-log directory during dry-run persistence', async (): Promise<void> => {
     const directory = await mkdtemp(join(tmpdir(), 'sf-flow-benchmark-dry-'));
     const logDirectory = join(directory, 'logs');
     try {
       const destinations = await prepareFlowBenchmarkDestinations(undefined, logDirectory, false);
-      await persistFlowBenchmark(destinations, { result: { ...result, dryRun: true, successful: null }, rawLogs: [] });
+      await persistFlowBenchmark(destinations, {
+        result: { ...result, dryRun: true, successful: null },
+        rawLogStage: null,
+      });
       expect(await exists(logDirectory)).to.equal(false);
     } finally {
       await rm(directory, { recursive: true });

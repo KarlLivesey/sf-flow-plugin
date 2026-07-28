@@ -5,12 +5,8 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import type { JsonObject } from '../types/flow-analysis.js';
-import type {
-  FlowBenchmarkPhase,
-  FlowBenchmarkRawLog,
-  FlowBenchmarkSample,
-  FlowBenchmarkTransportSample,
-} from '../types/flow-benchmark.js';
+import type { FlowBenchmarkPhase, FlowBenchmarkSample, FlowBenchmarkTransportSample } from '../types/flow-benchmark.js';
+import { FlowBenchmarkExecutionError } from './flow-benchmark-error.js';
 import { parseFlowDebugLog } from './flow-debug-log.js';
 import { parseApexCpuTime } from './flow-benchmark-log.js';
 
@@ -23,16 +19,19 @@ export interface PlannedBenchmarkSample {
 
 export interface CompletedBenchmarkSample {
   sample: FlowBenchmarkSample;
-  rawLog: FlowBenchmarkRawLog | null;
+  rawLog: string | null;
 }
 
 interface FailedSampleContext {
-  wallClockMilliseconds: number;
+  wallClockMilliseconds: number | null;
   errorCode: string;
   apexLogId?: string;
 }
 
 export function safeBenchmarkErrorCode(error: unknown): string {
+  if (error instanceof FlowBenchmarkExecutionError) {
+    return error.errorCode;
+  }
   return error instanceof Error && /^Flow[A-Z][A-Za-z]+$/u.test(error.name) ? error.name : 'FlowBenchmarkFailed';
 }
 
@@ -80,7 +79,7 @@ export function completedBenchmarkSample(
           parsed.error?.type ??
           (successful ? null : rollbackConfirmed ? 'FlowBenchmarkSampleFailed' : 'FlowDebugRollbackFailed'),
       },
-      rawLog: { sample: planned.sample, phase: planned.phase, rawLog: transport.rawLog },
+      rawLog: transport.rawLog,
     };
   } catch {
     const failed = failedBenchmarkSample(planned, {
@@ -90,7 +89,7 @@ export function completedBenchmarkSample(
     });
     return {
       ...failed,
-      rawLog: { sample: planned.sample, phase: planned.phase, rawLog: transport.rawLog },
+      rawLog: transport.rawLog,
     };
   }
 }

@@ -30,6 +30,7 @@ const result: FlowBenchmarkResult = {
   failedSamples: 0,
   includedSamples: 4,
   totalWallClockMilliseconds: 100,
+  measuredWallClockMilliseconds: 80,
   throughputPerSecond: 40,
   wallClock: null,
   cpuTime: null,
@@ -74,7 +75,7 @@ describe('flow benchmark command', (): void => {
     $$.SANDBOX.stub(FlowBenchmark.prototype, 'parseFlags').resolves(flags());
     const benchmark = $$.SANDBOX.stub(FlowBenchmarkService.prototype, 'benchmark').resolves({
       result,
-      rawLogs: [],
+      rawLogStage: null,
     });
 
     const actual = await FlowBenchmark.run(['--json']);
@@ -93,6 +94,7 @@ describe('flow benchmark command', (): void => {
       confirm: false,
       logLevel: 'detailed',
       waitMilliseconds: 120_000,
+      retainWarmupLogs: true,
       expectedActiveVersion: 7,
     });
     expect(actual).to.equal(result);

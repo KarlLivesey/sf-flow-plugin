@@ -5,76 +5,37 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import { Messages } from '@salesforce/core';
-import type { Org } from '@salesforce/core';
 import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
 import { FlowBenchmarkService } from '../../services/flow-benchmark-service.js';
 import { ToolingFlowBenchmarkGateway } from '../../services/tooling-flow-benchmark-gateway.js';
 import { ToolingFlowDebugGateway } from '../../services/tooling-flow-debug-gateway.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
-import type { FlowBenchmarkRequest, FlowBenchmarkResult } from '../../types/flow-benchmark.js';
+import type { FlowBenchmarkResult } from '../../types/flow-benchmark.js';
 import type { FlowDebugLogLevel } from '../../types/flow-debug.js';
-import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
+import type { BenchmarkFlagValues } from '../../utils/flow-benchmark-command.js';
+import { createFlowBenchmarkRequest } from '../../utils/flow-benchmark-command.js';
+import { createFlowCommandContext, validateNamedFlowFlags } from '../../utils/flow-command.js';
 import {
   persistFlowBenchmark,
   prepareFlowBenchmarkDestinations,
   type FlowBenchmarkDestinations,
 } from '../../utils/flow-benchmark-files.js';
 import {
+  MAX_BENCHMARK_CONCURRENCY,
+  MAX_BENCHMARK_ITERATIONS,
+  MAX_BENCHMARK_WARMUP,
   parseBenchmarkPercentile,
   parseNonnegativeBenchmarkInteger,
   parsePositiveBenchmarkInteger,
 } from '../../utils/flow-benchmark-flags.js';
-import { readFlowInputs } from '../../utils/flow-input-file.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('sf-flow-plugin', 'flow.benchmark');
 
-export interface BenchmarkFlagValues {
-  'api-name': string;
-  'target-org': Org | undefined;
-  input: string[];
-  'input-file': string | undefined;
-  iterations: number;
-  warmup: number;
-  concurrency: number;
-  percentile: number[];
-  'continue-on-error': boolean;
-  'include-failed': boolean;
-  'raw-log-dir': string | undefined;
-  'exclude-warmup-logs': boolean;
-  'output-file': string | undefined;
-  'dry-run': boolean;
-  confirm: boolean;
-  'log-level': FlowDebugLogLevel;
-  wait: number;
-  'if-active-version': number | undefined;
-  namespace: string | undefined;
-  'api-version': string | undefined;
-}
-
-async function createRequest(
-  flags: BenchmarkFlagValues,
-  context: ReturnType<typeof createFlowCommandContext>
-): Promise<FlowBenchmarkRequest> {
-  return {
-    ...createNamedFlowRequest(flags, context),
-    inputs: await readFlowInputs(flags['input-file'], flags.input),
-    iterations: flags.iterations,
-    warmup: flags.warmup,
-    concurrency: flags.concurrency,
-    percentiles: [...new Set(flags.percentile)].sort((left, right) => left - right),
-    continueOnError: flags['continue-on-error'],
-    includeFailed: flags['include-failed'],
-    dryRun: flags['dry-run'],
-    confirm: flags.confirm,
-    logLevel: flags['log-level'],
-    waitMilliseconds: flags.wait * 60_000,
-    ...(flags['if-active-version'] === undefined ? {} : { expectedActiveVersion: flags['if-active-version'] }),
-  };
-}
+export type { BenchmarkFlagValues } from '../../utils/flow-benchmark-command.js';
 
 export default class FlowBenchmark extends SfCommand<FlowBenchmarkResult> {
   public static override readonly summary = messages.getMessage('summary');
@@ -105,17 +66,20 @@ export default class FlowBenchmark extends SfCommand<FlowBenchmarkResult> {
     }),
     iterations: Flags.custom<number>({
       default: 100,
-      parse: (input: string): Promise<number> => Promise.resolve(parsePositiveBenchmarkInteger(input)),
+      parse: (input: string): Promise<number> =>
+        Promise.resolve(parsePositiveBenchmarkInteger(input, MAX_BENCHMARK_ITERATIONS)),
       summary: messages.getMessage('flags.iterations.summary'),
     })(),
     warmup: Flags.custom<number>({
       default: 10,
-      parse: (input: string): Promise<number> => Promise.resolve(parseNonnegativeBenchmarkInteger(input)),
+      parse: (input: string): Promise<number> =>
+        Promise.resolve(parseNonnegativeBenchmarkInteger(input, MAX_BENCHMARK_WARMUP)),
       summary: messages.getMessage('flags.warmup.summary'),
     })(),
     concurrency: Flags.custom<number>({
       default: 1,
-      parse: (input: string): Promise<number> => Promise.resolve(parsePositiveBenchmarkInteger(input)),
+      parse: (input: string): Promise<number> =>
+        Promise.resolve(parsePositiveBenchmarkInteger(input, MAX_BENCHMARK_CONCURRENCY)),
       summary: messages.getMessage('flags.concurrency.summary'),
     })(),
     percentile: Flags.custom<number>({
@@ -201,7 +165,7 @@ export default class FlowBenchmark extends SfCommand<FlowBenchmarkResult> {
     context: ReturnType<typeof createFlowCommandContext>,
     destinations: FlowBenchmarkDestinations
   ): Promise<FlowBenchmarkResult> {
-    const request = await createRequest(flags, context);
+    const request = await createFlowBenchmarkRequest(flags, context, destinations);
     const definition = new ToolingFlowDefinitionGateway(context.connection);
     const artifact = await withFlowProgress(this.spinner, 'benchmark', async (progress) =>
       new FlowBenchmarkService({
@@ -227,6 +191,7 @@ export default class FlowBenchmark extends SfCommand<FlowBenchmarkResult> {
           concurrency: `${result.effectiveConcurrency} effective (${result.requestedConcurrency} requested)`,
           failures: result.failedSamples,
           totalWallClock: result.totalWallClockMilliseconds,
+          measuredWallClock: result.measuredWallClockMilliseconds,
           throughput: result.throughputPerSecond ?? '-',
         },
       ],
@@ -235,6 +200,7 @@ export default class FlowBenchmark extends SfCommand<FlowBenchmarkResult> {
         { key: 'concurrency', name: 'Concurrency' },
         { key: 'failures', name: 'Failures' },
         { key: 'totalWallClock', name: 'Total wall-clock (ms)' },
+        { key: 'measuredWallClock', name: 'Measured wall-clock (ms)' },
         { key: 'throughput', name: 'Measured samples/s' },
       ],
     });

@@ -9,9 +9,9 @@ import { expect } from 'chai';
 import sinon from 'sinon';
 
 import { ToolingFlowBenchmarkGateway } from '../../src/services/tooling-flow-benchmark-gateway.js';
-import { ToolingFlowDebugLog } from '../../src/services/tooling-flow-debug-log.js';
+import { ToolingFlowBenchmarkLogCollector } from '../../src/services/tooling-flow-benchmark-log-collector.js';
 import { ToolingFlowDebugTrace, type TraceState } from '../../src/services/tooling-flow-debug-trace.js';
-import type { FlowDebugExecutionRequest } from '../../src/types/flow-debug.js';
+import type { FlowBenchmarkSessionRequest } from '../../src/types/flow-benchmark.js';
 
 const trace: TraceState = {
   debugLevelId: '7dl-temp',
@@ -19,12 +19,12 @@ const trace: TraceState = {
   restore: null,
   temporary: {
     debugLevelId: '7dl-temp',
-    startDate: '2026-07-28T09:59:00.000Z',
-    expirationDate: '2026-07-29T09:59:00.000Z',
+    startDate: new Date(Date.now() - 60_000).toISOString(),
+    expirationDate: new Date(Date.now() + 60 * 60_000).toISOString(),
   },
 };
 
-function request(): FlowDebugExecutionRequest {
+function request(): FlowBenchmarkSessionRequest {
   return {
     apiName: 'Calculate_Discount',
     namespace: null,
@@ -32,6 +32,7 @@ function request(): FlowDebugExecutionRequest {
     outputVariables: ['discount'],
     logLevel: 'detailed',
     waitMilliseconds: 120_000,
+    traceDurationMilliseconds: 600_000,
   };
 }
 
@@ -50,21 +51,24 @@ function connection(): { connection: Connection; executeAnonymous: sinon.SinonSt
   };
 }
 
-function stubLifecycle(): { open: sinon.SinonStub; close: sinon.SinonStub; find: sinon.SinonStub } {
+function stubLifecycle(): { open: sinon.SinonStub; close: sinon.SinonStub; register: sinon.SinonStub } {
   return {
     open: sinon.stub(ToolingFlowDebugTrace.prototype, 'open').resolves(trace),
     close: sinon.stub(ToolingFlowDebugTrace.prototype, 'close').resolves(),
-    find: sinon.stub(ToolingFlowDebugLog.prototype, 'find').resolves({
-      log: {
-        id: '07L000000000001',
-        status: 'Success',
-        operation: 'executeAnonymous',
-        startTime: '2026-07-28T10:00:00.000Z',
-        durationMilliseconds: 25,
-        logLength: 1000,
-      },
-      rawLog: 'complete correlated log',
-    }),
+    register: sinon.stub(ToolingFlowBenchmarkLogCollector.prototype, 'register').callsFake(() => ({
+      cancel: sinon.stub(),
+      result: Promise.resolve({
+        log: {
+          id: '07L000000000001',
+          status: 'Success',
+          operation: 'executeAnonymous',
+          startTime: '2026-07-28T10:00:00.000Z',
+          durationMilliseconds: 25,
+          logLength: 1000,
+        },
+        rawLog: 'complete correlated log',
+      }),
+    })),
   };
 }
 
@@ -77,11 +81,100 @@ async function runTwoSamples(connectionValue: Connection): Promise<void> {
 
 function expectSessionReuse(lifecycle: ReturnType<typeof stubLifecycle>, fake: ReturnType<typeof connection>): void {
   expect(lifecycle.open.calledOnce).to.equal(true);
+  expect(lifecycle.open.firstCall.args[1]).to.include({ waitMilliseconds: 600_000 });
   expect(lifecycle.close.calledOnceWithExactly(trace)).to.equal(true);
   expect(fake.executeAnonymous.callCount).to.equal(2);
-  expect(lifecycle.find.callCount).to.equal(2);
-  expect(lifecycle.find.firstCall.args[0]).to.include({ queryLimit: 2000 });
+  expect(lifecycle.register.callCount).to.equal(2);
   expect(fake.executeAnonymous.firstCall.args[0]).to.include('Database.rollback(sfFlowSavepoint)');
+}
+
+function renewalTraces(): { expiring: TraceState; renewed: TraceState } {
+  return {
+    expiring: {
+      ...trace,
+      temporary: { ...trace.temporary, expirationDate: new Date(Date.now() + 60_000).toISOString() },
+    },
+    renewed: {
+      ...trace,
+      traceFlagId: '7tf-renewed',
+      temporary: { ...trace.temporary, expirationDate: new Date(Date.now() + 60 * 60_000).toISOString() },
+    },
+  };
+}
+
+function collectorFixture(): {
+  collector: ToolingFlowBenchmarkLogCollector;
+  correlations: [string, string];
+  query: sinon.SinonStub;
+  records: Array<{ Id: string }>;
+  requestBody: sinon.SinonStub;
+} {
+  const correlations: [string, string] = [
+    '12345678-1234-1234-1234-123456789abc',
+    '87654321-4321-4321-4321-cba987654321',
+  ];
+  const records = correlations.map((_, index) => ({
+    Id: `07L00000000000${index + 1}`,
+    Status: 'Success',
+    Operation: 'executeAnonymous',
+    StartTime: '2026-07-28T10:00:00.000Z',
+    DurationMilliseconds: 25,
+    LogLength: 1000,
+  }));
+  const query = sinon.stub().resolves({ records });
+  const requestBody = sinon.stub().callsFake(async (url: string) => {
+    const index = url.endsWith('1/Body') ? 0 : 1;
+    return `SF_FLOW_PLUGIN_DEBUG|${correlations[index]}|END`;
+  });
+  const fake = {
+    getApiVersion: (): string => '65.0',
+    request: requestBody,
+    tooling: { query },
+  } as unknown as Connection;
+  return {
+    collector: new ToolingFlowBenchmarkLogCollector(fake, '005000000000001'),
+    correlations,
+    query,
+    records,
+    requestBody,
+  };
+}
+
+function registerCollector(
+  collector: ToolingFlowBenchmarkLogCollector,
+  correlations: [string, string]
+): Array<ReturnType<ToolingFlowBenchmarkLogCollector['register']>> {
+  const startedAt = new Date('2026-07-28T09:59:00.000Z');
+  return correlations.map((correlationId) =>
+    collector.register({ apiName: 'Flow_A', correlationId, startedAt, waitMilliseconds: 5000 })
+  );
+}
+
+async function expectTraceRenewal(context: {
+  fake: ReturnType<typeof connection>;
+  lifecycle: ReturnType<typeof stubLifecycle>;
+  expiring: TraceState;
+  renewed: TraceState;
+}): Promise<void> {
+  const session = await new ToolingFlowBenchmarkGateway(context.fake.connection).open(request());
+  await session.prepareBatch();
+  await session.close();
+  expect(context.lifecycle.open.callCount).to.equal(2);
+  expect(context.lifecycle.close.firstCall.calledWithExactly(context.expiring)).to.equal(true);
+  expect(context.lifecycle.close.secondCall.calledWithExactly(context.renewed)).to.equal(true);
+}
+
+async function expectKnownLogFailureDuration(
+  fake: ReturnType<typeof connection>,
+  lifecycle: ReturnType<typeof stubLifecycle>
+): Promise<void> {
+  const session = await new ToolingFlowBenchmarkGateway(fake.connection).open(request());
+  const error = await session.execute(request()).catch((caught: unknown) => caught);
+  expect(error).to.have.property('name', 'FlowBenchmarkExecutionError');
+  expect(error).to.have.property('errorCode', 'FlowDebugLogNotFound');
+  expect(error).to.have.property('executionDurationMilliseconds').that.is.a('number');
+  await session.close();
+  expect(lifecycle.close.calledOnce).to.equal(true);
 }
 
 describe('ToolingFlowBenchmarkGateway tracing session', (): void => {
@@ -94,5 +187,42 @@ describe('ToolingFlowBenchmarkGateway tracing session', (): void => {
     } finally {
       sinon.restore();
     }
+  });
+
+  it('renews an expiring trace between batches', async (): Promise<void> => {
+    const fake = connection();
+    const { expiring, renewed } = renewalTraces();
+    const lifecycle = stubLifecycle();
+    lifecycle.open.onFirstCall().resolves(expiring).onSecondCall().resolves(renewed);
+    try {
+      await expectTraceRenewal({ fake, lifecycle, expiring, renewed });
+    } finally {
+      sinon.restore();
+    }
+  });
+
+  it('preserves Execute Anonymous duration when correlated log retrieval fails', async (): Promise<void> => {
+    const fake = connection();
+    const lifecycle = stubLifecycle();
+    const logError = Object.assign(new Error('sensitive polling failure'), { name: 'FlowDebugLogNotFound' });
+    lifecycle.register.onFirstCall().returns({ cancel: sinon.stub(), result: Promise.reject(logError) });
+    try {
+      await expectKnownLogFailureDuration(fake, lifecycle);
+    } finally {
+      sinon.restore();
+    }
+  });
+});
+
+describe('ToolingFlowBenchmarkLogCollector shared polling', (): void => {
+  it('queries once and downloads each concurrent ApexLog body once', async (): Promise<void> => {
+    const fixture = collectorFixture();
+    const registrations = registerCollector(fixture.collector, fixture.correlations);
+    expect((await Promise.all(registrations.map(({ result }) => result))).map((result) => result.log.id)).to.deep.equal(
+      fixture.records.map((record) => record.Id)
+    );
+    expect(fixture.query.callCount).to.equal(1);
+    expect(fixture.requestBody.callCount).to.equal(2);
+    fixture.collector.close();
   });
 });

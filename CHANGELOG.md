@@ -28,8 +28,9 @@ All notable user-visible changes to this project will be documented in this file
   the rollback marker for every sample. Raw logs are written with owner-only permissions on POSIX systems.
 - Rollback affects database changes in the current transaction only. It cannot reverse callouts, email, asynchronous
   work or separately committed transactions; production execution therefore requires `--confirm`.
-- The plugin does not impose an artificial execution-concurrency cap. Salesforce org, API, Apex-log and tracing
-  limits remain authoritative.
+- Benchmark workloads are bounded before tracing starts. ApexLogs are collected once per tracing session, streamed to
+  private staging only when requested and published after successful completion; long runs renew short trace windows
+  between batches.
 
 ### Changed
 

@@ -8,6 +8,9 @@ import { expect } from 'chai';
 
 import { parseApexCpuTime } from '../../src/utils/flow-benchmark-log.js';
 import {
+  assertBenchmarkWorkload,
+  MAX_BENCHMARK_CONCURRENCY,
+  MAX_BENCHMARK_ITERATIONS,
   parseNonnegativeBenchmarkInteger,
   parsePositiveBenchmarkInteger,
 } from '../../src/utils/flow-benchmark-flags.js';
@@ -47,5 +50,12 @@ describe('Flow benchmark integer flags', (): void => {
     expect(parseNonnegativeBenchmarkInteger('0')).to.equal(0);
     expect(() => parsePositiveBenchmarkInteger('9007199254740992')).to.throw('positive safe integer');
     expect(() => parseNonnegativeBenchmarkInteger('-1')).to.throw('non-negative safe integer');
+    expect(() => parsePositiveBenchmarkInteger('10001', MAX_BENCHMARK_ITERATIONS)).to.throw('no greater than 10000');
+  });
+
+  it('rejects excessive workloads before execution', (): void => {
+    expect(() => {
+      assertBenchmarkWorkload({ iterations: 1, warmup: 0, concurrency: MAX_BENCHMARK_CONCURRENCY + 1, inputCount: 1 });
+    }).to.throw('concurrency must be between 1 and 100');
   });
 });

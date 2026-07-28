@@ -8,7 +8,6 @@ import { flowBenchmarkFailed, flowInputInvalid } from '../errors/flow-errors.js'
 import type { FlowMetadataGateway, JsonObject } from '../types/flow-analysis.js';
 import type {
   FlowBenchmarkArtifact,
-  FlowBenchmarkPhase,
   FlowBenchmarkRequest,
   FlowBenchmarkSession,
   FlowBenchmarkSessionGateway,
@@ -17,18 +16,19 @@ import type { FlowDebugGateway } from '../types/flow-debug.js';
 import type { FlowRollbackRequest } from '../types/flow-invocation.js';
 import type { FlowDefinitionGateway } from '../types/flow.js';
 import { createBoundedFlowDebugApex } from '../utils/flow-debug-apex.js';
+import { createFlowBenchmarkLogStage, discardFlowBenchmarkLogStage } from '../utils/flow-benchmark-files.js';
+import { assertBenchmarkWorkload } from '../utils/flow-benchmark-flags.js';
 import { createFlowBenchmarkResult } from '../utils/flow-benchmark-result.js';
-import {
-  completedBenchmarkSample,
-  type CompletedBenchmarkSample,
-  failedBenchmarkSample,
-  type PlannedBenchmarkSample,
-  safeBenchmarkErrorCode,
-} from '../utils/flow-benchmark-sample.js';
+import type { CompletedBenchmarkSample } from '../utils/flow-benchmark-sample.js';
 import { analyseFlowMetadata } from '../utils/flow-metadata-analysis.js';
 import { validateFlowInputs } from '../utils/flow-input-schema.js';
 import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
+import { qualifiedFlowName, selectFlowDefinition } from '../utils/flow-state.js';
 import { FlowDebugService, type PreparedDebug } from './flow-debug-service.js';
+import { FLOW_BENCHMARK_BATCH_SIZE, FlowBenchmarkPhaseRunner } from './flow-benchmark-phase-runner.js';
+
+const MINIMUM_TRACE_DURATION_MILLISECONDS = 10 * 60_000;
+const MAXIMUM_TRACE_DURATION_MILLISECONDS = 60 * 60_000;
 
 interface FlowBenchmarkGateways {
   definition: FlowDefinitionGateway & FlowMetadataGateway;
@@ -36,23 +36,17 @@ interface FlowBenchmarkGateways {
   benchmark: FlowBenchmarkSessionGateway;
 }
 
-interface PhaseResult {
-  completed: CompletedBenchmarkSample[];
-  stopped: boolean;
-}
-
-interface PhaseRunnerContext {
-  session: FlowBenchmarkSession;
-  prepared: PreparedDebug;
-  request: FlowBenchmarkRequest;
-  progress: FlowProgressReporter;
-}
-
 interface BenchmarkExecutionContext {
   request: FlowBenchmarkRequest;
   prepared: PreparedDebug;
   inputs: JsonObject[];
+  rawLogStage: string | null;
   progress: FlowProgressReporter;
+}
+
+interface BenchmarkPhases {
+  completed: CompletedBenchmarkSample[];
+  measuredWallClockMilliseconds: number;
 }
 
 function rollbackRequest(request: FlowBenchmarkRequest, input: JsonObject): FlowRollbackRequest {
@@ -93,98 +87,96 @@ function requiredInput(inputs: JsonObject[], index: number): JsonObject {
   return input;
 }
 
-function planPhase(phase: FlowBenchmarkPhase, count: number, inputs: JsonObject[]): PlannedBenchmarkSample[] {
-  return Array.from({ length: count }, (_, index) => ({
-    sample: index + 1,
-    phase,
-    inputIndex: index % inputs.length,
-    input: requiredInput(inputs, index % inputs.length),
-  }));
+function firstBenchmarkInput(request: FlowBenchmarkRequest): JsonObject {
+  assertBenchmarkWorkload({
+    iterations: request.iterations,
+    warmup: request.warmup,
+    concurrency: request.concurrency,
+    inputCount: request.inputs.length,
+  });
+  const firstInput = request.inputs[0];
+  if (firstInput === undefined) {
+    throw flowInputInvalid('Flow benchmark requires at least one input object.');
+  }
+  return firstInput;
 }
 
-class BenchmarkPhaseRunner {
-  private readonly completed: CompletedBenchmarkSample[] = [];
-  private nextIndex = 0;
-  private stopped = false;
+function dryRunArtifact(context: BenchmarkExecutionContext): FlowBenchmarkArtifact {
+  return {
+    result: createFlowBenchmarkResult({
+      request: context.request,
+      prepared: context.prepared,
+      samples: [],
+      totalWallClockMilliseconds: 0,
+      measuredWallClockMilliseconds: 0,
+    }),
+    rawLogStage: null,
+  };
+}
 
-  public constructor(
-    private readonly context: PhaseRunnerContext,
-    private readonly planned: PlannedBenchmarkSample[]
-  ) {}
+function traceDuration(request: FlowBenchmarkRequest): number {
+  const batches = Math.ceil((request.iterations + request.warmup) / FLOW_BENCHMARK_BATCH_SIZE);
+  const plannedDuration = Math.max(request.waitMilliseconds + 60_000, batches * 60_000);
+  return Math.min(MAXIMUM_TRACE_DURATION_MILLISECONDS, Math.max(MINIMUM_TRACE_DURATION_MILLISECONDS, plannedDuration));
+}
 
-  public async run(): Promise<PhaseResult> {
-    const workerCount = Math.min(this.context.request.concurrency, this.planned.length);
-    await Promise.all(Array.from({ length: workerCount }, async () => this.worker()));
-    return { completed: this.completed, stopped: this.stopped };
-  }
-
-  private claim(): PlannedBenchmarkSample | null {
-    if (this.stopped || this.nextIndex >= this.planned.length) {
-      return null;
-    }
-    const planned = this.planned[this.nextIndex];
-    if (planned === undefined) {
-      return null;
-    }
-    this.nextIndex += 1;
-    return planned;
-  }
-
-  private async execute(planned: PlannedBenchmarkSample): Promise<CompletedBenchmarkSample> {
-    this.context.progress(
-      'invoking-flow',
-      `${this.context.prepared.flow.apiName} ${planned.phase} ${planned.sample}/${this.planned.length}`
+async function assertActiveVersionUnchanged(
+  gateway: FlowDefinitionGateway,
+  prepared: PreparedDebug,
+  stage: 'before' | 'after'
+): Promise<void> {
+  const expected = prepared.flow;
+  const lookup =
+    expected.definition.namespace === null
+      ? { apiName: expected.definition.apiName }
+      : { apiName: expected.definition.apiName, namespace: expected.definition.namespace };
+  const current = selectFlowDefinition(expected.definition.apiName, await gateway.findDefinitions(lookup));
+  if (current.activeVersionId !== expected.version.id) {
+    throw flowBenchmarkFailed(
+      `Flow "${qualifiedFlowName(
+        expected.definition.apiName,
+        expected.definition.namespace
+      )}" active version changed ${stage} measured sampling.`
     );
-    const started = performance.now();
-    try {
-      const transport = await this.context.session.execute({
-        apiName: this.context.prepared.flow.definition.apiName,
-        namespace: this.context.prepared.flow.definition.namespace,
-        input: planned.input,
-        outputVariables: this.context.prepared.outputVariables,
-        logLevel: this.context.request.logLevel,
-        waitMilliseconds: this.context.request.waitMilliseconds,
-      });
-      return completedBenchmarkSample(planned, transport);
-    } catch (error: unknown) {
-      return failedBenchmarkSample(planned, {
-        wallClockMilliseconds: performance.now() - started,
-        errorCode: safeBenchmarkErrorCode(error),
-      });
-    }
-  }
-
-  private async worker(): Promise<void> {
-    const planned = this.claim();
-    if (planned === null) {
-      return;
-    }
-    const completed = await this.execute(planned);
-    this.completed.push(completed);
-    if (!completed.sample.successful && !this.context.request.continueOnError) {
-      this.stopped = true;
-      return;
-    }
-    await this.worker();
   }
 }
 
 async function runPhases(
   context: BenchmarkExecutionContext,
-  session: FlowBenchmarkSession
-): Promise<CompletedBenchmarkSample[]> {
-  const { request, prepared, inputs, progress } = context;
-  const runnerContext = { session, prepared, request, progress };
-  const warmup = await new BenchmarkPhaseRunner(runnerContext, planPhase('warmup', request.warmup, inputs)).run();
-  const measured =
-    warmup.stopped && !request.continueOnError
-      ? { completed: [], stopped: true }
-      : await new BenchmarkPhaseRunner(runnerContext, planPhase('measured', request.iterations, inputs)).run();
-  return [...warmup.completed, ...measured.completed].sort(
-    (left, right) =>
-      Number(left.sample.phase === 'measured') - Number(right.sample.phase === 'measured') ||
-      left.sample.sample - right.sample.sample
-  );
+  session: FlowBenchmarkSession,
+  definition: FlowDefinitionGateway
+): Promise<BenchmarkPhases> {
+  const shared = {
+    session,
+    prepared: context.prepared,
+    request: context.request,
+    inputs: context.inputs,
+    rawLogStage: context.rawLogStage,
+    progress: context.progress,
+  };
+  const warmup = await new FlowBenchmarkPhaseRunner({
+    ...shared,
+    phase: 'warmup',
+    count: context.request.warmup,
+  }).run();
+  if (warmup.stopped && !context.request.continueOnError) {
+    return { completed: warmup.completed, measuredWallClockMilliseconds: 0 };
+  }
+  await assertActiveVersionUnchanged(definition, context.prepared, 'before');
+  const measured = await new FlowBenchmarkPhaseRunner({
+    ...shared,
+    phase: 'measured',
+    count: context.request.iterations,
+  }).run();
+  await assertActiveVersionUnchanged(definition, context.prepared, 'after');
+  return {
+    completed: [...warmup.completed, ...measured.completed].sort(
+      (left, right) =>
+        Number(left.sample.phase === 'measured') - Number(right.sample.phase === 'measured') ||
+        left.sample.sample - right.sample.sample
+    ),
+    measuredWallClockMilliseconds: measured.elapsedMilliseconds,
+  };
 }
 
 export class FlowBenchmarkService {
@@ -194,20 +186,33 @@ export class FlowBenchmarkService {
     request: FlowBenchmarkRequest,
     progress: FlowProgressReporter = noFlowProgress
   ): Promise<FlowBenchmarkArtifact> {
-    const firstInput = request.inputs[0];
-    if (firstInput === undefined) {
-      throw flowInputInvalid('Flow benchmark requires at least one input object.');
-    }
+    const context = await this.prepare(request, progress);
+    return request.dryRun ? dryRunArtifact(context) : this.withRawLogStage(context);
+  }
+
+  private async prepare(
+    request: FlowBenchmarkRequest,
+    progress: FlowProgressReporter
+  ): Promise<BenchmarkExecutionContext> {
+    const firstInput = firstBenchmarkInput(request);
     const debug = new FlowDebugService({ definition: this.gateways.definition, debug: this.gateways.debug });
     const prepared = await debug.prepare(rollbackRequest(request, firstInput), progress);
     const inputs = validateInputs(prepared, request);
-    if (request.dryRun) {
-      return {
-        result: createFlowBenchmarkResult({ request, prepared, samples: [], totalWallClockMilliseconds: 0 }),
-        rawLogs: [],
-      };
+    return { request, prepared, inputs, rawLogStage: null, progress };
+  }
+
+  private async withRawLogStage(context: BenchmarkExecutionContext): Promise<FlowBenchmarkArtifact> {
+    const { request, prepared } = context;
+    const rawLogStage = await createFlowBenchmarkLogStage(request.rawLogDirectory);
+    try {
+      return await this.execute({ ...context, rawLogStage });
+    } catch (error: unknown) {
+      await discardFlowBenchmarkLogStage(rawLogStage);
+      if (error instanceof Error && error.name === 'FlowBenchmarkFailed') {
+        throw error;
+      }
+      throw flowBenchmarkFailed(`Flow benchmark "${prepared.flow.apiName}" failed.`, error);
     }
-    return this.execute({ request, prepared, inputs, progress });
   }
 
   private async execute(context: BenchmarkExecutionContext): Promise<FlowBenchmarkArtifact> {
@@ -219,22 +224,21 @@ export class FlowBenchmarkService {
       outputVariables: prepared.outputVariables,
       logLevel: request.logLevel,
       waitMilliseconds: request.waitMilliseconds,
+      traceDurationMilliseconds: traceDuration(request),
     });
     const started = performance.now();
     try {
-      const completed = await runPhases(context, session);
-      const result = createFlowBenchmarkResult({
-        request,
-        prepared,
-        samples: completed.map((entry) => entry.sample),
-        totalWallClockMilliseconds: performance.now() - started,
-      });
+      const phases = await runPhases(context, session, this.gateways.definition);
       return {
-        result,
-        rawLogs: completed.flatMap((entry) => (entry.rawLog === null ? [] : [entry.rawLog])),
+        result: createFlowBenchmarkResult({
+          request,
+          prepared,
+          samples: phases.completed.map((entry) => entry.sample),
+          totalWallClockMilliseconds: performance.now() - started,
+          measuredWallClockMilliseconds: phases.measuredWallClockMilliseconds,
+        }),
+        rawLogStage: context.rawLogStage,
       };
-    } catch (error: unknown) {
-      throw flowBenchmarkFailed(`Flow benchmark "${prepared.flow.apiName}" failed.`, error);
     } finally {
       await session.close();
     }

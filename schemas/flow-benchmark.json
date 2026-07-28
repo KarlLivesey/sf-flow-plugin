@@ -53,6 +53,9 @@
         "totalWallClockMilliseconds": {
           "type": "number"
         },
+        "measuredWallClockMilliseconds": {
+          "type": "number"
+        },
         "throughputPerSecond": {
           "type": ["number", "null"]
         },
@@ -100,6 +103,7 @@
         "failedSamples",
         "includedSamples",
         "totalWallClockMilliseconds",
+        "measuredWallClockMilliseconds",
         "throughputPerSecond",
         "wallClock",
         "cpuTime",
@@ -167,7 +171,7 @@
           "type": "boolean"
         },
         "wallClockMilliseconds": {
-          "type": "number"
+          "type": ["number", "null"]
         },
         "cpuTimeMilliseconds": {
           "type": ["number", "null"]

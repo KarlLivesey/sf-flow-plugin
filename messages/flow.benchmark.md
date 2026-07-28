@@ -12,9 +12,10 @@ Measured samples report individual wall-clock and Salesforce CPU time. The summa
 requested percentiles, total benchmark wall-clock time and throughput. Input arrays are assigned deterministically in
 round-robin order.
 
-Concurrency defaults to one and has no plugin-defined upper bound. The effective measured concurrency is the smaller
-of the requested concurrency and iteration count. Salesforce remains authoritative for org, API, tracing and Apex-log
-limits.
+Concurrency defaults to one and is limited to 100. Measured samples are limited to 10,000, warm-up samples to 1,000,
+the combined workload to 11,000 and varied input files to 10 MiB or 10,000 objects. The effective measured concurrency
+is the smaller of the requested concurrency and iteration count. Salesforce remains authoritative for stricter org,
+API, tracing and Apex-log limits.
 
 The command stops scheduling new samples after a failure by default. Concurrent samples already in progress are
 allowed to finish. Use `--continue-on-error` to run all samples. Failed samples are reported but excluded from
@@ -49,7 +50,7 @@ Number of warm-up samples excluded from statistics. Defaults to 10; use 0 to dis
 
 # flags.concurrency.summary
 
-Maximum samples to run concurrently. Defaults to 1 and has no plugin-defined upper bound.
+Maximum samples to run concurrently. Defaults to 1; maximum 100.
 
 # flags.percentile.summary
 
@@ -65,7 +66,7 @@ Include available failed-sample timings in measured statistics.
 
 # flags.raw-log-dir.summary
 
-Write every complete standard Salesforce ApexLog to a new directory.
+Stream complete standard Salesforce ApexLogs into a private staging directory and publish it only after success.
 
 # flags.exclude-warmup-logs.summary
 
