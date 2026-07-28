@@ -83,6 +83,10 @@ Minutes to wait for Salesforce to make the correlated ApexLog available. Default
 
 Exit with status 1 when Salesforce reports an unsuccessful Flow invocation.
 
+# flags.if-active-version.summary
+
+Continue only when this Flow version is still active.
+
 # flags.namespace.summary
 
 Namespace that identifies a packaged Flow.

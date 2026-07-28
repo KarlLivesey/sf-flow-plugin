@@ -25,6 +25,13 @@ import { qualifiedFlowName } from '../../utils/flow-state.js';
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('sf-flow-plugin', 'flow.run');
 
+function positiveVersion(input: string): number {
+  if (!/^[1-9]\d*$/u.test(input) || !Number.isSafeInteger(Number(input))) {
+    throw flowInputInvalid(`Expected active Flow version "${input}" is not a positive safe integer.`);
+  }
+  return Number(input);
+}
+
 export interface RunFlagValues {
   'api-name': string;
   'target-org': Org | undefined;
@@ -39,6 +46,7 @@ export interface RunFlagValues {
   'show-values': boolean | undefined;
   wait: number | undefined;
   'fail-on-flow-error': boolean;
+  'if-active-version': number | undefined;
   namespace: string | undefined;
   'api-version': string | undefined;
 }
@@ -52,6 +60,7 @@ async function createRunRequest(
     invocations: await readFlowInputs(flags['input-file'], flags.input),
     dryRun: flags['dry-run'],
     confirm: flags.confirm,
+    ...(flags['if-active-version'] === undefined ? {} : { expectedActiveVersion: flags['if-active-version'] }),
   };
 }
 
@@ -76,6 +85,7 @@ async function createRollbackRequest(
     logLevel: flags['log-level'] ?? 'detailed',
     showValues: flags['show-values'] ?? false,
     waitMilliseconds: waitMinutes * 60_000,
+    ...(flags['if-active-version'] === undefined ? {} : { expectedActiveVersion: flags['if-active-version'] }),
   };
 }
 
@@ -142,6 +152,10 @@ export default class FlowRun extends SfCommand<FlowRunResult> {
       default: false,
       summary: messages.getMessage('flags.fail-on-flow-error.summary'),
     }),
+    'if-active-version': Flags.custom<number>({
+      parse: (input: string): Promise<number> => Promise.resolve(positiveVersion(input)),
+      summary: messages.getMessage('flags.if-active-version.summary'),
+    })(),
     namespace: Flags.string({
       summary: messages.getMessage('flags.namespace.summary'),
     }),

@@ -17,6 +17,7 @@ All notable user-visible changes to this project will be documented in this file
 
 ### Added
 
+- Added `sf flow run --if-active-version` to guard invocation and rollback debugging against an unexpected activation.
 - Added `sf flow run --rollback` for one active, directly invocable autolaunched Flow. It validates inputs, executes
   the Flow through Execute Anonymous Apex, rolls back database changes, retrieves the related Salesforce ApexLog using
   an exact per-run correlation marker and displays parsed Flow events.

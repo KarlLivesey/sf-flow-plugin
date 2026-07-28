@@ -356,6 +356,7 @@
       "dry-run",
       "fail-on-flow-error",
       "flags-dir",
+      "if-active-version",
       "input",
       "input-file",
       "json",

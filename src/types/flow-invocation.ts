@@ -12,6 +12,7 @@ export interface FlowRunRequest extends NamedFlowRequest {
   invocations: JsonObject[];
   dryRun: boolean;
   confirm: boolean;
+  expectedActiveVersion?: FlowVersionNumber;
 }
 
 export interface FlowRollbackRequest extends NamedFlowRequest {
@@ -21,6 +22,7 @@ export interface FlowRollbackRequest extends NamedFlowRequest {
   logLevel: FlowDebugLogLevel;
   showValues: boolean;
   waitMilliseconds: number;
+  expectedActiveVersion?: FlowVersionNumber;
 }
 
 export interface FlowInvocationError {

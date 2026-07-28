@@ -17,6 +17,15 @@ import {
 } from '../helpers/flow-run-fixtures.js';
 
 describe('FlowRunService execution', (): void => {
+  it('rejects a stale expected active version before invocation', async (): Promise<void> => {
+    const fake = gateways();
+    await expectErrorName(
+      new FlowRunService(fake).run(request({ expectedActiveVersion: 2 })),
+      'FlowActiveVersionMismatch'
+    );
+    expect(fake.invocation.invoked).to.deep.equal([]);
+  });
+
   it('validates, invokes and redacts Flow values', async (): Promise<void> => {
     const fake = gateways();
     fake.invocation.results = [

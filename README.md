@@ -810,6 +810,7 @@ sf flow run \
   [--wait MINUTES] \
   [--confirm] \
   [--fail-on-flow-error] \
+  [--if-active-version NUMBER] \
   [--namespace NAMESPACE] \
   [--target-org ORG] \
   [--api-version VERSION] \
@@ -817,6 +818,8 @@ sf flow run \
 ```
 
 `sf flow run` invokes the active version of an autolaunched Flow through Salesforce's supported Flow REST action.
+Use `--if-active-version` as an explicit optimistic concurrency guard when a script must run only a previously
+inspected version.
 The command discovers declared inputs and validates scalar, record and collection values with Zod. Repeatable
 `--input NAME=VALUE` values perform one invocation; `--input-file` accepts one JSON object or an array of objects for
 up to 200 invocations. All supplied invocations are sent in one REST action request. Salesforce does not guarantee

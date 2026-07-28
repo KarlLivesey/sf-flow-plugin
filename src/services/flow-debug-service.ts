@@ -15,6 +15,7 @@ import type {
 import type { FlowRollbackRequest, FlowRunResult } from '../types/flow-invocation.js';
 import type { FlowDefinition, FlowDefinitionGateway, FlowDefinitionLookup, FlowVersion } from '../types/flow.js';
 import { createBoundedFlowDebugApex } from '../utils/flow-debug-apex.js';
+import { assertExpectedActiveVersion } from '../utils/flow-concurrency.js';
 import { parseFlowDebugLog } from '../utils/flow-debug-log.js';
 import {
   createFlowDebugArtifact,
@@ -224,6 +225,7 @@ export class FlowDebugService {
     const apiName = qualifiedFlowName(definition.apiName, definition.namespace);
     progress('loading-versions', `${apiName} (active)`);
     const version = activeVersion(definition, await this.gateways.definition.findVersions(definition.id));
+    assertExpectedActiveVersion(apiName, request.expectedActiveVersion, version.versionNumber);
     progress('loading-metadata', `${apiName} v${version.versionNumber}`);
     const metadata = await this.gateways.definition.getVersionMetadata(version.id);
     return { definition, version, apiName, metadata };
