@@ -12,6 +12,7 @@ import { resolve } from 'node:path';
 import { expect } from 'chai';
 
 import FlowCheck from '../../../src/commands/flow/check.js';
+import FlowCompare from '../../../src/commands/flow/compare.js';
 import FlowDescribe from '../../../src/commands/flow/describe.js';
 import FlowGraph from '../../../src/commands/flow/graph.js';
 import FlowLint from '../../../src/commands/flow/lint.js';
@@ -73,6 +74,21 @@ describe('local Flow source commands', (): void => {
     expect(orgCheck.called).to.equal(false);
     expect(result.checks).to.deep.equal(['metrics']);
     expect(result.targetOrg).to.equal(null);
+  });
+
+  it('compares two local Flow files without resolving an org', async (): Promise<void> => {
+    const result = await FlowCompare.run(['--from-file', fixture, '--to-file', fixture, '--json']);
+    expect(result).to.include({
+      apiName: 'Plugin_Test_Flow',
+      fromDefinitionId: null,
+      toDefinitionId: null,
+      fromVersion: null,
+      toVersion: null,
+      targetOrg: null,
+      different: false,
+    });
+    expect(result.fromSourceFile).to.equal(fixture);
+    expect(result.toSourceFile).to.equal(fixture);
   });
 });
 

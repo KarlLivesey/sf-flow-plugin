@@ -97,6 +97,7 @@
       "flags-dir",
       "format",
       "from",
+      "from-file",
       "from-org",
       "ignore-order",
       "ignore-path",
@@ -106,6 +107,7 @@
       "output-file",
       "target-org",
       "to",
+      "to-file",
       "to-org"
     ],
     "plugin": "sf-flow-plugin"

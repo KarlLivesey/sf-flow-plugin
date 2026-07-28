@@ -387,7 +387,9 @@ displayed.
 
 ```bash
 sf flow compare \
-  --api-name Order_Processing \
+  [--api-name Order_Processing] \
+  [--from-file FILE] \
+  [--to-file FILE] \
   [--target-org ORG] \
   [--from-org ORG --to-org ORG] \
   [--from active|latest|NUMBER] \
@@ -412,6 +414,19 @@ sf flow compare \
   --to 7
 ```
 
+Compare deployable local source with an org version:
+
+```bash
+sf flow compare \
+  --from-file force-app/main/default/flows/Order_Processing.flow-meta.xml \
+  --to active
+```
+
+Use both file flags for an entirely local comparison. The qualified Flow identity is derived from each filename and
+must match. `--api-name` is required only when both sides are org versions. A file flag cannot be combined with the
+version or cross-org flag for that same side. File-backed result fields use `null` for org IDs and version numbers
+and include the resolved absolute source-file path.
+
 Compare the same Flow across two authenticated orgs:
 
 ```bash
@@ -426,7 +441,10 @@ sf flow compare \
 `--from-org` and `--to-org` must be supplied together. Without them, both sides use `--target-org` or the configured
 default target org. The Flow definition and selected version are resolved independently in each org.
 
-The command retrieves each version's validated `Flow.Metadata` value and reports `added`, `removed` and `changed` paths. Named Flow elements are matched by name so array reordering does not produce false changes. Top-level lifecycle `status` is excluded because `sf flow versions` already reports version state.
+The command retrieves each org version's validated `Flow.Metadata` value or parses the selected local source and
+reports `added`, `removed` and `changed` paths. Named Flow elements are matched by name so array reordering does not
+produce false changes. Top-level lifecycle `status` is excluded because `sf flow versions` already reports version
+state.
 
 `--fail-on-difference` retains the comparison output but sets process status 1 when changes exist, making the command suitable for CI checks.
 

@@ -9,6 +9,7 @@ import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
 import { flowComparisonFailed } from '../../errors/flow-errors.js';
 import { FlowComparisonService } from '../../services/flow-comparison-service.js';
+import { loadFlowSource } from '../../services/flow-source-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type {
   FlowCompareRequest,
@@ -17,7 +18,9 @@ import type {
   FlowComparisonScope,
   FlowComparisonVersionSelector,
 } from '../../types/flow-analysis.js';
-import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
+import type { FlowSource } from '../../types/flow-source.js';
+import { createFlowCommandContext } from '../../utils/flow-command.js';
+import { validateFlowApiName, validateNamespace } from '../../utils/flow-name-validation.js';
 import { renderFlowComparison } from '../../utils/flow-comparison-renderer.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
 import { writeFlowReport } from '../../utils/flow-report-file.js';
@@ -26,7 +29,9 @@ Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('sf-flow-plugin', 'flow.compare');
 
 export interface CompareFlagValues {
-  'api-name': string;
+  'api-name': string | undefined;
+  'from-file': string | undefined;
+  'to-file': string | undefined;
   'target-org': Org | undefined;
   'from-org': Org | undefined;
   'to-org': Org | undefined;
@@ -43,8 +48,8 @@ export interface CompareFlagValues {
 }
 
 interface ComparisonContexts {
-  from: ReturnType<typeof createFlowCommandContext>;
-  to: ReturnType<typeof createFlowCommandContext>;
+  from?: ReturnType<typeof createFlowCommandContext>;
+  to?: ReturnType<typeof createFlowCommandContext>;
 }
 
 export function parseComparisonVersionSelector(input: string): FlowComparisonVersionSelector {
@@ -57,17 +62,44 @@ export function parseComparisonVersionSelector(input: string): FlowComparisonVer
   return Number(input);
 }
 
-function createRequest(flags: CompareFlagValues, contexts: ComparisonContexts): FlowCompareRequest {
+function createRequest(
+  flags: CompareFlagValues,
+  contexts: ComparisonContexts,
+  sources: { from?: FlowSource; to?: FlowSource }
+): FlowCompareRequest {
+  const { apiName, namespace } = comparisonIdentity(flags, sources);
+  const fromOrg = contexts.from?.targetOrg ?? 'local source';
+  const toOrg = contexts.to?.targetOrg ?? 'local source';
   return {
-    ...createNamedFlowRequest(flags, contexts.from),
+    apiName,
+    targetOrg: fromOrg,
+    ...(namespace === undefined ? {} : { namespace }),
+    ...(flags['api-version'] === undefined ? {} : { apiVersion: flags['api-version'] }),
     from: flags.from,
     to: flags.to,
-    fromOrg: contexts.from.targetOrg,
-    toOrg: contexts.to.targetOrg,
+    fromOrg,
+    toOrg,
     scopes: flags.only ?? [],
     ignoreOrder: flags['ignore-order'],
     ignorePaths: flags['ignore-path'] ?? [],
   };
+}
+
+function comparisonIdentity(
+  flags: CompareFlagValues,
+  sources: { from?: FlowSource; to?: FlowSource }
+): { apiName: string; namespace: string | undefined } {
+  const identity = sources.from ?? sources.to;
+  const apiName = flags['api-name'] ?? identity?.apiName;
+  if (apiName === undefined) {
+    throw flowComparisonFailed('--api-name is required when neither comparison side is a local source file.');
+  }
+  validateFlowApiName(apiName);
+  const namespace = flags.namespace ?? identity?.namespace ?? undefined;
+  if (namespace !== undefined) {
+    validateNamespace(namespace);
+  }
+  return { apiName, namespace };
 }
 
 function createComparisonContexts(flags: CompareFlagValues): ComparisonContexts {
@@ -77,8 +109,34 @@ function createComparisonContexts(flags: CompareFlagValues): ComparisonContexts 
       to: createFlowCommandContext({ 'target-org': flags['to-org'], 'api-version': flags['api-version'] }),
     };
   }
+  if (flags['from-file'] !== undefined && flags['to-file'] !== undefined) {
+    return {};
+  }
   const context = createFlowCommandContext(flags);
-  return { from: context, to: context };
+  return {
+    ...(flags['from-file'] === undefined ? { from: context } : {}),
+    ...(flags['to-file'] === undefined ? { to: context } : {}),
+  };
+}
+
+async function loadComparisonSources(flags: CompareFlagValues): Promise<{ from?: FlowSource; to?: FlowSource }> {
+  const from = flags['from-file'] === undefined ? undefined : await loadFlowSource(flags['from-file']);
+  const to = flags['to-file'] === undefined ? undefined : await loadFlowSource(flags['to-file']);
+  return { ...(from === undefined ? {} : { from }), ...(to === undefined ? {} : { to }) };
+}
+
+function createComparisonService(contexts: ComparisonContexts): FlowComparisonService {
+  const fromGateway =
+    contexts.from === undefined ? undefined : new ToolingFlowDefinitionGateway(contexts.from.connection);
+  const toGateway =
+    contexts.to === undefined
+      ? undefined
+      : contexts.to === contexts.from
+      ? fromGateway
+      : new ToolingFlowDefinitionGateway(contexts.to.connection);
+  return fromGateway === toGateway
+    ? new FlowComparisonService(fromGateway)
+    : new FlowComparisonService(fromGateway, toGateway);
 }
 
 async function writeComparisonReport(outputFile: string, content: string): Promise<void> {
@@ -97,10 +155,19 @@ export default class FlowCompare extends SfCommand<FlowCompareResult> {
   public static override readonly flags = {
     'api-name': Flags.string({
       char: 'n',
-      required: true,
       summary: messages.getMessage('flags.api-name.summary'),
     }),
-    'target-org': Flags.requiredOrg({
+    'from-file': Flags.file({
+      exists: true,
+      exclusive: ['from', 'from-org'],
+      summary: messages.getMessage('flags.from-file.summary'),
+    }),
+    'to-file': Flags.file({
+      exists: true,
+      exclusive: ['to', 'to-org'],
+      summary: messages.getMessage('flags.to-file.summary'),
+    }),
+    'target-org': Flags.optionalOrg({
       char: 'o',
       required: false,
       exclusive: ['from-org', 'to-org'],
@@ -169,15 +236,11 @@ export default class FlowCompare extends SfCommand<FlowCompareResult> {
 
   public async run(): Promise<FlowCompareResult> {
     const flags = await this.parseFlags();
-    validateNamedFlowFlags(flags);
+    const sources = await loadComparisonSources(flags);
     const contexts = createComparisonContexts(flags);
-    const fromGateway = new ToolingFlowDefinitionGateway(contexts.from.connection);
-    const service =
-      contexts.from === contexts.to
-        ? new FlowComparisonService(fromGateway)
-        : new FlowComparisonService(fromGateway, new ToolingFlowDefinitionGateway(contexts.to.connection));
+    const service = createComparisonService(contexts);
     const result = await withFlowProgress(this.spinner, 'compare', async (progress) =>
-      service.compare(createRequest(flags, contexts), progress)
+      service.compare(createRequest(flags, contexts, sources), progress, sources)
     );
     await this.writeOutput(result, flags);
     if (flags['fail-on-difference'] && result.different) {

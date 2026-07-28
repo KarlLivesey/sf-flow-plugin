@@ -5,6 +5,7 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import type { NamedFlowRequest, FlowVersionNumber } from './flow.js';
+import type { FlowSource } from './flow-source.js';
 
 export type FlowComparisonVersionSelector = 'active' | 'latest' | FlowVersionNumber;
 
@@ -132,23 +133,30 @@ export interface FlowComparisonChange {
 export interface FlowCompareResult {
   apiName: string;
   namespace: string | null;
-  definitionId: string;
-  fromDefinitionId: string;
-  toDefinitionId: string;
-  requestedFrom: FlowComparisonVersionSelector;
-  requestedTo: FlowComparisonVersionSelector;
+  definitionId: string | null;
+  fromDefinitionId: string | null;
+  toDefinitionId: string | null;
+  requestedFrom: FlowComparisonVersionSelector | null;
+  requestedTo: FlowComparisonVersionSelector | null;
   scopes: FlowComparisonScope[];
   ignoreOrder: boolean;
   ignorePaths: string[];
-  fromVersion: FlowVersionNumber;
-  toVersion: FlowVersionNumber;
+  fromVersion: FlowVersionNumber | null;
+  toVersion: FlowVersionNumber | null;
+  fromSourceFile: string | null;
+  toSourceFile: string | null;
   changes: FlowComparisonChange[];
   added: number;
   removed: number;
   changed: number;
   different: boolean;
-  targetOrg: string;
-  fromOrg: string;
-  toOrg: string;
+  targetOrg: string | null;
+  fromOrg: string | null;
+  toOrg: string | null;
   crossOrg: boolean;
+}
+
+export interface FlowCompareSources {
+  from?: FlowSource;
+  to?: FlowSource;
 }

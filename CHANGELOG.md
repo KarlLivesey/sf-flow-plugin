@@ -10,6 +10,7 @@ All notable user-visible changes to this project will be documented in this file
   through `--source-file`, without requiring an authenticated org.
 - Added strict local XML validation, Salesforce Code Analyzer Flow Scanner linting with installation consent,
   structural metrics, local graph rendering and complete source-file locations in SARIF reports.
+- Added local-to-local and local-to-org comparisons through `sf flow compare --from-file` and `--to-file`.
 
 ## 1.4.1 - 2026-07-27
 

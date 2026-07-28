@@ -27,6 +27,8 @@ const result: FlowCompareResult = {
   ignorePaths: [],
   fromVersion: 1,
   toVersion: 2,
+  fromSourceFile: null,
+  toSourceFile: null,
   changes: [{ kind: 'changed', path: '$.label', before: 'One', after: 'Two' }],
   added: 0,
   removed: 0,
@@ -67,6 +69,8 @@ describe('flow compare request execution', (): void => {
   it('passes selectors and namespace to the service', async (): Promise<void> => {
     const flags = {
       'api-name': 'Order_Processing',
+      'from-file': undefined,
+      'to-file': undefined,
       'target-org': createCommandOrg({} as Connection),
       'from-org': undefined,
       'to-org': undefined,
@@ -104,6 +108,8 @@ describe('flow compare interactive output', (): void => {
   it('prints the summary renderer for interactive output', async (): Promise<void> => {
     const flags = {
       'api-name': 'Order_Processing',
+      'from-file': undefined,
+      'to-file': undefined,
       'target-org': createCommandOrg({} as Connection),
       'from-org': undefined,
       'to-org': undefined,
@@ -129,6 +135,8 @@ describe('flow compare exit status', (): void => {
   it('sets a failing process status when requested and versions differ', async (): Promise<void> => {
     const flags = {
       'api-name': 'Order_Processing',
+      'from-file': undefined,
+      'to-file': undefined,
       'target-org': createCommandOrg({} as Connection),
       'from-org': undefined,
       'to-org': undefined,
@@ -158,6 +166,8 @@ describe('flow compare cross-org execution', (): void => {
   it('passes separate authenticated orgs to a cross-org comparison', async (): Promise<void> => {
     const flags = {
       'api-name': 'Order_Processing',
+      'from-file': undefined,
+      'to-file': undefined,
       'target-org': createCommandOrg({} as Connection),
       'from-org': createCommandOrg({} as Connection, 'developer@example.com'),
       'to-org': createCommandOrg({} as Connection, 'preprod@example.com'),
