@@ -21,7 +21,7 @@ import { analyseFlowMetrics, totalFlowMetrics } from '../utils/flow-metrics-anal
 import { type FlowProgressReporter, noFlowProgress } from '../utils/flow-progress.js';
 import { renderDescribedFlowGraph } from './flow-graph-service.js';
 import type { FlowSourceDirectory } from './flow-source-directory-service.js';
-import { traverseLocalSubflows } from './flow-source-directory-service.js';
+import { inspectDirectLocalSubflows, traverseLocalSubflows } from './flow-source-directory-service.js';
 
 export const FLOW_SOURCE_CHECK_KINDS: FlowCheckKind[] = ['lint', 'metrics'];
 export const FLOW_SOURCE_DIRECTORY_CHECK_KINDS: FlowCheckKind[] = ['lint', 'subflows', 'metrics'];
@@ -205,9 +205,12 @@ export function checkFlowSource(
 function directorySubflowFindings(
   source: FlowSource,
   directory: FlowSourceDirectory,
-  maxDepth: number
+  traversal: Pick<DirectoryCheckSelection, 'recursive' | 'maxDepth'>
 ): FlowCheckResult['findings'] {
-  return traverseLocalSubflows(source, directory.sources, maxDepth).warnings.map((warning) => ({
+  const warnings = traversal.recursive
+    ? traverseLocalSubflows(source, directory.sources, traversal.maxDepth).warnings
+    : inspectDirectLocalSubflows(source, directory.sources);
+  return warnings.map((warning) => ({
     apiName: source.apiName,
     namespace: source.namespace,
     version: null,
@@ -246,7 +249,7 @@ function directoryCheckEntry(
     progress
   );
   const subflowFindings = selection.checks.includes('subflows')
-    ? directorySubflowFindings(source, directory, selection.recursive ? selection.maxDepth : 0)
+    ? directorySubflowFindings(source, directory, selection)
     : [];
   const flow = result.flows[0];
   if (flow === undefined) {

@@ -94,6 +94,19 @@ export interface LocalSourceTraversal {
   warnings: FlowTraversalWarning[];
 }
 
+export function inspectDirectLocalSubflows(
+  root: FlowSource,
+  allSources: ReadonlyArray<FlowSource>
+): FlowTraversalWarning[] {
+  const index = sourceIndex(allSources);
+  const rootName = qualifiedFlowName(root.apiName, root.namespace);
+  return root.description.subflows.flatMap((subflow) =>
+    referencedSource(root, subflow.flowName, index) === undefined
+      ? [{ kind: 'missing-subflow' as const, flowName: subflow.flowName, path: [rootName, subflow.flowName] }]
+      : []
+  );
+}
+
 interface TraversalContext {
   index: ReadonlyMap<string, FlowSource>;
   visited: Set<string>;

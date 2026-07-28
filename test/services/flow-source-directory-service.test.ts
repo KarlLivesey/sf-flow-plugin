@@ -6,7 +6,7 @@
  */
 import { expect } from 'chai';
 
-import { traverseLocalSubflows } from '../../src/services/flow-source-directory-service.js';
+import { inspectDirectLocalSubflows, traverseLocalSubflows } from '../../src/services/flow-source-directory-service.js';
 import type { FlowSource } from '../../src/types/flow-source.js';
 
 function source(apiName: string, subflowNames: string[] = []): FlowSource {
@@ -52,5 +52,18 @@ describe('local Flow source directory traversal', (): void => {
     const child = source('Child', ['Missing']);
     const result = traverseLocalSubflows(root, [root, child], 0);
     expect(result.warnings).to.deep.equal([{ kind: 'depth-limit', flowName: 'Child', path: ['Root', 'Child'] }]);
+  });
+
+  it('validates direct references without treating non-recursive traversal as a depth limit', (): void => {
+    const root = source('Root', ['Child']);
+    const child = source('Child', ['MissingBelowChild']);
+    expect(inspectDirectLocalSubflows(root, [root, child])).to.deep.equal([]);
+    expect(inspectDirectLocalSubflows(source('MissingRoot', ['Missing']), [])).to.deep.equal([
+      {
+        kind: 'missing-subflow',
+        flowName: 'Missing',
+        path: ['MissingRoot', 'Missing'],
+      },
+    ]);
   });
 });
