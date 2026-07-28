@@ -926,6 +926,32 @@ Flow Builder endpoints and does not simulate record-triggered, scheduled, screen
 run-as-user debugging. Salesforce CLI's existing `sf flow run test` and `sf flow get test` commands remain the Flow
 test runner.
 
+## `sf flow debug`
+
+```bash
+sf flow debug \
+  --api-name Calculate_Discount \
+  [--input NAME=VALUE ...] \
+  [--input-file FILE] \
+  [--log-level basic|detailed|finest] \
+  [--show-values] \
+  [--raw-log-file FILE] \
+  [--output-file FILE] \
+  [--wait MINUTES] \
+  [--dry-run] \
+  [--confirm] \
+  [--fail-on-flow-error] \
+  [--if-active-version NUMBER] \
+  [--namespace NAMESPACE] \
+  [--target-org ORG] \
+  [--api-version VERSION] \
+  [--json]
+```
+
+`sf flow debug` is the clearer equivalent of `sf flow run --rollback`; it selects rollback debugging automatically
+and uses the same implementation and safeguards. `sf flow run --rollback` remains available. The rollback limitations,
+trace handling, dry-run contract and output security guidance documented above apply identically.
+
 ## `sf flow deactivate`
 
 ```bash

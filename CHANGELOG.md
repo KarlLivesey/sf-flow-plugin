@@ -13,6 +13,8 @@ All notable user-visible changes to this project will be documented in this file
 - Added local-to-local and local-to-org comparisons through `sf flow compare --from-file` and `--to-file`.
 - Added recursive project-wide Flow linting, checks, metrics and local subflow resolution through `--source-dir`.
 - Added `sf flow run --if-active-version` to guard invocation and rollback debugging against an unexpected activation.
+- Added `sf flow debug` as the clearer equivalent of `sf flow run --rollback`, using the same rollback execution,
+  correlated-log retrieval, dry-run, output and safety implementation without requiring the rollback flag.
 
 ### Changed
 
