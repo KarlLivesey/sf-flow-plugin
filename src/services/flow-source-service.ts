@@ -11,48 +11,18 @@ import { parseStringPromise } from 'xml2js';
 import { z as zod } from 'zod';
 
 import { flowSourceInvalid } from '../errors/flow-errors.js';
-import type { JsonObject, JsonValue } from '../types/flow-analysis.js';
+import type { JsonObject } from '../types/flow-analysis.js';
 import type { FlowDefinition, FlowVersion } from '../types/flow.js';
 import type { FlowDescription } from '../types/flow-inspection.js';
 import type { FlowSource } from '../types/flow-source.js';
 import { analyseFlowMetadata } from '../utils/flow-metadata-analysis.js';
 import { validateFlowApiName, validateNamespace } from '../utils/flow-name-validation.js';
+import { normaliseFlowSourceMetadata } from '../utils/flow-source-normalizer.js';
 
 const FLOW_SOURCE_SUFFIX = '.flow-meta.xml';
 const FLOW_METADATA_NAMESPACE = 'http://soap.sforce.com/2006/04/metadata';
 const MAX_FLOW_SOURCE_BYTES = 20 * 1024 * 1024;
 
-const ROOT_COLLECTIONS = new Set([
-  'actionCalls',
-  'apexPluginCalls',
-  'assignments',
-  'choices',
-  'collectionProcessors',
-  'constants',
-  'customErrors',
-  'decisions',
-  'dynamicChoiceSets',
-  'formulas',
-  'loops',
-  'orchestratedStages',
-  'processMetadataValues',
-  'recordCreates',
-  'recordDeletes',
-  'recordLookups',
-  'recordRollbacks',
-  'recordUpdates',
-  'screens',
-  'stages',
-  'steps',
-  'subflows',
-  'textTemplates',
-  'transforms',
-  'variables',
-  'waits',
-]);
-
-const BOOLEAN_FIELDS = new Set(['isCollection', 'isInput', 'isOutput']);
-const NUMBER_FIELDS = new Set(['scale']);
 const XML_DECLARATION_PATTERN = /<!\s*(?:DOCTYPE|ENTITY)\b/iu;
 
 const flowMetadataSchema = zod
@@ -93,46 +63,6 @@ function sourceIdentity(file: string): { apiName: string; namespace: string | nu
   return identity;
 }
 
-function scalar(value: string, key: string): JsonValue {
-  if (BOOLEAN_FIELDS.has(key) && (value === 'true' || value === 'false')) {
-    return value === 'true';
-  }
-  if (NUMBER_FIELDS.has(key) && /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/u.test(value)) {
-    return Number(value);
-  }
-  return value;
-}
-
-function normaliseXmlValue(value: unknown, key: string): JsonValue {
-  if (Array.isArray(value)) {
-    return value.map((item) => normaliseXmlValue(item, key));
-  }
-  if (typeof value === 'object' && value !== null) {
-    const entries = Object.entries(value)
-      .filter(([name]) => name !== '$')
-      .map(([name, child]) => [name, normaliseXmlValue(child, name)] as const);
-    return Object.fromEntries(entries) as JsonObject;
-  }
-  if (typeof value === 'string') {
-    return scalar(value, key);
-  }
-  if (typeof value === 'boolean' || typeof value === 'number' || value === null) {
-    return value;
-  }
-  throw flowSourceInvalid(`Flow source contains an unsupported XML value in "${key}".`);
-}
-
-function normaliseRoot(value: Record<string, unknown>): JsonObject {
-  return Object.fromEntries(
-    Object.entries(value)
-      .filter(([name]) => name !== '$')
-      .map(([name, child]) => {
-        const normalised = normaliseXmlValue(child, name);
-        return [name, ROOT_COLLECTIONS.has(name) && !Array.isArray(normalised) ? [normalised] : normalised];
-      })
-  ) as JsonObject;
-}
-
 async function parseXmlDocument(content: string, file: string): Promise<unknown> {
   if (XML_DECLARATION_PATTERN.test(content)) {
     throw flowSourceInvalid(`Flow source file "${file}" contains a forbidden document type or entity declaration.`);
@@ -163,7 +93,7 @@ function validatedRoot(parsed: unknown, file: string): Record<string, unknown> {
 }
 
 async function parseMetadata(content: string, file: string): Promise<JsonObject> {
-  const metadata = normaliseRoot(validatedRoot(await parseXmlDocument(content, file), file));
+  const metadata = normaliseFlowSourceMetadata(validatedRoot(await parseXmlDocument(content, file), file));
   if (!flowMetadataSchema.safeParse(metadata).success) {
     throw flowSourceInvalid(`Flow source file "${file}" is missing its label, processType or status.`);
   }

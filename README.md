@@ -124,7 +124,6 @@ sf flow export \
   --output-file force-app/main/default/flows/My_Flow.flow-meta.xml \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
-  [--no-prompt] \
   [--json]
 ```
 
@@ -198,6 +197,7 @@ sf flow lint \
   [--result-format human|sarif] \
   [--output-file FILE] \
   [--baseline FILE] \
+  [--no-prompt] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--json]
@@ -364,7 +364,6 @@ sf flow versions \
   [--limit NUMBER] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
-  [--no-prompt] \
   [--json]
 ```
 
@@ -715,6 +714,7 @@ sf flow check \
   [--fail-on warning|error] \
   [--result-format human|sarif] \
   [--output-file FILE] \
+  [--no-prompt] \
   [--namespace NAMESPACE] \
   [--api-version VERSION] \
   [--json]

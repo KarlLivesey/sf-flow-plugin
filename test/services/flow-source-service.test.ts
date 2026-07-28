@@ -14,6 +14,145 @@ import { loadFlowSource } from '../../src/services/flow-source-service.js';
 import { expectErrorName } from '../helpers/fake-flow-gateway.js';
 
 const fixture = resolve('test/nuts/fixtures/project/v3/main/default/flows/Plugin_Test_Flow.flow-meta.xml');
+const equivalentMetadataXml = `<?xml version="1.0" encoding="UTF-8"?>
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+  <apiVersion>65.0</apiVersion>
+  <assignments>
+    <name>Assign_Total</name><label>Assign Total</label><locationX>10</locationX><locationY>20</locationY>
+    <assignmentItems>
+      <assignToReference>Total</assignToReference><operator>Assign</operator>
+      <value><numberValue>1.5</numberValue></value>
+    </assignmentItems>
+  </assignments>
+  <decisions>
+    <name>Check_Total</name><label>Check Total</label><locationX>30</locationX><locationY>40</locationY>
+    <rules>
+      <name>Positive</name><conditionLogic>and</conditionLogic><label>Positive</label>
+      <conditions>
+        <leftValueReference>Total</leftValueReference><operator>GreaterThan</operator>
+        <rightValue><numberValue>0</numberValue></rightValue>
+      </conditions>
+    </rules>
+  </decisions>
+  <recordLookups>
+    <name>Find_Record</name><label>Find Record</label><locationX>50</locationX><locationY>60</locationY>
+    <filters>
+      <field>Active__c</field><operator>EqualTo</operator><value><booleanValue>true</booleanValue></value>
+    </filters>
+    <getFirstRecordOnly>true</getFirstRecordOnly><object>Account</object><queriedFields>Name</queriedFields>
+  </recordLookups>
+  <screens>
+    <name>Details</name><label>Details</label><locationX>70</locationX><locationY>80</locationY>
+    <allowBack>false</allowBack><showFooter>true</showFooter>
+    <fields>
+      <name>Amount</name><dataType>Number</dataType><fieldType>InputField</fieldType><isRequired>true</isRequired>
+      <inputParameters><name>minimum</name><value><numberValue>0</numberValue></value></inputParameters>
+      <outputParameters><assignToReference>Total</assignToReference><name>value</name></outputParameters>
+    </fields>
+  </screens>
+  <subflows>
+    <name>Child</name><label>Child</label><locationX>90</locationX><locationY>100</locationY>
+    <flowName>Child_Flow</flowName>
+    <inputAssignments><name>Input</name><value><elementReference>Total</elementReference></value></inputAssignments>
+    <outputAssignments><assignToReference>Total</assignToReference><name>Output</name></outputAssignments>
+  </subflows>
+  <label>Equivalent Flow</label><processType>AutoLaunchedFlow</processType><status>Draft</status>
+  <variables>
+    <name>Total</name><dataType>Number</dataType><isCollection>false</isCollection>
+    <isInput>true</isInput><isOutput>true</isOutput><scale>2</scale>
+  </variables>
+</Flow>`;
+
+const equivalentToolingMetadata = {
+  apiVersion: 65,
+  assignments: [
+    {
+      name: 'Assign_Total',
+      label: 'Assign Total',
+      locationX: 10,
+      locationY: 20,
+      assignmentItems: [{ assignToReference: 'Total', operator: 'Assign', value: { numberValue: 1.5 } }],
+    },
+  ],
+  decisions: [
+    {
+      name: 'Check_Total',
+      label: 'Check Total',
+      locationX: 30,
+      locationY: 40,
+      rules: [
+        {
+          name: 'Positive',
+          conditionLogic: 'and',
+          label: 'Positive',
+          conditions: [
+            {
+              leftValueReference: 'Total',
+              operator: 'GreaterThan',
+              rightValue: { numberValue: 0 },
+            },
+          ],
+        },
+      ],
+    },
+  ],
+  recordLookups: [
+    {
+      name: 'Find_Record',
+      label: 'Find Record',
+      locationX: 50,
+      locationY: 60,
+      filters: [{ field: 'Active__c', operator: 'EqualTo', value: { booleanValue: true } }],
+      getFirstRecordOnly: true,
+      object: 'Account',
+      queriedFields: ['Name'],
+    },
+  ],
+  screens: [
+    {
+      name: 'Details',
+      label: 'Details',
+      locationX: 70,
+      locationY: 80,
+      allowBack: false,
+      showFooter: true,
+      fields: [
+        {
+          name: 'Amount',
+          dataType: 'Number',
+          fieldType: 'InputField',
+          isRequired: true,
+          inputParameters: [{ name: 'minimum', value: { numberValue: 0 } }],
+          outputParameters: [{ assignToReference: 'Total', name: 'value' }],
+        },
+      ],
+    },
+  ],
+  subflows: [
+    {
+      name: 'Child',
+      label: 'Child',
+      locationX: 90,
+      locationY: 100,
+      flowName: 'Child_Flow',
+      inputAssignments: [{ name: 'Input', value: { elementReference: 'Total' } }],
+      outputAssignments: [{ assignToReference: 'Total', name: 'Output' }],
+    },
+  ],
+  label: 'Equivalent Flow',
+  processType: 'AutoLaunchedFlow',
+  status: 'Draft',
+  variables: [
+    {
+      name: 'Total',
+      dataType: 'Number',
+      isCollection: false,
+      isInput: true,
+      isOutput: true,
+      scale: 2,
+    },
+  ],
+};
 
 function flowXml(rootAttributes = 'xmlns="http://soap.sforce.com/2006/04/metadata"'): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -74,6 +213,19 @@ describe('loadFlowSource', (): void => {
       expect(source.apiName).to.equal('Local_Flow');
       expect(source.namespace).to.equal('managed');
       expect(source.description.qualifiedName).to.equal('managed__Local_Flow');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('loadFlowSource Tooling metadata compatibility', (): void => {
+  it('matches the typed collection shape returned by Tooling Flow.Metadata', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'flow-source-equivalent-'));
+    const file = join(directory, 'Equivalent_Flow.flow-meta.xml');
+    try {
+      await writeFile(file, equivalentMetadataXml, 'utf8');
+      expect((await loadFlowSource(file)).metadata).to.deep.equal(equivalentToolingMetadata);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

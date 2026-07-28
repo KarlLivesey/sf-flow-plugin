@@ -16,6 +16,8 @@ import {
 import type { CodeAnalyzerProcessRunner } from '../../src/services/salesforce-code-analyzer-flow-service.js';
 import { expectErrorName } from '../helpers/fake-flow-gateway.js';
 
+const CODE_ANALYZER_PLUGIN_FOR_TEST = '@salesforce/plugin-code-analyzer';
+
 class FakeProcessRunner implements CodeAnalyzerProcessRunner {
   public readonly calls: string[][] = [];
 
@@ -129,9 +131,13 @@ describe('Salesforce Code Analyzer installation consent', (): void => {
   it('installs only after confirmation and verifies the installation', async (): Promise<void> => {
     let inspections = 0;
     const runner = new FakeProcessRunner(async (args) => {
-      if (args[0] === 'plugins' && args[1] === '--core') {
+      if (args[0] === 'plugins' && args[1] === '--json') {
         inspections += 1;
-        return inspections === 1 ? '' : 'code-analyzer 5.14.0 (5.14.0)';
+        return JSON.stringify(
+          inspections === 1
+            ? [{ name: CODE_ANALYZER_PLUGIN_FOR_TEST, type: 'jit' }]
+            : [{ name: CODE_ANALYZER_PLUGIN_FOR_TEST, type: 'user' }]
+        );
       }
       return '';
     });
@@ -150,11 +156,19 @@ describe('Salesforce Code Analyzer installation consent', (): void => {
     expect(runner.calls.some((args) => args[0] === 'plugins' && args[1] === 'install')).to.equal(true);
     expect(inspections).to.equal(2);
   });
+
+  it('does not treat an uninstalled JIT placeholder as an installed plugin', async (): Promise<void> => {
+    const runner = new FakeProcessRunner(async () =>
+      JSON.stringify([{ name: CODE_ANALYZER_PLUGIN_FOR_TEST, alias: 'code-analyzer', type: 'jit' }])
+    );
+    expect(await new SalesforceCodeAnalyzerFlowService(runner).isInstalled()).to.equal(false);
+    expect(runner.calls[0]).to.deep.equal(['plugins', '--json']);
+  });
 });
 
 describe('Salesforce Code Analyzer non-interactive installation', (): void => {
   it('returns the install command without prompting in non-interactive mode', async (): Promise<void> => {
-    const runner = new FakeProcessRunner(async () => '');
+    const runner = new FakeProcessRunner(async () => '[]');
     const service = new SalesforceCodeAnalyzerFlowService(runner);
     let prompted = false;
     try {

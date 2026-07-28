@@ -17,6 +17,7 @@ import type { FlowLintFinding, FlowLintLocation } from '../types/flow-lint.js';
 import { createFlowLintFingerprint } from '../utils/flow-lint-fingerprint.js';
 
 const CODE_ANALYZER_PLUGIN = '@salesforce/plugin-code-analyzer';
+const INSTALLED_PLUGIN_TYPES = new Set(['core', 'user', 'link']);
 const MAX_PROCESS_OUTPUT_BYTES = 5 * 1024 * 1024;
 const execFileAsync = promisify(execFile);
 
@@ -42,6 +43,24 @@ const analyzerResultSchema = z.object({
   runDir: z.string().min(1),
   violations: z.array(analyzerViolationSchema),
 });
+
+const installedPluginSchema = z
+  .array(
+    z
+      .object({
+        name: z.string().optional(),
+        alias: z.string().optional(),
+        type: z.string(),
+      })
+      .passthrough()
+  )
+  .transform((plugins) =>
+    plugins.some(
+      (plugin) =>
+        INSTALLED_PLUGIN_TYPES.has(plugin.type) &&
+        [plugin.name, plugin.alias].some((name) => name === CODE_ANALYZER_PLUGIN || name === 'code-analyzer')
+    )
+  );
 
 export interface CodeAnalyzerProcessRunner {
   run(args: ReadonlyArray<string>, cwd: string): Promise<{ stdout: string }>;
@@ -160,8 +179,8 @@ export class SalesforceCodeAnalyzerFlowService {
 
   public async isInstalled(): Promise<boolean> {
     try {
-      const result = await this.runner.run(['plugins', '--core'], this.cwd);
-      return /^(?:@salesforce\/plugin-)?code-analyzer\s+/mu.test(result.stdout);
+      const result = await this.runner.run(['plugins', '--json'], this.cwd);
+      return installedPluginSchema.parse(JSON.parse(result.stdout) as unknown);
     } catch {
       return false;
     }
