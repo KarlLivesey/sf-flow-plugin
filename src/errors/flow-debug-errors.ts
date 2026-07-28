@@ -24,6 +24,15 @@ function createFlowError(options: FlowErrorOptions): SfError {
   return options.cause === undefined ? SfError.create(base) : SfError.create({ ...base, cause: options.cause });
 }
 
+export function flowBenchmarkFailed(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowBenchmarkFailed',
+    message,
+    action: 'Review the failed benchmark sample and confirm that rollback tracing remains available.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
 export function flowDebugFailed(message: string, cause?: unknown): SfError {
   return createFlowError({
     code: 'FlowDebugFailed',

@@ -6,6 +6,10 @@ Activating Flow
 
 Auditing Flows
 
+# actions.benchmark
+
+Benchmarking Flow
+
 # actions.bundle
 
 Bundling Flow source

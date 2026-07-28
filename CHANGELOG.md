@@ -15,6 +15,21 @@ All notable user-visible changes to this project will be documented in this file
 - Added `sf flow run --if-active-version` to guard invocation and rollback debugging against an unexpected activation.
 - Added `sf flow debug` as the clearer equivalent of `sf flow run --rollback`, using the same rollback execution,
   request-scoped SOAP log, dry-run, output and safety implementation without requiring the rollback flag.
+- Added `sf flow benchmark` to run repeatable rollback-isolated warm-up and measured samples against the active version
+  of a directly invocable autolaunched Flow.
+- Added deterministic varied-input assignment, configurable concurrency, min/max/mean and nearest-rank percentile
+  statistics for per-sample wall-clock and Salesforce CPU time, total wall-clock time and measured throughput.
+- Added optional raw ApexLog retention, production confirmation, active-version concurrency guards, failure policy
+  controls and a non-executing dry-run preflight.
+
+### Safety and compatibility
+
+- Benchmark execution reuses one temporary tracing session, restores the previous trace configuration and verifies
+  the rollback marker for every sample. Raw logs are written with owner-only permissions on POSIX systems.
+- Rollback affects database changes in the current transaction only. It cannot reverse callouts, email, asynchronous
+  work or separately committed transactions; production execution therefore requires `--confirm`.
+- The plugin does not impose an artificial execution-concurrency cap. Salesforce org, API, Apex-log and tracing
+  limits remain authoritative.
 
 ### Changed
 

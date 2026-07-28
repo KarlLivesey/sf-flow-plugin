@@ -1,0 +1,200 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowBenchmarkResult",
+  "definitions": {
+    "FlowBenchmarkResult": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "definitionId": {
+          "type": "string"
+        },
+        "version": {
+          "$ref": "#/definitions/FlowVersionNumber"
+        },
+        "targetOrg": {
+          "type": "string"
+        },
+        "production": {
+          "type": "boolean"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "successful": {
+          "type": ["boolean", "null"]
+        },
+        "iterations": {
+          "type": "number"
+        },
+        "warmup": {
+          "type": "number"
+        },
+        "requestedConcurrency": {
+          "type": "number"
+        },
+        "effectiveConcurrency": {
+          "type": "number"
+        },
+        "completedSamples": {
+          "type": "number"
+        },
+        "failedSamples": {
+          "type": "number"
+        },
+        "includedSamples": {
+          "type": "number"
+        },
+        "totalWallClockMilliseconds": {
+          "type": "number"
+        },
+        "throughputPerSecond": {
+          "type": ["number", "null"]
+        },
+        "wallClock": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowBenchmarkStatistics"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cpuTime": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowBenchmarkStatistics"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "samples": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowBenchmarkSample"
+          }
+        }
+      },
+      "required": [
+        "apiName",
+        "namespace",
+        "definitionId",
+        "version",
+        "targetOrg",
+        "production",
+        "dryRun",
+        "successful",
+        "iterations",
+        "warmup",
+        "requestedConcurrency",
+        "effectiveConcurrency",
+        "completedSamples",
+        "failedSamples",
+        "includedSamples",
+        "totalWallClockMilliseconds",
+        "throughputPerSecond",
+        "wallClock",
+        "cpuTime",
+        "samples"
+      ],
+      "additionalProperties": false
+    },
+    "FlowVersionNumber": {
+      "type": "number"
+    },
+    "FlowBenchmarkStatistics": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "number"
+        },
+        "minimum": {
+          "type": "number"
+        },
+        "maximum": {
+          "type": "number"
+        },
+        "mean": {
+          "type": "number"
+        },
+        "percentiles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowBenchmarkPercentile"
+          }
+        }
+      },
+      "required": ["count", "minimum", "maximum", "mean", "percentiles"],
+      "additionalProperties": false
+    },
+    "FlowBenchmarkPercentile": {
+      "type": "object",
+      "properties": {
+        "percentile": {
+          "type": "number"
+        },
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": ["percentile", "value"],
+      "additionalProperties": false
+    },
+    "FlowBenchmarkSample": {
+      "type": "object",
+      "properties": {
+        "sample": {
+          "type": "number"
+        },
+        "phase": {
+          "$ref": "#/definitions/FlowBenchmarkPhase"
+        },
+        "inputIndex": {
+          "type": "number"
+        },
+        "successful": {
+          "type": "boolean"
+        },
+        "rollbackConfirmed": {
+          "type": "boolean"
+        },
+        "wallClockMilliseconds": {
+          "type": "number"
+        },
+        "cpuTimeMilliseconds": {
+          "type": ["number", "null"]
+        },
+        "apexLogId": {
+          "type": ["string", "null"]
+        },
+        "errorCode": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": [
+        "sample",
+        "phase",
+        "inputIndex",
+        "successful",
+        "rollbackConfirmed",
+        "wallClockMilliseconds",
+        "cpuTimeMilliseconds",
+        "apexLogId",
+        "errorCode"
+      ],
+      "additionalProperties": false
+    },
+    "FlowBenchmarkPhase": {
+      "type": "string",
+      "enum": ["warmup", "measured"]
+    }
+  }
+}

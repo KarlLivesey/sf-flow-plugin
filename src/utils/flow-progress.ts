@@ -13,6 +13,7 @@ const messages = Messages.loadMessages('sf-flow-plugin', 'flow.progress');
 export type FlowProgressAction =
   | 'activate'
   | 'audit'
+  | 'benchmark'
   | 'bundle'
   | 'compare'
   | 'check'
@@ -61,6 +62,7 @@ export const noFlowProgress: FlowProgressReporter = () => undefined;
 const actionMessages: Record<FlowProgressAction, string> = {
   activate: messages.getMessage('actions.activate'),
   audit: messages.getMessage('actions.audit'),
+  benchmark: messages.getMessage('actions.benchmark'),
   bundle: messages.getMessage('actions.bundle'),
   compare: messages.getMessage('actions.compare'),
   check: messages.getMessage('actions.check'),

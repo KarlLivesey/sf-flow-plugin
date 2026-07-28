@@ -73,6 +73,7 @@ If `--target-org` is omitted, the command uses the Salesforce CLI `target-org` c
 | `sf flow check`          | Aggregate read-only Flow checks for CI.                                 |
 | `sf flow metrics`        | Report structural and optional Data Cloud runtime metrics.              |
 | `sf flow run`            | Invoke the active version of an autolaunched Flow.                      |
+| `sf flow benchmark`      | Measure rollback-isolated autolaunched Flow execution.                  |
 | `sf flow deactivate`     | Deactivate a Flow and verify the resulting state.                       |
 | `sf flow delete-version` | Safely plan or delete one explicitly numbered inactive version.         |
 | `sf flow audit`          | Report Flow definitions with version-state issues.                      |
@@ -794,6 +795,65 @@ sf flow check \
 The command fails on errors by default. Use `--fail-on warning` for a stricter CI gate, repeatable `--only` or
 `--exclude` flags to select checks, and SARIF output for code-scanning integrations.
 
+## `sf flow benchmark`
+
+```bash
+sf flow benchmark \
+  --api-name Calculate_Discount \
+  [--input NAME=VALUE ...] \
+  [--input-file FILE] \
+  [--iterations NUMBER] \
+  [--warmup NUMBER] \
+  [--concurrency NUMBER] \
+  [--percentile NUMBER ...] \
+  [--continue-on-error] \
+  [--include-failed] \
+  [--raw-log-dir DIRECTORY] \
+  [--exclude-warmup-logs] \
+  [--output-file FILE] \
+  [--log-level detailed|finest] \
+  [--wait MINUTES] \
+  [--dry-run] \
+  [--confirm] \
+  [--if-active-version NUMBER] \
+  [--namespace NAMESPACE] \
+  [--target-org ORG] \
+  [--api-version VERSION] \
+  [--json]
+```
+
+`sf flow benchmark` executes the active version of a directly invocable autolaunched Flow through rollback-isolated
+Execute Anonymous transactions. It performs 10 warm-up samples and 100 measured samples serially by default.
+`--input-file` accepts one JSON object or an array of varied input objects; arrays are assigned deterministically in
+round-robin order. `--concurrency` defaults to 1 and has no plugin-defined upper bound. Effective measured concurrency
+is the smaller of the requested concurrency and iteration count.
+
+Every completed sample reports wall-clock time, Salesforce CPU time, rollback confirmation and its ApexLog ID. The
+summary reports minimum, maximum, mean and nearest-rank p50, p90, p95 and p99 values for measured wall-clock and CPU
+time, plus total benchmark wall-clock time and measured throughput. Repeat `--percentile` to replace the default
+percentile set. Warm-up samples are excluded from statistics.
+
+The command stops scheduling new samples after the first failure by default; samples already in progress may finish.
+Use `--continue-on-error` to schedule the remaining samples. Failed or rollback-unconfirmed samples are excluded from
+statistics unless `--include-failed` is supplied and the relevant timing exists. Any failure gives the command a
+non-zero exit status.
+
+`--raw-log-dir` writes the complete standard Salesforce ApexLog for each retrievable sample to a new directory,
+including warm-up logs unless `--exclude-warmup-logs` is supplied. These logs can be processed by Apex log analysers
+and flame-graph tooling. They are unredacted and can contain sensitive Flow data; new files use owner-only permissions
+on POSIX systems.
+
+`--dry-run` validates the Flow, every varied input, generated Apex size, production context, tracing permissions,
+active-version guard and output destinations without creating a trace, executing samples or creating a raw-log
+directory. Production execution requires `--confirm`.
+
+Each sample establishes an Apex savepoint and verifies the correlated rollback marker. Rollback affects database work
+in the current transaction only: it cannot reverse callouts, email, asynchronous work or effects committed by another
+transaction, and establishing a savepoint can prevent callouts from running. The command creates one temporary
+DebugLevel and TraceFlag session for the complete benchmark and restores the previous trace configuration afterwards.
+A forced process termination can prevent cleanup; inspect temporary `SfFlowPlugin_*` tracing records if that occurs.
+Salesforce org, API, tracing and Apex-log limits remain authoritative.
+
 ## `sf flow run`
 
 ```bash
@@ -1158,6 +1218,7 @@ These checks are point-in-time preflights, not an atomic guarantee. Permissions 
 | `FlowInvocationFailed`                | Salesforce could not execute or report the Flow invocation.                     |
 | `FlowInvocationPermissionDenied`      | The authenticated user cannot invoke the Flow action.                           |
 | `FlowProductionConfirmationRequired`  | Production Flow execution requires explicit confirmation.                       |
+| `FlowBenchmarkFailed`                 | Flow benchmark execution, log validation or output failed.                      |
 | `FlowDebugFailed`                     | Rollback execution or returned-log validation failed.                           |
 | `FlowDebugPermissionDenied`           | The user lacks anonymous Apex or Flow execution access.                         |
 | `FlowDebugRollbackFailed`             | The returned log did not confirm the expected database rollback.                |
