@@ -16,6 +16,7 @@ import { FlowCheckService } from '../../../src/services/flow-check-service.js';
 import { FlowDescribeService } from '../../../src/services/flow-describe-service.js';
 import { FlowGraphService } from '../../../src/services/flow-graph-service.js';
 import { FlowLintService } from '../../../src/services/flow-lint-service.js';
+import { SalesforceCodeAnalyzerFlowService } from '../../../src/services/salesforce-code-analyzer-flow-service.js';
 import { commandTestContext as $$ } from '../../helpers/command-test-context.js';
 import { expectErrorName } from '../../helpers/fake-flow-gateway.js';
 
@@ -24,6 +25,8 @@ const fixture = resolve('test/nuts/fixtures/project/v3/main/default/flows/Plugin
 describe('local Flow source commands', (): void => {
   it('runs lint without calling an org-backed service', async (): Promise<void> => {
     const orgLint = $$.SANDBOX.stub(FlowLintService.prototype, 'lint');
+    $$.SANDBOX.stub(SalesforceCodeAnalyzerFlowService.prototype, 'isInstalled').resolves(true);
+    $$.SANDBOX.stub(SalesforceCodeAnalyzerFlowService.prototype, 'analyse').resolves([]);
     const result = await FlowLint.run(['--source-file', fixture, '--json']);
     expect(orgLint.called).to.equal(false);
     expect(result).to.include({
@@ -36,6 +39,14 @@ describe('local Flow source commands', (): void => {
     });
   });
 
+  it('reports the Code Analyzer installation command in JSON mode instead of prompting', async (): Promise<void> => {
+    $$.SANDBOX.stub(SalesforceCodeAnalyzerFlowService.prototype, 'isInstalled').resolves(false);
+    await expectErrorName(
+      FlowLint.run(['--source-file', fixture, '--no-prompt', '--json']),
+      'FlowCodeAnalyzerUnavailable'
+    );
+  });
+
   it('runs check without calling an org-backed service', async (): Promise<void> => {
     const orgCheck = $$.SANDBOX.stub(FlowCheckService.prototype, 'check');
     const result = await FlowCheck.run(['--source-file', fixture, '--only', 'metrics', '--json']);
@@ -43,7 +54,9 @@ describe('local Flow source commands', (): void => {
     expect(result.checks).to.deep.equal(['metrics']);
     expect(result.targetOrg).to.equal(null);
   });
+});
 
+describe('local Flow source inspection commands', (): void => {
   it('runs describe without calling an org-backed service', async (): Promise<void> => {
     const orgDescribe = $$.SANDBOX.stub(FlowDescribeService.prototype, 'describe');
     const result = await FlowDescribe.run(['--source-file', fixture, '--only', 'outputs', '--json']);

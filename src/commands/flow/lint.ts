@@ -8,9 +8,11 @@ import { Messages } from '@salesforce/core';
 import type { Org } from '@salesforce/core';
 import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
+import { flowLintFailed } from '../../errors/flow-errors.js';
 import { FlowLintService } from '../../services/flow-lint-service.js';
 import { lintFlowSource } from '../../services/flow-source-analysis-service.js';
 import { loadFlowSource } from '../../services/flow-source-service.js';
+import { SalesforceCodeAnalyzerFlowService } from '../../services/salesforce-code-analyzer-flow-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type { FlowComparisonVersionSelector } from '../../types/flow-analysis.js';
 import type {
@@ -21,6 +23,7 @@ import type {
   FlowLintRule,
 } from '../../types/flow-lint.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
+import { prepareSalesforceCodeAnalyzer } from '../../utils/flow-code-analyzer-command.js';
 import {
   applyFlowLintBaseline,
   formatFlowLintHuman,
@@ -28,6 +31,7 @@ import {
   writeFlowLintOutput,
 } from '../../utils/flow-lint-output.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
+import type { FlowProgressReporter } from '../../utils/flow-progress.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
 import { validateFlowSourceFlags } from '../../utils/flow-source-command.js';
 import { parseInspectionVersionSelector } from './describe.js';
@@ -41,13 +45,32 @@ export interface LintFlagValues {
   'target-org': Org | undefined;
   'flow-version': FlowComparisonVersionSelector;
   'fail-on': FlowLintFailSeverity | undefined;
-  rule: FlowLintRule[] | undefined;
-  'exclude-rule': FlowLintRule[] | undefined;
+  rule: string[] | undefined;
+  'exclude-rule': string[] | undefined;
   'result-format': FlowLintResultFormat;
   'output-file': string | undefined;
   baseline: string | undefined;
   namespace: string | undefined;
   'api-version': string | undefined;
+  'no-prompt': boolean;
+}
+
+const orgLintRules: FlowLintRule[] = [
+  'dml-inside-loop',
+  'hard-coded-id',
+  'inactive-subflow',
+  'missing-fault-path',
+  'missing-subflow',
+  'unconnected-element',
+  'unused-resource',
+];
+
+function orgLintRule(value: string): FlowLintRule {
+  const rule = orgLintRules.find((candidate) => candidate === value);
+  if (rule === undefined) {
+    throw flowLintFailed(`Org-backed Flow lint rule "${value}" is invalid. Valid rules: ${orgLintRules.join(', ')}.`);
+  }
+  return rule;
 }
 
 function createRequest(flags: LintFlagValues, context: ReturnType<typeof createFlowCommandContext>): FlowLintRequest {
@@ -57,20 +80,10 @@ function createRequest(flags: LintFlagValues, context: ReturnType<typeof createF
   return {
     ...createNamedFlowRequest({ ...flags, 'api-name': flags['api-name'] }, context),
     version: flags['flow-version'],
-    rules: flags.rule ?? [],
-    excludedRules: flags['exclude-rule'] ?? [],
+    rules: (flags.rule ?? []).map(orgLintRule),
+    excludedRules: (flags['exclude-rule'] ?? []).map(orgLintRule),
   };
 }
-
-const lintRules: FlowLintRule[] = [
-  'dml-inside-loop',
-  'hard-coded-id',
-  'inactive-subflow',
-  'missing-fault-path',
-  'missing-subflow',
-  'unconnected-element',
-  'unused-resource',
-];
 
 function shouldFail(result: FlowLintResult, severity: FlowLintFailSeverity | undefined): boolean {
   return severity === 'warning'
@@ -91,6 +104,36 @@ async function lintOrg(
     createRequest(flags, context),
     progress
   );
+}
+
+async function lintSource(
+  flags: LintFlagValues,
+  analyzer: SalesforceCodeAnalyzerFlowService,
+  progress: FlowProgressReporter
+): Promise<FlowLintResult> {
+  if (flags['source-file'] === undefined) {
+    throw new Error('A source file is required for local Flow linting.');
+  }
+  progress('loading-source', flags['source-file']);
+  const source = await loadFlowSource(flags['source-file']);
+  progress('running-code-analyzer', source.sourceFile);
+  const findings = await analyzer.analyse({
+    sourceFile: source.sourceFile,
+    rules: flags.rule ?? [],
+    excludedRules: flags['exclude-rule'] ?? [],
+  });
+  return lintFlowSource(source, findings, progress);
+}
+
+async function prepareLintAnalyzer(
+  command: FlowLint,
+  flags: LintFlagValues
+): Promise<SalesforceCodeAnalyzerFlowService> {
+  const analyzer = new SalesforceCodeAnalyzerFlowService();
+  if (flags['source-file'] !== undefined) {
+    await prepareSalesforceCodeAnalyzer(command, analyzer, flags['no-prompt']);
+  }
+  return analyzer;
 }
 
 export default class FlowLint extends SfCommand<FlowLintResult> {
@@ -123,16 +166,14 @@ export default class FlowLint extends SfCommand<FlowLintResult> {
       options: ['warning', 'error'],
       summary: messages.getMessage('flags.fail-on.summary'),
     })(),
-    rule: Flags.custom<FlowLintRule>({
+    rule: Flags.string({
       multiple: true,
-      options: lintRules,
       summary: messages.getMessage('flags.rule.summary'),
-    })(),
-    'exclude-rule': Flags.custom<FlowLintRule>({
+    }),
+    'exclude-rule': Flags.string({
       multiple: true,
-      options: lintRules,
       summary: messages.getMessage('flags.exclude-rule.summary'),
-    })(),
+    }),
     'result-format': Flags.custom<FlowLintResultFormat>({
       default: 'human',
       options: ['human', 'sarif'],
@@ -150,20 +191,18 @@ export default class FlowLint extends SfCommand<FlowLintResult> {
     'api-version': Flags.orgApiVersion({
       summary: messages.getMessage('flags.api-version.summary'),
     }),
+    'no-prompt': Flags.boolean({
+      default: false,
+      summary: messages.getMessage('flags.no-prompt.summary'),
+    }),
   };
 
   public async run(): Promise<FlowLintResult> {
     validateFlowSourceFlags(this.argv, ['target-org', 'flow-version', 'namespace', 'api-version']);
     const flags = await this.parseFlags();
+    const analyzer = await prepareLintAnalyzer(this, flags);
     const lintResult = await withFlowProgress(this.spinner, 'lint', async (progress) =>
-      flags['source-file'] === undefined
-        ? lintOrg(flags, progress)
-        : (progress('loading-source', flags['source-file']),
-          lintFlowSource(
-            await loadFlowSource(flags['source-file']),
-            { rules: flags.rule ?? [], excludedRules: flags['exclude-rule'] ?? [] },
-            progress
-          ))
+      flags['source-file'] === undefined ? lintOrg(flags, progress) : lintSource(flags, analyzer, progress)
     );
     const result = await applyFlowLintBaseline(lintResult, flags.baseline);
     await this.writeOutput(result, flags);

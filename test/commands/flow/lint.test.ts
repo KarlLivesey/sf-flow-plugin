@@ -43,6 +43,7 @@ function flags(): {
   baseline: undefined;
   namespace: undefined;
   'api-version': undefined;
+  'no-prompt': false;
 } {
   return {
     'api-name': 'Root_Flow',
@@ -57,6 +58,7 @@ function flags(): {
     baseline: undefined,
     namespace: undefined,
     'api-version': undefined,
+    'no-prompt': false,
   };
 }
 

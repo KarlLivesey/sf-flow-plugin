@@ -4,7 +4,7 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { flowCheckFailed, flowLintFailed } from '../errors/flow-errors.js';
+import { flowCheckFailed } from '../errors/flow-errors.js';
 import type { FlowCheckKind, FlowCheckResult } from '../types/flow-check.js';
 import type {
   FlowDescribeResult,
@@ -12,23 +12,14 @@ import type {
   FlowGraphRenderRequest,
   FlowGraphResult,
 } from '../types/flow-inspection.js';
-import type { FlowLintRequest, FlowLintResult, FlowLintRule } from '../types/flow-lint.js';
+import type { FlowLintFinding, FlowLintResult } from '../types/flow-lint.js';
 import type { FlowSourceMetricsResult } from '../types/flow-metrics.js';
 import type { FlowSource } from '../types/flow-source.js';
 import { filterFlowDescriptionSections } from '../utils/flow-description-sections.js';
 import { flowContracts, lintCheckFindings } from '../utils/flow-check-analysis.js';
-import { analyseFlowLintMetadata } from '../utils/flow-lint-analysis.js';
 import { analyseFlowMetrics, totalFlowMetrics } from '../utils/flow-metrics-analysis.js';
 import { type FlowProgressReporter, noFlowProgress } from '../utils/flow-progress.js';
 import { renderDescribedFlowGraph } from './flow-graph-service.js';
-
-export const FLOW_SOURCE_LINT_RULES: FlowLintRule[] = [
-  'dml-inside-loop',
-  'hard-coded-id',
-  'missing-fault-path',
-  'unconnected-element',
-  'unused-resource',
-];
 
 export const FLOW_SOURCE_CHECK_KINDS: FlowCheckKind[] = ['lint', 'metrics'];
 
@@ -56,30 +47,12 @@ export function describeFlowSource(source: FlowSource, sections: FlowDescribeSec
   };
 }
 
-function selectedSourceLintRules(rules: FlowLintRule[], excludedRules: FlowLintRule[]): FlowLintRule[] {
-  const unsupported = rules.filter((rule) => !FLOW_SOURCE_LINT_RULES.includes(rule));
-  if (unsupported.length > 0) {
-    throw flowLintFailed(
-      `Local Flow source cannot run org-dependent lint rule${unsupported.length === 1 ? '' : 's'}: ${unsupported.join(
-        ', '
-      )}.`
-    );
-  }
-  const selected = new Set(rules.length === 0 ? FLOW_SOURCE_LINT_RULES : rules);
-  excludedRules.forEach((rule) => selected.delete(rule));
-  return FLOW_SOURCE_LINT_RULES.filter((rule) => selected.has(rule));
-}
-
 export function lintFlowSource(
   source: FlowSource,
-  request: Pick<FlowLintRequest, 'rules' | 'excludedRules'>,
+  findings: FlowLintFinding[],
   progress: FlowProgressReporter = noFlowProgress
 ): FlowLintResult {
-  const selectedRules = selectedSourceLintRules(request.rules, request.excludedRules);
   progress('analysing-results', `${source.apiName} (local source)`);
-  const findings = analyseFlowLintMetadata(source.metadata, source.description).filter((finding) =>
-    selectedRules.includes(finding.rule)
-  );
   return {
     apiName: source.apiName,
     namespace: source.namespace,
@@ -107,7 +80,7 @@ export function graphFlowSource(
   return renderDescribedFlowGraph(sourceTraversal(source), request, progress);
 }
 
-function selectedSourceChecks(requested: FlowCheckKind[], excluded: FlowCheckKind[]): FlowCheckKind[] {
+export function selectedSourceChecks(requested: FlowCheckKind[], excluded: FlowCheckKind[]): FlowCheckKind[] {
   const unsupported = requested.filter((check) => !FLOW_SOURCE_CHECK_KINDS.includes(check));
   if (unsupported.length > 0) {
     throw flowCheckFailed(
@@ -147,13 +120,11 @@ function sourceMetrics(source: FlowSource): FlowSourceMetricsResult {
 
 export function checkFlowSource(
   source: FlowSource,
-  selection: { requested: FlowCheckKind[]; excluded: FlowCheckKind[] },
+  selection: { checks: FlowCheckKind[]; excluded: FlowCheckKind[]; lintFindings: FlowLintFinding[] },
   progress: FlowProgressReporter = noFlowProgress
 ): FlowCheckResult {
-  const checks = selectedSourceChecks(selection.requested, selection.excluded);
-  const lint = checks.includes('lint')
-    ? lintFlowSource(source, { rules: FLOW_SOURCE_LINT_RULES, excludedRules: [] }, progress)
-    : null;
+  const checks = selection.checks;
+  const lint = checks.includes('lint') ? lintFlowSource(source, selection.lintFindings, progress) : null;
   const findings = lint === null ? [] : lintCheckFindings(lint, 'lint');
   const metrics = checks.includes('metrics') ? sourceMetrics(source) : null;
   const flow = {

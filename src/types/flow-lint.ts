@@ -18,6 +18,15 @@ export type FlowLintRule =
 
 export type FlowLintSeverity = 'error' | 'warning';
 
+export interface FlowLintLocation {
+  file: string;
+  startLine: number;
+  startColumn: number;
+  endLine: number | null;
+  endColumn: number | null;
+  primary: boolean;
+}
+
 export interface FlowLintRequest extends NamedFlowRequest {
   version: FlowComparisonVersionSelector;
   rules: FlowLintRule[];
@@ -26,11 +35,14 @@ export interface FlowLintRequest extends NamedFlowRequest {
 
 export interface FlowLintFinding {
   fingerprint: string;
-  rule: FlowLintRule;
+  rule: string;
   severity: FlowLintSeverity;
   message: string;
   element: string | null;
   path: string | null;
+  analyzerSeverity?: number;
+  tags?: string[];
+  locations?: FlowLintLocation[];
 }
 
 export interface FlowLintResult {

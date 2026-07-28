@@ -10,8 +10,9 @@ import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
 import { flowCheckFailed } from '../../errors/flow-errors.js';
 import { FlowCheckService } from '../../services/flow-check-service.js';
-import { checkFlowSource } from '../../services/flow-source-analysis-service.js';
+import { checkFlowSource, selectedSourceChecks } from '../../services/flow-source-analysis-service.js';
 import { loadFlowSource } from '../../services/flow-source-service.js';
+import { SalesforceCodeAnalyzerFlowService } from '../../services/salesforce-code-analyzer-flow-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type { FlowComparisonVersionSelector } from '../../types/flow-analysis.js';
 import type {
@@ -23,9 +24,11 @@ import type {
 } from '../../types/flow-check.js';
 import type { FlowSubflowVersionSelector } from '../../types/flow-inspection.js';
 import { FLOW_CHECK_KINDS, formatFlowCheckHuman, formatFlowCheckSarif } from '../../utils/flow-check-analysis.js';
+import { prepareSalesforceCodeAnalyzer } from '../../utils/flow-code-analyzer-command.js';
 import { createFlowCommandContext } from '../../utils/flow-command.js';
 import { validateFlowApiName, validateNamespace } from '../../utils/flow-name-validation.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
+import type { FlowProgressReporter } from '../../utils/flow-progress.js';
 import { writeFlowReportFile } from '../../utils/flow-report-file.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
 import { validateFlowSourceFlags } from '../../utils/flow-source-command.js';
@@ -50,6 +53,7 @@ export interface CheckFlagValues {
   'output-file': string | undefined;
   namespace: string | undefined;
   'api-version': string | undefined;
+  'no-prompt': boolean;
 }
 
 function createRequest(flags: CheckFlagValues, context: ReturnType<typeof createFlowCommandContext>): FlowCheckRequest {
@@ -88,6 +92,42 @@ async function checkOrg(
     createRequest(flags, context),
     progress
   );
+}
+
+interface CheckSourceContext {
+  flags: CheckFlagValues;
+  checks: FlowCheckKind[];
+  analyzer: SalesforceCodeAnalyzerFlowService;
+  progress: FlowProgressReporter;
+}
+
+async function checkSource(context: CheckSourceContext): Promise<FlowCheckResult> {
+  const { flags, checks, analyzer, progress } = context;
+  if (flags['source-file'] === undefined) {
+    throw new Error('A source file is required for local Flow checks.');
+  }
+  progress('loading-source', flags['source-file']);
+  const source = await loadFlowSource(flags['source-file']);
+  const lintFindings = checks.includes('lint')
+    ? (progress('running-code-analyzer', source.sourceFile),
+      await analyzer.analyse({ sourceFile: source.sourceFile, rules: [], excludedRules: [] }))
+    : [];
+  return checkFlowSource(source, { checks, excluded: flags.exclude ?? [], lintFindings }, progress);
+}
+
+interface PreparedSourceCheck {
+  analyzer: SalesforceCodeAnalyzerFlowService;
+  checks: FlowCheckKind[] | null;
+}
+
+async function prepareSourceCheck(command: FlowCheck, flags: CheckFlagValues): Promise<PreparedSourceCheck> {
+  const analyzer = new SalesforceCodeAnalyzerFlowService();
+  const checks =
+    flags['source-file'] === undefined ? null : selectedSourceChecks(flags.only ?? [], flags.exclude ?? []);
+  if (checks?.includes('lint') === true) {
+    await prepareSalesforceCodeAnalyzer(command, analyzer, flags['no-prompt']);
+  }
+  return { analyzer, checks };
 }
 
 export default class FlowCheck extends SfCommand<FlowCheckResult> {
@@ -165,6 +205,10 @@ export default class FlowCheck extends SfCommand<FlowCheckResult> {
     'api-version': Flags.orgApiVersion({
       summary: messages.getMessage('flags.api-version.summary'),
     }),
+    'no-prompt': Flags.boolean({
+      default: false,
+      summary: messages.getMessage('flags.no-prompt.summary'),
+    }),
   };
 
   public async run(): Promise<FlowCheckResult> {
@@ -179,15 +223,11 @@ export default class FlowCheck extends SfCommand<FlowCheckResult> {
       'api-version',
     ]);
     const flags = await this.parseFlags();
+    const source = await prepareSourceCheck(this, flags);
     const result = await withFlowProgress(this.spinner, 'check', async (progress) =>
       flags['source-file'] === undefined
         ? checkOrg(flags, progress)
-        : (progress('loading-source', flags['source-file']),
-          checkFlowSource(
-            await loadFlowSource(flags['source-file']),
-            { requested: flags.only ?? [], excluded: flags.exclude ?? [] },
-            progress
-          ))
+        : checkSource({ flags, checks: source.checks ?? [], analyzer: source.analyzer, progress })
     );
     await this.writeOutput(result, flags);
     if (shouldFail(result, flags['fail-on'])) {

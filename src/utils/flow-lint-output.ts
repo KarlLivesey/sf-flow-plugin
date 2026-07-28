@@ -14,6 +14,8 @@ import { flowLintFailed } from '../errors/flow-errors.js';
 import { flowApiNameSchema, namespaceSchema } from '../schemas/flow.js';
 import type { FlowLintFinding, FlowLintResult } from '../types/flow-lint.js';
 import { legacyFlowLintFingerprint } from './flow-lint-fingerprint.js';
+import { analyzerFlowLintSarifLocations } from './flow-lint-sarif.js';
+import type { FlowLintSarifLocation } from './flow-lint-sarif.js';
 import { qualifiedFlowName } from './flow-state.js';
 
 interface BaselineFinding {
@@ -37,28 +39,44 @@ const findingSchema = z
       .string()
       .regex(/^[\da-f]{64}$/u)
       .optional(),
-    rule: z.enum([
-      'dml-inside-loop',
-      'hard-coded-id',
-      'inactive-subflow',
-      'missing-fault-path',
-      'missing-subflow',
-      'unconnected-element',
-      'unused-resource',
-    ]),
+    rule: z.string().min(1),
     severity: z.enum(['error', 'warning']),
     message: z.string(),
     element: z.string().nullable(),
     path: z.string().nullable(),
+    analyzerSeverity: z.number().int().min(1).max(5).optional(),
+    tags: z.array(z.string()).optional(),
+    locations: z
+      .array(
+        z.object({
+          file: z.string().min(1),
+          startLine: z.number().int().positive(),
+          startColumn: z.number().int().positive(),
+          endLine: z.number().int().positive().nullable(),
+          endColumn: z.number().int().positive().nullable(),
+          primary: z.boolean(),
+        })
+      )
+      .optional(),
   })
   .transform((finding): BaselineFinding => {
     const legacy = finding.fingerprint === undefined;
+    const parsedFinding: Omit<FlowLintFinding, 'fingerprint'> = {
+      rule: finding.rule,
+      severity: finding.severity,
+      message: finding.message,
+      element: finding.element,
+      path: finding.path,
+      ...(finding.analyzerSeverity === undefined ? {} : { analyzerSeverity: finding.analyzerSeverity }),
+      ...(finding.tags === undefined ? {} : { tags: finding.tags }),
+      ...(finding.locations === undefined ? {} : { locations: finding.locations }),
+    };
     return {
       finding: {
-        ...finding,
-        fingerprint: finding.fingerprint ?? legacyFlowLintFingerprint(finding),
+        ...parsedFinding,
+        fingerprint: finding.fingerprint ?? legacyFlowLintFingerprint(parsedFinding),
       },
-      legacyMessageKey: legacy ? legacyMessageKey(finding) : null,
+      legacyMessageKey: legacy ? legacyMessageKey(parsedFinding) : null,
     };
   });
 
@@ -155,30 +173,20 @@ export function formatFlowLintHuman(result: FlowLintResult): string {
   ].join('\n');
 }
 
-interface SarifLocation {
-  logicalLocations: Array<{
-    name: string;
-    fullyQualifiedName: string;
-    kind: 'flowElement' | 'metadataPath';
-  }>;
-  properties?: { metadataPath: string };
-  physicalLocation?: { artifactLocation: { uri: string } };
-}
-
 interface SarifResult {
   ruleId: string;
   level: 'error' | 'warning';
   message: { text: string };
   baselineState: 'new' | 'unchanged';
   partialFingerprints: { 'sf-flow-plugin/v1': string };
-  locations?: SarifLocation[];
+  locations?: FlowLintSarifLocation[];
 }
 
-function sarifLocation(
+function metadataSarifLocation(
   flowName: string,
   finding: FlowLintFinding,
   sourceFile: string | undefined
-): SarifLocation | null {
+): FlowLintSarifLocation | null {
   const location = finding.path ?? finding.element;
   if (location === null) {
     return null;
@@ -198,6 +206,19 @@ function sarifLocation(
   };
 }
 
+function sarifLocations(
+  flowName: string,
+  finding: FlowLintFinding,
+  sourceFile: string | undefined
+): FlowLintSarifLocation[] {
+  const analyzerLocations = analyzerFlowLintSarifLocations(flowName, finding);
+  if (analyzerLocations.length > 0) {
+    return analyzerLocations;
+  }
+  const location = metadataSarifLocation(flowName, finding, sourceFile);
+  return location === null ? [] : [location];
+}
+
 interface SarifResultContext {
   flowName: string;
   baseline: ReadonlySet<string>;
@@ -205,14 +226,14 @@ interface SarifResultContext {
 }
 
 function sarifResult(finding: FlowLintFinding, context: SarifResultContext): SarifResult {
-  const location = sarifLocation(context.flowName, finding, context.sourceFile);
+  const locations = sarifLocations(context.flowName, finding, context.sourceFile);
   return {
     ruleId: finding.rule,
     level: finding.severity,
     message: { text: finding.message },
     baselineState: context.baseline.has(findingKey(finding)) ? 'unchanged' : 'new',
     partialFingerprints: { 'sf-flow-plugin/v1': finding.fingerprint },
-    ...(location === null ? {} : { locations: [location] }),
+    ...(locations.length === 0 ? {} : { locations }),
   };
 }
 

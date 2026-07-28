@@ -4,9 +4,8 @@ Lint a Salesforce Flow.
 
 # description
 
-Inspect a Flow version for unconnected elements, missing fault paths, DML inside loops, hard-coded Salesforce IDs,
-inactive or missing subflows, and unused resources. Use `--source-file` to analyse local Flow metadata without an org;
-org-dependent subflow rules are unavailable in that mode.
+Inspect an org-backed Flow version using this plugin's lint rules. Use `--source-file` to analyse local Flow metadata
+without an org through Salesforce Code Analyzer's official Flow Scanner rules.
 
 # flags.api-name.summary
 
@@ -30,11 +29,13 @@ Set a failing exit code when a new finding has this severity or worse.
 
 # flags.rule.summary
 
-Run only this lint rule. Repeat the flag to select multiple rules.
+Run only this lint rule. Local values are Salesforce Code Analyzer rule selectors constrained to the `flow` engine;
+org-backed values use this plugin's Flow lint rule names. Repeat the flag to select multiple rules.
 
 # flags.exclude-rule.summary
 
-Exclude this lint rule. Repeat the flag to exclude multiple rules. Exclusions take precedence over `--rule`.
+Exclude this lint rule. Local values match Salesforce Code Analyzer Flow Scanner rule names. Repeat the flag to
+exclude multiple rules. Exclusions take precedence over `--rule`.
 
 # flags.result-format.summary
 
@@ -56,6 +57,10 @@ Namespace of the Flow. Use this to disambiguate managed-package Flows.
 
 Salesforce API version to use for the Tooling API requests.
 
+# flags.no-prompt.summary
+
+Do not offer to install Salesforce Code Analyzer when local Flow linting requires it.
+
 # examples
 
 - Lint the latest version of a Flow in the default target org:
@@ -66,9 +71,13 @@ Salesforce API version to use for the Tooling API requests.
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --flow-version active --json
 
-- Lint a local Flow source file without an org:
+- Lint a local Flow source file with every Salesforce Code Analyzer Flow Scanner rule:
 
   <%= config.bin %> <%= command.id %> --source-file force-app/main/default/flows/Order_Processing.flow-meta.xml
+
+- Run one Salesforce Code Analyzer Flow Scanner rule:
+
+  <%= config.bin %> <%= command.id %> --source-file force-app/main/default/flows/Order_Processing.flow-meta.xml --rule MissingDescription
 
 - Fail CI for new warnings while retaining known findings in a baseline:
 

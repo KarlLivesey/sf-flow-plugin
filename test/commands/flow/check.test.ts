@@ -53,6 +53,7 @@ describe('flow check command', (): void => {
       'output-file': undefined,
       namespace: undefined,
       'api-version': undefined,
+      'no-prompt': false,
     };
     $$.SANDBOX.stub(FlowCheck.prototype, 'parseFlags').resolves({
       ...flags,
@@ -93,6 +94,7 @@ describe('flow check command qualified output', (): void => {
       'output-file': undefined,
       namespace: undefined,
       'api-version': undefined,
+      'no-prompt': false,
     };
     const finding = {
       apiName: 'Flow_A',

@@ -117,7 +117,7 @@
           "type": "string"
         },
         "rule": {
-          "$ref": "#/definitions/FlowLintRule"
+          "type": "string"
         },
         "severity": {
           "$ref": "#/definitions/FlowLintSeverity"
@@ -130,26 +130,54 @@
         },
         "path": {
           "type": ["string", "null"]
+        },
+        "analyzerSeverity": {
+          "type": "number"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "locations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowLintLocation"
+          }
         }
       },
       "required": ["fingerprint", "rule", "severity", "message", "element", "path"],
       "additionalProperties": false
     },
-    "FlowLintRule": {
-      "type": "string",
-      "enum": [
-        "dml-inside-loop",
-        "hard-coded-id",
-        "inactive-subflow",
-        "missing-fault-path",
-        "missing-subflow",
-        "unconnected-element",
-        "unused-resource"
-      ]
-    },
     "FlowLintSeverity": {
       "type": "string",
       "enum": ["error", "warning"]
+    },
+    "FlowLintLocation": {
+      "type": "object",
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "startLine": {
+          "type": "number"
+        },
+        "startColumn": {
+          "type": "number"
+        },
+        "endLine": {
+          "type": ["number", "null"]
+        },
+        "endColumn": {
+          "type": ["number", "null"]
+        },
+        "primary": {
+          "type": "boolean"
+        }
+      },
+      "required": ["file", "startLine", "startColumn", "endLine", "endColumn", "primary"],
+      "additionalProperties": false
     }
   }
 }

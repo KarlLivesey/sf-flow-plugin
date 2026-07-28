@@ -86,6 +86,10 @@ Loading Flow metadata
 
 Loading local Flow source
 
+# stages.running-code-analyzer
+
+Running Salesforce Code Analyzer Flow Scanner
+
 # stages.checking-permissions
 
 Checking permissions

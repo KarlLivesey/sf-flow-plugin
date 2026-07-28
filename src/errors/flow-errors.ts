@@ -245,7 +245,7 @@ export function flowPruneVerificationFailed(apiName: string): SfError {
     action: 'Query the Flow versions in Salesforce and retry the prune operation.',
   });
 }
-
+export { flowCodeAnalyzerFailed, flowCodeAnalyzerUnavailable } from './flow-code-analyzer-errors.js';
 export {
   flowBundleFailed,
   flowCheckFailed,

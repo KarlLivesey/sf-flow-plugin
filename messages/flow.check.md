@@ -6,7 +6,8 @@ Run aggregated read-only checks against Salesforce Flows.
 
 Run static lint, subflow, dependency and version checks for one or more Flows. Metrics are opt-in. The command returns
 one structured result suitable for local review or CI and fails on errors by default. Local `--source-file` mode
-supports lint and structural metrics; checks that require org state are rejected.
+supports Salesforce Code Analyzer Flow Scanner lint and structural metrics; checks that require org state are
+rejected.
 
 # flags.api-name.summary
 
@@ -67,6 +68,10 @@ Namespace of each requested Flow. Use this to disambiguate managed-package Flows
 # flags.api-version.summary
 
 Salesforce API version to use for Tooling API requests.
+
+# flags.no-prompt.summary
+
+Do not offer to install Salesforce Code Analyzer when a local lint check requires it.
 
 # examples
 

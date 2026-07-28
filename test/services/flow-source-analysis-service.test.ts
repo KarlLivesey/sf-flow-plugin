@@ -13,6 +13,7 @@ import {
   describeFlowSource,
   graphFlowSource,
   lintFlowSource,
+  selectedSourceChecks,
 } from '../../src/services/flow-source-analysis-service.js';
 import { loadFlowSource } from '../../src/services/flow-source-service.js';
 import type { FlowGraphRenderRequest } from '../../src/types/flow-inspection.js';
@@ -57,32 +58,41 @@ describe('local Flow source analysis', (): void => {
     expect(result.flows[0]?.formulas).to.deep.equal([]);
   });
 
-  it('runs only static lint rules and ignores Flow global names that resemble IDs', async (): Promise<void> => {
+  it('returns Salesforce Code Analyzer findings with the local-source contract', async (): Promise<void> => {
     const source = await loadFlowSource(fixture);
-    const result = lintFlowSource(source, { rules: [], excludedRules: [] });
+    const finding = {
+      fingerprint: 'a'.repeat(64),
+      rule: 'MissingDescription',
+      severity: 'warning' as const,
+      message: 'Add a description.',
+      element: null,
+      path: 'line 4:1',
+      analyzerSeverity: 4,
+      tags: ['CodeStyle', 'XML'],
+      locations: [],
+    };
+    const result = lintFlowSource(source, [finding]);
     expect(result.targetOrg).to.equal(null);
     expect(result.sourceFile).to.equal(fixture);
-    expect(result.findings.some((finding) => finding.message.includes('CurrentDateTime'))).to.equal(false);
-    expect(() => lintFlowSource(source, { rules: ['missing-subflow'], excludedRules: [] }))
-      .to.throw()
-      .with.property('name', 'FlowLintFailed');
+    expect(result.findings).to.deep.equal([finding]);
   });
 });
 
 describe('local Flow source check and graph analysis', (): void => {
   it('defaults checks to lint and permits local static metrics', async (): Promise<void> => {
     const source = await loadFlowSource(fixture);
-    const defaultResult = checkFlowSource(source, { requested: [], excluded: [] });
+    const defaultChecks = selectedSourceChecks([], []);
+    const defaultResult = checkFlowSource(source, { checks: defaultChecks, excluded: [], lintFindings: [] });
     expect(defaultResult.checks).to.deep.equal(['lint']);
     expect(defaultResult.flows[0]?.metrics).to.equal(null);
 
-    const metricsResult = checkFlowSource(source, { requested: ['metrics'], excluded: [] });
+    const metricsResult = checkFlowSource(source, { checks: ['metrics'], excluded: [], lintFindings: [] });
     expect(metricsResult.checks).to.deep.equal(['metrics']);
     expect(metricsResult.flows[0]?.metrics?.flows[0]).to.include({
       apiName: 'Plugin_Test_Flow',
       version: null,
     });
-    expect(() => checkFlowSource(source, { requested: ['dependencies'], excluded: [] }))
+    expect(() => selectedSourceChecks(['dependencies'], []))
       .to.throw()
       .with.property('name', 'FlowCheckFailed');
   });

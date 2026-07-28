@@ -746,6 +746,21 @@
         },
         "path": {
           "type": ["string", "null"]
+        },
+        "analyzerSeverity": {
+          "type": "number"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "locations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowLintLocation"
+          }
         }
       },
       "required": ["apiName", "namespace", "version", "check", "code", "severity", "message", "path"],
@@ -754,6 +769,31 @@
     "FlowCheckSeverity": {
       "type": "string",
       "enum": ["error", "warning"]
+    },
+    "FlowLintLocation": {
+      "type": "object",
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "startLine": {
+          "type": "number"
+        },
+        "startColumn": {
+          "type": "number"
+        },
+        "endLine": {
+          "type": ["number", "null"]
+        },
+        "endColumn": {
+          "type": ["number", "null"]
+        },
+        "primary": {
+          "type": "boolean"
+        }
+      },
+      "required": ["file", "startLine", "startColumn", "endLine", "endColumn", "primary"],
+      "additionalProperties": false
     }
   }
 }

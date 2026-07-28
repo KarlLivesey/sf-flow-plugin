@@ -6,6 +6,7 @@
  */
 import type { FlowComparisonVersionSelector } from './flow-analysis.js';
 import type { FlowSubflowVersionSelector, FlowVariableSummary } from './flow-inspection.js';
+import type { FlowLintLocation } from './flow-lint.js';
 import type { FlowMetricsResult, FlowSourceMetricsResult } from './flow-metrics.js';
 
 export type FlowCheckKind = 'dependencies' | 'lint' | 'metrics' | 'subflows' | 'versions';
@@ -37,6 +38,9 @@ export interface FlowCheckFinding {
   severity: FlowCheckSeverity;
   message: string;
   path: string | null;
+  analyzerSeverity?: number;
+  tags?: string[];
+  locations?: FlowLintLocation[];
 }
 
 export interface FlowInputOutputContract {
