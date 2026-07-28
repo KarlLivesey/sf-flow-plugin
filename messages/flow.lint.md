@@ -5,11 +5,16 @@ Lint a Salesforce Flow.
 # description
 
 Inspect a Flow version for unconnected elements, missing fault paths, DML inside loops, hard-coded Salesforce IDs,
-inactive or missing subflows, and unused resources.
+inactive or missing subflows, and unused resources. Use `--source-file` to analyse local Flow metadata without an org;
+org-dependent subflow rules are unavailable in that mode.
 
 # flags.api-name.summary
 
 API name of the Flow to lint.
+
+# flags.source-file.summary
+
+Local .flow-meta.xml file to lint without authenticating to an org.
 
 # flags.target-org.summary
 
@@ -61,6 +66,10 @@ Salesforce API version to use for the Tooling API requests.
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --flow-version active --json
 
+- Lint a local Flow source file without an org:
+
+  <%= config.bin %> <%= command.id %> --source-file force-app/main/default/flows/Order_Processing.flow-meta.xml
+
 - Fail CI for new warnings while retaining known findings in a baseline:
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --fail-on warning --baseline flow-lint-baseline.json
@@ -71,11 +80,11 @@ Salesforce API version to use for the Tooling API requests.
 
 # info.clean
 
-No lint findings for %s v%s.
+No lint findings for %s %s.
 
 # info.new-title
 
-New lint findings for %s v%s (%s)
+New lint findings for %s %s (%s)
 
 # info.baseline-title
 

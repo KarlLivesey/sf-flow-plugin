@@ -146,6 +146,22 @@ export interface FlowGraphRequest extends FlowTraversalRequest {
   style: FlowGraphStyle;
 }
 
+export type FlowGraphRenderRequest = Pick<
+  FlowGraphRequest,
+  | 'curve'
+  | 'direction'
+  | 'elk'
+  | 'format'
+  | 'includeFormulas'
+  | 'includeVariables'
+  | 'labelWidth'
+  | 'layout'
+  | 'legend'
+  | 'nodeSpacing'
+  | 'rankSpacing'
+  | 'style'
+>;
+
 export interface FlowVariableSummary {
   name: string;
   dataType: string;
@@ -194,9 +210,9 @@ export interface FlowDescription {
   apiName: string;
   namespace: string | null;
   qualifiedName: string;
-  definitionId: string;
-  versionId: string;
-  versionNumber: FlowVersionNumber;
+  definitionId: string | null;
+  versionId: string | null;
+  versionNumber: FlowVersionNumber | null;
   status: string;
   label: string;
   processType: string;
@@ -225,14 +241,15 @@ export interface FlowTraversalWarning {
 export interface FlowTraversalResult {
   apiName: string;
   namespace: string | null;
-  requestedVersion: FlowComparisonVersionSelector;
-  resolvedVersion: FlowVersionNumber;
+  requestedVersion: FlowComparisonVersionSelector | null;
+  resolvedVersion: FlowVersionNumber | null;
   subflowVersion: FlowSubflowVersionSelector;
   recursive: boolean;
   maxDepth: number;
   flows: FlowDescription[];
   warnings: FlowTraversalWarning[];
-  targetOrg: string;
+  targetOrg: string | null;
+  sourceFile?: string;
 }
 
 export interface FlowDescribeResult extends FlowTraversalResult {

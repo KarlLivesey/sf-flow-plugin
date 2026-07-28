@@ -82,6 +82,10 @@ Loading Flow versions
 
 Loading Flow metadata
 
+# stages.loading-source
+
+Loading local Flow source
+
 # stages.checking-permissions
 
 Checking permissions

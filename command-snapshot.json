@@ -78,6 +78,7 @@
       "output-file",
       "recursive",
       "result-format",
+      "source-file",
       "subflow-version",
       "target-org"
     ],
@@ -184,6 +185,7 @@
       "namespace",
       "only",
       "recursive",
+      "source-file",
       "subflow-version",
       "target-org"
     ],
@@ -241,6 +243,7 @@
       "output-file",
       "rank-spacing",
       "recursive",
+      "source-file",
       "subflow-version",
       "target-org"
     ],
@@ -264,6 +267,7 @@
       "output-file",
       "result-format",
       "rule",
+      "source-file",
       "target-org"
     ],
     "plugin": "sf-flow-plugin"

@@ -203,6 +203,15 @@ export function flowInspectionFailed(message: string, cause?: unknown): SfError 
   });
 }
 
+export function flowSourceInvalid(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowSourceInvalid',
+    message,
+    action: 'Provide a readable Salesforce Flow .flow-meta.xml file with valid metadata.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
 export function flowLintFailed(message: string, cause?: unknown): SfError {
   return createFlowError({
     code: 'FlowLintFailed',

@@ -36,9 +36,9 @@ export interface FlowLintFinding {
 export interface FlowLintResult {
   apiName: string;
   namespace: string | null;
-  definitionId: string;
-  requestedVersion: FlowComparisonVersionSelector;
-  resolvedVersion: FlowVersionNumber;
+  definitionId: string | null;
+  requestedVersion: FlowComparisonVersionSelector | null;
+  resolvedVersion: FlowVersionNumber | null;
   status: string;
   findings: FlowLintFinding[];
   newFindings: FlowLintFinding[];
@@ -47,7 +47,8 @@ export interface FlowLintResult {
   warnings: number;
   newErrors: number;
   newWarnings: number;
-  targetOrg: string;
+  targetOrg: string | null;
+  sourceFile?: string;
 }
 
 export type FlowLintFailSeverity = 'error' | 'warning';

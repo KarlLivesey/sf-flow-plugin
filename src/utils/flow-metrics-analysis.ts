@@ -6,7 +6,7 @@
  */
 import type { JsonObject } from '../types/flow-analysis.js';
 import type { FlowDescription } from '../types/flow-inspection.js';
-import type { FlowMetricCounts, FlowMetricEntry } from '../types/flow-metrics.js';
+import type { AnalysedFlowMetricEntry, FlowMetricCounts } from '../types/flow-metrics.js';
 import { analyseFlowLintMetadata, FLOW_DML_TYPES, FLOW_FAULT_PATH_COLLECTIONS } from './flow-lint-analysis.js';
 
 function adjacency(description: FlowDescription): ReadonlyMap<string, ReadonlyArray<string>> {
@@ -185,7 +185,7 @@ function uniqueFindingElements(
   );
 }
 
-export function analyseFlowMetrics(metadata: JsonObject, description: FlowDescription): FlowMetricEntry {
+export function analyseFlowMetrics(metadata: JsonObject, description: FlowDescription): AnalysedFlowMetricEntry {
   const findings = analyseFlowLintMetadata(metadata, description);
   const missingFaults = findings.filter((finding) => finding.rule === 'missing-fault-path').length;
   const faultCapable = description.elements.filter(
@@ -258,7 +258,7 @@ const maximumKeys: ReadonlySet<keyof FlowMetricCounts> = new Set([
   'maximumFanOut',
 ]);
 
-export function totalFlowMetrics(entries: ReadonlyArray<FlowMetricEntry>): FlowMetricCounts {
+export function totalFlowMetrics(entries: ReadonlyArray<FlowMetricCounts>): FlowMetricCounts {
   return Object.fromEntries(
     countKeys.map((key) => [
       key,

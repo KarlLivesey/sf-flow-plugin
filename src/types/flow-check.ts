@@ -6,7 +6,7 @@
  */
 import type { FlowComparisonVersionSelector } from './flow-analysis.js';
 import type { FlowSubflowVersionSelector, FlowVariableSummary } from './flow-inspection.js';
-import type { FlowMetricsResult } from './flow-metrics.js';
+import type { FlowMetricsResult, FlowSourceMetricsResult } from './flow-metrics.js';
 
 export type FlowCheckKind = 'dependencies' | 'lint' | 'metrics' | 'subflows' | 'versions';
 
@@ -42,7 +42,7 @@ export interface FlowCheckFinding {
 export interface FlowInputOutputContract {
   apiName: string;
   namespace: string | null;
-  version: number;
+  version: number | null;
   inputs: FlowVariableSummary[];
   outputs: FlowVariableSummary[];
 }
@@ -50,10 +50,10 @@ export interface FlowInputOutputContract {
 export interface FlowCheckEntry {
   apiName: string;
   namespace: string | null;
-  resolvedVersion: number;
+  resolvedVersion: number | null;
   checks: FlowCheckKind[];
   contracts: FlowInputOutputContract[];
-  metrics: FlowMetricsResult | null;
+  metrics: FlowMetricsResult | FlowSourceMetricsResult | null;
   findings: FlowCheckFinding[];
   errors: number;
   warnings: number;
@@ -61,7 +61,7 @@ export interface FlowCheckEntry {
 
 export interface FlowCheckResult {
   apiNames: string[];
-  requestedVersion: FlowComparisonVersionSelector;
+  requestedVersion: FlowComparisonVersionSelector | null;
   subflowVersion: FlowSubflowVersionSelector;
   checks: FlowCheckKind[];
   excludedChecks: FlowCheckKind[];
@@ -72,5 +72,6 @@ export interface FlowCheckResult {
   findings: FlowCheckFinding[];
   errors: number;
   warnings: number;
-  targetOrg: string;
+  targetOrg: string | null;
+  sourceFile?: string;
 }

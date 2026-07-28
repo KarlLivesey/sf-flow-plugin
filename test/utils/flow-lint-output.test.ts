@@ -7,6 +7,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { expect } from 'chai';
 
@@ -198,5 +199,19 @@ describe('Flow lint qualified report identity', (): void => {
     expect(sarif.runs[0]?.results[0]?.locations?.[0]?.logicalLocations[0]?.fullyQualifiedName).to.equal(
       'managed__Root_Flow:formulas[0].expression'
     );
+  });
+
+  it('identifies local source in human and SARIF output', (): void => {
+    const sourceFile = '/workspace/flows/Root_Flow.flow-meta.xml';
+    const result = {
+      ...lintResult(),
+      requestedVersion: null,
+      resolvedVersion: null,
+      targetOrg: null,
+      sourceFile,
+    };
+    const sarif = formatFlowLintSarif(result);
+    expect(formatFlowLintHuman(result)).to.contain('Flow lint: Root_Flow local source');
+    expect(sarif).to.contain(pathToFileURL(sourceFile).toString());
   });
 });

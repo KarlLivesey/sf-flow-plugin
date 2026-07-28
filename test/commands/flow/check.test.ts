@@ -39,6 +39,7 @@ describe('flow check command', (): void => {
   it('passes repeatable names and selected checks to the service', async (): Promise<void> => {
     const flags = {
       'api-name': ['Flow_A', 'Flow_B'],
+      'source-file': undefined,
       'target-org': createCommandOrg({} as Connection),
       'flow-version': 'latest' as const,
       only: ['lint', 'metrics'] as const,
@@ -78,6 +79,7 @@ describe('flow check command qualified output', (): void => {
   it('qualifies Flow names in the interactive findings table', async (): Promise<void> => {
     const flags = {
       'api-name': ['Flow_A'],
+      'source-file': undefined,
       'target-org': createCommandOrg({} as Connection),
       'flow-version': 'latest' as const,
       only: undefined,

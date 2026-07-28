@@ -4,11 +4,17 @@ Generate a Mermaid or DOT graph for a Salesforce Flow version.
 
 # description
 
-Render Flow elements and connectors as Mermaid or Graphviz DOT. Recursive traversal follows selected subflow versions and stops at the configured depth.
+Render Flow elements and connectors as Mermaid or Graphviz DOT. Recursive org traversal follows selected subflow
+versions and stops at the configured depth. Use `--source-file` for one local Flow without an org; recursive traversal
+is unavailable when only one source file is supplied.
 
 # flags.api-name.summary
 
 API name of the Flow definition.
+
+# flags.source-file.summary
+
+Local .flow-meta.xml file to graph without authenticating to an org.
 
 # flags.target-org.summary
 
@@ -135,6 +141,10 @@ Salesforce API version to use for the Tooling API requests.
 - Write DOT source to a file:
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --format dot --output-file order-processing.dot
+
+- Graph a local Flow source file without an org:
+
+  <%= config.bin %> <%= command.id %> --source-file force-app/main/default/flows/Order_Processing.flow-meta.xml --include-variables
 
 # info.written
 

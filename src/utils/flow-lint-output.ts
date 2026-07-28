@@ -6,6 +6,7 @@
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { z } from 'zod';
 
@@ -143,7 +144,8 @@ function section(title: string, findings: ReadonlyArray<FlowLintFinding>): strin
 }
 
 export function formatFlowLintHuman(result: FlowLintResult): string {
-  const heading = `Flow lint: ${qualifiedFlowName(result.apiName, result.namespace)} v${result.resolvedVersion}`;
+  const version = result.resolvedVersion === null ? 'local source' : `v${result.resolvedVersion}`;
+  const heading = `Flow lint: ${qualifiedFlowName(result.apiName, result.namespace)} ${version}`;
   return [
     heading,
     '='.repeat(heading.length),
@@ -160,6 +162,7 @@ interface SarifLocation {
     kind: 'flowElement' | 'metadataPath';
   }>;
   properties?: { metadataPath: string };
+  physicalLocation?: { artifactLocation: { uri: string } };
 }
 
 interface SarifResult {
@@ -171,7 +174,11 @@ interface SarifResult {
   locations?: SarifLocation[];
 }
 
-function sarifLocation(flowName: string, finding: FlowLintFinding): SarifLocation | null {
+function sarifLocation(
+  flowName: string,
+  finding: FlowLintFinding,
+  sourceFile: string | undefined
+): SarifLocation | null {
   const location = finding.path ?? finding.element;
   if (location === null) {
     return null;
@@ -184,17 +191,26 @@ function sarifLocation(flowName: string, finding: FlowLintFinding): SarifLocatio
         kind: finding.path === null ? 'flowElement' : 'metadataPath',
       },
     ],
+    ...(sourceFile === undefined
+      ? {}
+      : { physicalLocation: { artifactLocation: { uri: pathToFileURL(sourceFile).toString() } } }),
     ...(finding.path === null ? {} : { properties: { metadataPath: finding.path } }),
   };
 }
 
-function sarifResult(flowName: string, finding: FlowLintFinding, baseline: ReadonlySet<string>): SarifResult {
-  const location = sarifLocation(flowName, finding);
+interface SarifResultContext {
+  flowName: string;
+  baseline: ReadonlySet<string>;
+  sourceFile: string | undefined;
+}
+
+function sarifResult(finding: FlowLintFinding, context: SarifResultContext): SarifResult {
+  const location = sarifLocation(context.flowName, finding, context.sourceFile);
   return {
     ruleId: finding.rule,
     level: finding.severity,
     message: { text: finding.message },
-    baselineState: baseline.has(findingKey(finding)) ? 'unchanged' : 'new',
+    baselineState: context.baseline.has(findingKey(finding)) ? 'unchanged' : 'new',
     partialFingerprints: { 'sf-flow-plugin/v1': finding.fingerprint },
     ...(location === null ? {} : { locations: [location] }),
   };
@@ -216,7 +232,9 @@ export function formatFlowLintSarif(result: FlowLintResult): string {
               rules: [...new Set(result.findings.map((finding) => finding.rule))].sort().map((id) => ({ id })),
             },
           },
-          results: result.findings.map((finding) => sarifResult(flowName, finding, baseline)),
+          results: result.findings.map((finding) =>
+            sarifResult(finding, { flowName, baseline, sourceFile: result.sourceFile })
+          ),
         },
       ],
     },

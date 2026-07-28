@@ -9,6 +9,8 @@ import type { Org } from '@salesforce/core';
 import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
 import { FlowLintService } from '../../services/flow-lint-service.js';
+import { lintFlowSource } from '../../services/flow-source-analysis-service.js';
+import { loadFlowSource } from '../../services/flow-source-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type { FlowComparisonVersionSelector } from '../../types/flow-analysis.js';
 import type {
@@ -27,13 +29,15 @@ import {
 } from '../../utils/flow-lint-output.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
+import { validateFlowSourceFlags } from '../../utils/flow-source-command.js';
 import { parseInspectionVersionSelector } from './describe.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('sf-flow-plugin', 'flow.lint');
 
 export interface LintFlagValues {
-  'api-name': string;
+  'api-name': string | undefined;
+  'source-file': string | undefined;
   'target-org': Org | undefined;
   'flow-version': FlowComparisonVersionSelector;
   'fail-on': FlowLintFailSeverity | undefined;
@@ -47,8 +51,11 @@ export interface LintFlagValues {
 }
 
 function createRequest(flags: LintFlagValues, context: ReturnType<typeof createFlowCommandContext>): FlowLintRequest {
+  if (flags['api-name'] === undefined) {
+    throw new Error('An API name is required for org-backed Flow linting.');
+  }
   return {
-    ...createNamedFlowRequest(flags, context),
+    ...createNamedFlowRequest({ ...flags, 'api-name': flags['api-name'] }, context),
     version: flags['flow-version'],
     rules: flags.rule ?? [],
     excludedRules: flags['exclude-rule'] ?? [],
@@ -71,6 +78,21 @@ function shouldFail(result: FlowLintResult, severity: FlowLintFailSeverity | und
     : severity === 'error' && result.newErrors > 0;
 }
 
+async function lintOrg(
+  flags: LintFlagValues,
+  progress: Parameters<FlowLintService['lint']>[1]
+): Promise<FlowLintResult> {
+  if (flags['api-name'] === undefined) {
+    throw new Error('An API name is required for org-backed Flow linting.');
+  }
+  validateNamedFlowFlags({ ...flags, 'api-name': flags['api-name'] });
+  const context = createFlowCommandContext(flags);
+  return new FlowLintService(new ToolingFlowDefinitionGateway(context.connection)).lint(
+    createRequest(flags, context),
+    progress
+  );
+}
+
 export default class FlowLint extends SfCommand<FlowLintResult> {
   public static override readonly summary = messages.getMessage('summary');
   public static override readonly description = messages.getMessage('description');
@@ -79,12 +101,16 @@ export default class FlowLint extends SfCommand<FlowLintResult> {
   public static override readonly flags = {
     'api-name': Flags.string({
       char: 'n',
-      required: true,
+      exactlyOne: ['api-name', 'source-file'],
       summary: messages.getMessage('flags.api-name.summary'),
     }),
-    'target-org': Flags.requiredOrg({
+    'source-file': Flags.file({
+      exactlyOne: ['api-name', 'source-file'],
+      exists: true,
+      summary: messages.getMessage('flags.source-file.summary'),
+    }),
+    'target-org': Flags.optionalOrg({
       char: 'o',
-      required: false,
       summary: messages.getMessage('flags.target-org.summary'),
     }),
     'flow-version': Flags.custom<FlowComparisonVersionSelector>({
@@ -127,12 +153,17 @@ export default class FlowLint extends SfCommand<FlowLintResult> {
   };
 
   public async run(): Promise<FlowLintResult> {
+    validateFlowSourceFlags(this.argv, ['target-org', 'flow-version', 'namespace', 'api-version']);
     const flags = await this.parseFlags();
-    validateNamedFlowFlags(flags);
-    const context = createFlowCommandContext(flags);
-    const service = new FlowLintService(new ToolingFlowDefinitionGateway(context.connection));
     const lintResult = await withFlowProgress(this.spinner, 'lint', async (progress) =>
-      service.lint(createRequest(flags, context), progress)
+      flags['source-file'] === undefined
+        ? lintOrg(flags, progress)
+        : (progress('loading-source', flags['source-file']),
+          lintFlowSource(
+            await loadFlowSource(flags['source-file']),
+            { rules: flags.rule ?? [], excludedRules: flags['exclude-rule'] ?? [] },
+            progress
+          ))
     );
     const result = await applyFlowLintBaseline(lintResult, flags.baseline);
     await this.writeOutput(result, flags);
@@ -166,12 +197,13 @@ export default class FlowLint extends SfCommand<FlowLintResult> {
 
   private writeHumanOutput(result: FlowLintResult): void {
     const flowName = qualifiedFlowName(result.apiName, result.namespace);
+    const version = result.resolvedVersion === null ? 'local source' : `v${result.resolvedVersion}`;
     if (result.findings.length === 0) {
-      this.log(messages.getMessage('info.clean', [flowName, result.resolvedVersion]));
+      this.log(messages.getMessage('info.clean', [flowName, version]));
       return;
     }
     this.writeFindingTable(
-      messages.getMessage('info.new-title', [flowName, result.resolvedVersion, result.newFindings.length]),
+      messages.getMessage('info.new-title', [flowName, version, result.newFindings.length]),
       result.newFindings
     );
     if (result.baselineFindings.length > 0) {

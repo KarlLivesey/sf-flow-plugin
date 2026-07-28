@@ -72,6 +72,7 @@ const result: FlowGraphResult = {
 function graphFlags(): GraphFlagValues {
   return {
     'api-name': 'Order_Processing',
+    'source-file': undefined,
     'target-org': createCommandOrg({} as Connection),
     'flow-version': 3,
     'subflow-version': 'latest',

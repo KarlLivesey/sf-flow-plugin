@@ -19,6 +19,7 @@ import type { FlowDefinitionGateway } from '../types/flow.js';
 import type {
   FlowDescribeResult,
   FlowGraphRequest,
+  FlowGraphRenderRequest,
   FlowGraphResult,
   FlowTraversalResult,
 } from '../types/flow-inspection.js';
@@ -33,7 +34,7 @@ import {
 import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
 import { FlowDescribeService } from './flow-describe-service.js';
 
-function summariseRequestedLayout(layout: FlowGraphRequest['layout']): FlowGraphResult['requestedLayout'] {
+function summariseRequestedLayout(layout: FlowGraphRenderRequest['layout']): FlowGraphResult['requestedLayout'] {
   if (!Array.isArray(layout)) {
     return layout;
   }
@@ -56,8 +57,8 @@ function traversalResult(result: FlowDescribeResult): FlowTraversalResult {
 }
 
 function validateGraphOptions(
-  request: FlowGraphRequest
-): Pick<FlowGraphRequest, 'curve' | 'direction' | 'elk' | 'layout' | 'nodeSpacing' | 'rankSpacing' | 'style'> {
+  request: FlowGraphRenderRequest
+): Pick<FlowGraphRenderRequest, 'curve' | 'direction' | 'elk' | 'layout' | 'nodeSpacing' | 'rankSpacing' | 'style'> {
   const style = flowGraphStyleSchema.safeParse(request.style);
   const direction = flowGraphDirectionSchema.safeParse(request.direction);
   const layout = flowGraphLayoutSelectionSchema.safeParse(request.layout);
@@ -88,6 +89,54 @@ function validateGraphOptions(
   };
 }
 
+export function renderDescribedFlowGraph(
+  described: FlowTraversalResult,
+  request: FlowGraphRenderRequest,
+  progress: FlowProgressReporter = noFlowProgress
+): FlowGraphResult {
+  const validated = validateGraphOptions(request);
+  const resolvedDirection = resolveGraphDirection(described.flows, validated.direction);
+  const layoutCandidates = resolveGraphLayoutCandidates(validated.layout);
+  const resolvedLayout = resolveGraphLayout(described.flows, validated.layout, validated.elk);
+  const resolvedCurve = resolveGraphCurve(validated.curve, resolvedLayout);
+  const resolvedElk = resolveGraphElkOptions(described.flows, validated.elk);
+  const options = {
+    includeVariables: request.includeVariables,
+    includeFormulas: request.includeFormulas,
+    direction: resolvedDirection,
+    layout: resolvedLayout,
+    curve: resolvedCurve,
+    elk: resolvedElk,
+    nodeSpacing: validated.nodeSpacing,
+    rankSpacing: validated.rankSpacing,
+    legend: request.legend,
+    labelWidth: request.labelWidth,
+    style: validated.style,
+  };
+  progress('rendering-graph', `${described.apiName} (${request.format})`);
+  return {
+    ...described,
+    format: request.format,
+    includeVariables: request.includeVariables,
+    includeFormulas: request.includeFormulas,
+    requestedDirection: validated.direction,
+    resolvedDirection,
+    requestedLayout: summariseRequestedLayout(validated.layout),
+    layoutCandidates: request.format === 'mermaid' ? layoutCandidates : null,
+    resolvedLayout: request.format === 'mermaid' ? resolvedLayout : null,
+    requestedCurve: validated.curve,
+    resolvedCurve: request.format === 'mermaid' ? resolvedCurve : null,
+    requestedElk: validated.elk,
+    resolvedElk: request.format === 'mermaid' ? resolvedElk : null,
+    nodeSpacing: validated.nodeSpacing,
+    rankSpacing: validated.rankSpacing,
+    legend: request.legend,
+    labelWidth: request.labelWidth,
+    style: validated.style,
+    graph: renderFlowGraph(described.flows, request.format, options),
+  };
+}
+
 export class FlowGraphService {
   public constructor(private readonly gateway: FlowDefinitionGateway & FlowMetadataGateway) {}
 
@@ -95,47 +144,7 @@ export class FlowGraphService {
     request: FlowGraphRequest,
     progress: FlowProgressReporter = noFlowProgress
   ): Promise<FlowGraphResult> {
-    const validated = validateGraphOptions(request);
     const described = traversalResult(await new FlowDescribeService(this.gateway).describe(request, progress));
-    const resolvedDirection = resolveGraphDirection(described.flows, validated.direction);
-    const layoutCandidates = resolveGraphLayoutCandidates(validated.layout);
-    const resolvedLayout = resolveGraphLayout(described.flows, validated.layout, validated.elk);
-    const resolvedCurve = resolveGraphCurve(validated.curve, resolvedLayout);
-    const resolvedElk = resolveGraphElkOptions(described.flows, validated.elk);
-    const options = {
-      includeVariables: request.includeVariables,
-      includeFormulas: request.includeFormulas,
-      direction: resolvedDirection,
-      layout: resolvedLayout,
-      curve: resolvedCurve,
-      elk: resolvedElk,
-      nodeSpacing: validated.nodeSpacing,
-      rankSpacing: validated.rankSpacing,
-      legend: request.legend,
-      labelWidth: request.labelWidth,
-      style: validated.style,
-    };
-    progress('rendering-graph', `${described.apiName} (${request.format})`);
-    return {
-      ...described,
-      format: request.format,
-      includeVariables: request.includeVariables,
-      includeFormulas: request.includeFormulas,
-      requestedDirection: validated.direction,
-      resolvedDirection,
-      requestedLayout: summariseRequestedLayout(validated.layout),
-      layoutCandidates: request.format === 'mermaid' ? layoutCandidates : null,
-      resolvedLayout: request.format === 'mermaid' ? resolvedLayout : null,
-      requestedCurve: validated.curve,
-      resolvedCurve: request.format === 'mermaid' ? resolvedCurve : null,
-      requestedElk: validated.elk,
-      resolvedElk: request.format === 'mermaid' ? resolvedElk : null,
-      nodeSpacing: validated.nodeSpacing,
-      rankSpacing: validated.rankSpacing,
-      legend: request.legend,
-      labelWidth: request.labelWidth,
-      style: validated.style,
-      graph: renderFlowGraph(described.flows, request.format, options),
-    };
+    return renderDescribedFlowGraph(described, request, progress);
   }
 }

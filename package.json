@@ -8,6 +8,7 @@
     "@salesforce/core": "^8.2.7",
     "@salesforce/sf-plugins-core": "^12",
     "filelist": "1.0.5",
+    "xml2js": "^0.6.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -16,6 +17,7 @@
     "@salesforce/dev-scripts": "^11.0.4",
     "@salesforce/plugin-command-reference": "^3.1.122",
     "@types/node": "~22.20.1",
+    "@types/xml2js": "^0.4.14",
     "c8": "^10.1.3",
     "eslint-plugin-sf-plugin": "^1.18.8",
     "oclif": "^4.14.0",

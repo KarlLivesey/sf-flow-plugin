@@ -12,7 +12,14 @@
           }
         },
         "requestedVersion": {
-          "$ref": "#/definitions/FlowComparisonVersionSelector"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowComparisonVersionSelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "subflowVersion": {
           "$ref": "#/definitions/FlowSubflowVersionSelector"
@@ -57,6 +64,9 @@
           "type": "number"
         },
         "targetOrg": {
+          "type": ["string", "null"]
+        },
+        "sourceFile": {
           "type": "string"
         }
       },
@@ -113,7 +123,7 @@
           "type": ["string", "null"]
         },
         "resolvedVersion": {
-          "type": "number"
+          "type": ["number", "null"]
         },
         "checks": {
           "type": "array",
@@ -131,6 +141,9 @@
           "anyOf": [
             {
               "$ref": "#/definitions/FlowMetricsResult"
+            },
+            {
+              "$ref": "#/definitions/FlowSourceMetricsResult"
             },
             {
               "type": "null"
@@ -173,7 +186,7 @@
           "type": ["string", "null"]
         },
         "version": {
-          "type": "number"
+          "type": ["number", "null"]
         },
         "inputs": {
           "type": "array",
@@ -514,6 +527,198 @@
     "FlowTraversalWarningKind": {
       "type": "string",
       "enum": ["depth-limit", "missing-subflow", "subflow-version-fallback", "missing-subflow-version"]
+    },
+    "FlowSourceMetricsResult": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "subflowVersion": {
+          "$ref": "#/definitions/FlowSubflowVersionSelector"
+        },
+        "recursive": {
+          "type": "boolean"
+        },
+        "maxDepth": {
+          "type": "number"
+        },
+        "totals": {
+          "$ref": "#/definitions/FlowMetricCounts"
+        },
+        "referencedObjects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowTraversalWarning"
+          }
+        },
+        "requestedVersion": {
+          "type": "null"
+        },
+        "resolvedVersion": {
+          "type": "null"
+        },
+        "flows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowSourceMetricEntry"
+          }
+        },
+        "targetOrg": {
+          "type": "null"
+        },
+        "sourceFile": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "apiName",
+        "flows",
+        "maxDepth",
+        "namespace",
+        "recursive",
+        "referencedObjects",
+        "requestedVersion",
+        "resolvedVersion",
+        "sourceFile",
+        "subflowVersion",
+        "targetOrg",
+        "totals",
+        "warnings"
+      ],
+      "additionalProperties": false
+    },
+    "FlowSourceMetricEntry": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "depth": {
+          "type": "number"
+        },
+        "faultPathCoverage": {
+          "type": ["number", "null"]
+        },
+        "referencedObjects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unusedResourceNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unreachableElementNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "executableElements": {
+          "type": "number"
+        },
+        "decisions": {
+          "type": "number"
+        },
+        "decisionOutcomes": {
+          "type": "number"
+        },
+        "loops": {
+          "type": "number"
+        },
+        "maximumLoopNestingUpperBound": {
+          "type": "number",
+          "description": "Upper bound derived after condensing each strongly connected component into one graph node."
+        },
+        "dmlElements": {
+          "type": "number"
+        },
+        "dmlInsideLoops": {
+          "type": "number"
+        },
+        "apexActions": {
+          "type": "number"
+        },
+        "subflows": {
+          "type": "number"
+        },
+        "maximumPathDepthUpperBound": {
+          "type": "number",
+          "description": "Upper bound derived after condensing each strongly connected component into one graph node."
+        },
+        "faultCapableElements": {
+          "type": "number"
+        },
+        "faultConnectedElements": {
+          "type": "number"
+        },
+        "variables": {
+          "type": "number"
+        },
+        "formulas": {
+          "type": "number"
+        },
+        "unusedResources": {
+          "type": "number"
+        },
+        "maximumFanIn": {
+          "type": "number"
+        },
+        "maximumFanOut": {
+          "type": "number"
+        },
+        "unreachableElements": {
+          "type": "number"
+        },
+        "version": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "apexActions",
+        "apiName",
+        "decisionOutcomes",
+        "decisions",
+        "depth",
+        "dmlElements",
+        "dmlInsideLoops",
+        "executableElements",
+        "faultCapableElements",
+        "faultConnectedElements",
+        "faultPathCoverage",
+        "formulas",
+        "loops",
+        "maximumFanIn",
+        "maximumFanOut",
+        "maximumLoopNestingUpperBound",
+        "maximumPathDepthUpperBound",
+        "namespace",
+        "referencedObjects",
+        "subflows",
+        "unreachableElementNames",
+        "unreachableElements",
+        "unusedResourceNames",
+        "unusedResources",
+        "variables",
+        "version"
+      ],
+      "additionalProperties": false
     },
     "FlowCheckFinding": {
       "type": "object",

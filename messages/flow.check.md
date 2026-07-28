@@ -5,11 +5,16 @@ Run aggregated read-only checks against Salesforce Flows.
 # description
 
 Run static lint, subflow, dependency and version checks for one or more Flows. Metrics are opt-in. The command returns
-one structured result suitable for local review or CI and fails on errors by default.
+one structured result suitable for local review or CI and fails on errors by default. Local `--source-file` mode
+supports lint and structural metrics; checks that require org state are rejected.
 
 # flags.api-name.summary
 
 API name of a Flow to check. Repeat the flag to check multiple Flows.
+
+# flags.source-file.summary
+
+Local .flow-meta.xml file to check without authenticating to an org.
 
 # flags.target-org.summary
 
@@ -76,6 +81,10 @@ Salesforce API version to use for Tooling API requests.
 - Write a SARIF report for CI:
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --result-format sarif --output-file flow-check.sarif
+
+- Run local lint and metrics without an org:
+
+  <%= config.bin %> <%= command.id %> --source-file force-app/main/default/flows/Order_Processing.flow-meta.xml --only lint --only metrics
 
 # info.title
 

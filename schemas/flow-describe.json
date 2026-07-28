@@ -12,10 +12,24 @@
           "type": ["string", "null"]
         },
         "requestedVersion": {
-          "$ref": "#/definitions/FlowComparisonVersionSelector"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowComparisonVersionSelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "resolvedVersion": {
-          "$ref": "#/definitions/FlowVersionNumber"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowVersionNumber"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "subflowVersion": {
           "$ref": "#/definitions/FlowSubflowVersionSelector"
@@ -39,6 +53,9 @@
           }
         },
         "targetOrg": {
+          "type": ["string", "null"]
+        },
+        "sourceFile": {
           "type": "string"
         },
         "sections": {
@@ -98,13 +115,20 @@
           "type": "string"
         },
         "definitionId": {
-          "type": "string"
+          "type": ["string", "null"]
         },
         "versionId": {
-          "type": "string"
+          "type": ["string", "null"]
         },
         "versionNumber": {
-          "$ref": "#/definitions/FlowVersionNumber"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowVersionNumber"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "status": {
           "type": "string"

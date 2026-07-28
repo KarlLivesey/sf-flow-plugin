@@ -216,8 +216,9 @@ function flowBlock(flow: RenderFlow, options: FlowGraphRenderOptions, theme: Res
       theme,
     })
   );
+  const version = flow.description.versionNumber === null ? 'local source' : `v${flow.description.versionNumber}`;
   const cluster = dotAttributes({
-    label: `${flow.description.qualifiedName} v${flow.description.versionNumber} · ${flow.description.status}`,
+    label: `${flow.description.qualifiedName} ${version} · ${flow.description.status}`,
     style: 'rounded,filled',
     fillcolor: theme.cluster.fill,
     color: theme.cluster.stroke,

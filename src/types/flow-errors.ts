@@ -25,6 +25,7 @@ export type FlowErrorCode =
   | 'FlowComparisonFailed'
   | 'FlowExportFailed'
   | 'FlowInspectionFailed'
+  | 'FlowSourceInvalid'
   | 'FlowLintFailed'
   | 'FlowPruneFailed'
   | 'FlowPruneVerificationFailed'

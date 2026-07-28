@@ -10,6 +10,8 @@ import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
 import { flowInspectionFailed } from '../../errors/flow-errors.js';
 import { FlowDescribeService } from '../../services/flow-describe-service.js';
+import { describeFlowSource } from '../../services/flow-source-analysis-service.js';
+import { loadFlowSource } from '../../services/flow-source-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type { FlowComparisonVersionSelector } from '../../types/flow-analysis.js';
 import type {
@@ -23,6 +25,7 @@ import type {
 } from '../../types/flow-inspection.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
+import { validateFlowSourceFlags } from '../../utils/flow-source-command.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('sf-flow-plugin', 'flow.describe');
@@ -35,7 +38,8 @@ const warningMessages: Record<FlowTraversalWarningKind, (path: string) => string
 };
 
 export interface DescribeFlagValues {
-  'api-name': string;
+  'api-name': string | undefined;
+  'source-file': string | undefined;
   'target-org': Org | undefined;
   'flow-version': FlowComparisonVersionSelector;
   'subflow-version': FlowSubflowVersionSelector;
@@ -60,8 +64,11 @@ function createRequest(
   flags: DescribeFlagValues,
   context: ReturnType<typeof createFlowCommandContext>
 ): FlowDescribeRequest {
+  if (flags['api-name'] === undefined) {
+    throw new Error('An API name is required for org-backed Flow description.');
+  }
   return {
-    ...createNamedFlowRequest(flags, context),
+    ...createNamedFlowRequest({ ...flags, 'api-name': flags['api-name'] }, context),
     version: flags['flow-version'],
     subflowVersion: flags['subflow-version'],
     recursive: flags.recursive,
@@ -77,7 +84,7 @@ function variableName(variable: FlowVariableSummary): string {
 function describeRow(flow: FlowDescription): Record<string, number | string> {
   return {
     name: flow.qualifiedName,
-    version: flow.versionNumber,
+    version: flow.versionNumber ?? 'local',
     status: flow.status,
     elements: flow.elements.map((element) => `${element.type}: ${element.label ?? element.name}`).join(', '),
     inputs: flow.variables
@@ -122,6 +129,21 @@ function describeColumns(sections: ReadonlyArray<FlowDescribeSection>): Array<{ 
   ];
 }
 
+async function describeOrg(
+  flags: DescribeFlagValues,
+  progress: Parameters<FlowDescribeService['describe']>[1]
+): Promise<FlowDescribeResult> {
+  if (flags['api-name'] === undefined) {
+    throw new Error('An API name is required for org-backed Flow description.');
+  }
+  validateNamedFlowFlags({ ...flags, 'api-name': flags['api-name'] });
+  const context = createFlowCommandContext(flags);
+  return new FlowDescribeService(new ToolingFlowDefinitionGateway(context.connection)).describe(
+    createRequest(flags, context),
+    progress
+  );
+}
+
 export default class FlowDescribe extends SfCommand<FlowDescribeResult> {
   public static override readonly summary = messages.getMessage('summary');
   public static override readonly description = messages.getMessage('description');
@@ -130,12 +152,16 @@ export default class FlowDescribe extends SfCommand<FlowDescribeResult> {
   public static override readonly flags = {
     'api-name': Flags.string({
       char: 'n',
-      required: true,
+      exactlyOne: ['api-name', 'source-file'],
       summary: messages.getMessage('flags.api-name.summary'),
     }),
-    'target-org': Flags.requiredOrg({
+    'source-file': Flags.file({
+      exactlyOne: ['api-name', 'source-file'],
+      exists: true,
+      summary: messages.getMessage('flags.source-file.summary'),
+    }),
+    'target-org': Flags.optionalOrg({
       char: 'o',
-      required: false,
       summary: messages.getMessage('flags.target-org.summary'),
     }),
     'flow-version': Flags.custom<FlowComparisonVersionSelector>({
@@ -175,12 +201,21 @@ export default class FlowDescribe extends SfCommand<FlowDescribeResult> {
   };
 
   public async run(): Promise<FlowDescribeResult> {
+    validateFlowSourceFlags(this.argv, [
+      'target-org',
+      'flow-version',
+      'subflow-version',
+      'recursive',
+      'max-depth',
+      'namespace',
+      'api-version',
+    ]);
     const flags = await this.parseFlags();
-    validateNamedFlowFlags(flags);
-    const context = createFlowCommandContext(flags);
-    const service = new FlowDescribeService(new ToolingFlowDefinitionGateway(context.connection));
     const result = await withFlowProgress(this.spinner, 'describe', async (progress) =>
-      service.describe(createRequest(flags, context), progress)
+      flags['source-file'] === undefined
+        ? describeOrg(flags, progress)
+        : (progress('loading-source', flags['source-file']),
+          describeFlowSource(await loadFlowSource(flags['source-file']), flags.only ?? []))
     );
     this.writeHumanOutput(result);
     return result;

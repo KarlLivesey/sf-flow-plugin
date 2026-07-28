@@ -10,7 +10,12 @@ import { flowBundleFailed } from '../errors/flow-errors.js';
 import type { FlowDependencyGateway, FlowMetadataGateway } from '../types/flow-analysis.js';
 import type { FlowBundleArtifact, FlowBundleFile, FlowBundleRequest, FlowBundleVersion } from '../types/flow-bundle.js';
 import type { FlowDefinitionGateway } from '../types/flow.js';
-import type { FlowDescribeRequest, FlowDescription, FlowTraversalWarning } from '../types/flow-inspection.js';
+import type {
+  FlowDescribeRequest,
+  FlowDescribeResult,
+  FlowDescription,
+  FlowTraversalWarning,
+} from '../types/flow-inspection.js';
 import { externalDependencies, renderPackageXml } from '../utils/flow-bundle-manifest.js';
 import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
 import { qualifiedFlowName } from '../utils/flow-state.js';
@@ -48,6 +53,32 @@ function flowPath(request: FlowBundleRequest, flow: FlowDescription): string {
   return join(request.outputDir, 'flows', `${flow.qualifiedName}.flow-meta.xml`);
 }
 
+function bundleVersion(value: number | null): number {
+  if (value === null) {
+    throw flowBundleFailed('An org-backed Flow bundle resolved without a version number.');
+  }
+  return value;
+}
+
+function bundleId(value: string | null, kind: string): string {
+  if (value === null) {
+    throw flowBundleFailed(`An org-backed Flow bundle resolved without a ${kind} ID.`);
+  }
+  return value;
+}
+
+function bundleResultVersions(
+  described: FlowDescribeResult
+): Pick<FlowBundleArtifact['result'], 'requestedVersion' | 'resolvedVersion'> {
+  if (described.requestedVersion === null) {
+    throw flowBundleFailed('An org-backed Flow bundle resolved without a requested version.');
+  }
+  return {
+    requestedVersion: described.requestedVersion,
+    resolvedVersion: bundleVersion(described.resolvedVersion),
+  };
+}
+
 function assertCompleteTraversal(warnings: ReadonlyArray<FlowTraversalWarning>): void {
   const incomplete = warnings.filter((warning) => warning.kind !== 'subflow-version-fallback');
   if (incomplete.length === 0) {
@@ -69,7 +100,7 @@ async function exportFlows(
       {
         apiName: flow.apiName,
         targetOrg: request.targetOrg,
-        version: flow.versionNumber,
+        version: bundleVersion(flow.versionNumber),
         format: 'xml',
         status: request.status,
         outputFile: file,
@@ -85,9 +116,9 @@ async function exportFlows(
       apiName: flow.apiName,
       namespace: flow.namespace,
       qualifiedName: flow.qualifiedName,
-      definitionId: flow.definitionId,
-      versionId: flow.versionId,
-      versionNumber: flow.versionNumber,
+      definitionId: bundleId(flow.definitionId, 'definition'),
+      versionId: bundleId(flow.versionId, 'version'),
+      versionNumber: bundleVersion(flow.versionNumber),
       sourceStatus: flow.status,
       exportedStatus: artifact.result.exportedStatus,
       file,
@@ -119,6 +150,7 @@ function reportFiles(context: BundleReportContext): FlowBundleFile[] {
 async function createBundle(context: BundleContext): Promise<FlowBundleArtifact> {
   const { gateway, request, progress } = context;
   const described = await new FlowDescribeService(gateway).describe(describeRequest(request), progress);
+  const versions = bundleResultVersions(described);
   assertCompleteTraversal(described.warnings);
   const dependencies = await new FlowDependenciesService(gateway).getDependencies(
     { ...request, direction: 'uses', recursive: true, maxDepth: request.maxDepth, types: [], excludeTypes: [] },
@@ -134,8 +166,7 @@ async function createBundle(context: BundleContext): Promise<FlowBundleArtifact>
     result: {
       apiName: described.apiName,
       namespace: described.namespace,
-      requestedVersion: described.requestedVersion,
-      resolvedVersion: described.resolvedVersion,
+      ...versions,
       subflowVersion: described.subflowVersion,
       maxDepth: described.maxDepth,
       exportedStatus: request.status === 'active' ? 'Active' : 'Draft',
