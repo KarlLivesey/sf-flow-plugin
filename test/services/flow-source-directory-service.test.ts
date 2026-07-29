@@ -11,13 +11,13 @@ import { pathToFileURL } from 'node:url';
 
 import { expect } from 'chai';
 
-import { checkFlowSourceDirectory } from '../../src/services/flow-source-analysis-service.js';
+import { checkFlowSourceDirectory, lintFlowSourceDirectory } from '../../src/services/flow-source-analysis-service.js';
 import {
   inspectDirectLocalSubflows,
   loadFlowSourceDirectory,
   traverseLocalSubflows,
-  verifyFlowSourceSnapshot,
 } from '../../src/services/flow-source-directory-service.js';
+import { verifyFlowSourceSnapshot } from '../../src/services/flow-source-service.js';
 import type { FlowSource } from '../../src/types/flow-source.js';
 import { formatFlowCheckSarif } from '../../src/utils/flow-check-analysis.js';
 import { flowCheckSourceFile } from '../../src/utils/flow-check-source-file.js';
@@ -28,6 +28,14 @@ function source(apiName: string, subflowNames: string[] = [], namespace: string 
     apiName,
     namespace,
     sourceFile: `/${qualifiedName}.flow-meta.xml`,
+    snapshot: {
+      sourceFile: `/${qualifiedName}.flow-meta.xml`,
+      device: 0,
+      inode: 0,
+      size: 0,
+      modifiedMilliseconds: 0,
+      changedMilliseconds: 0,
+    },
     metadata: {},
     description: {
       apiName,
@@ -154,6 +162,50 @@ describe('local Flow source directory SARIF locations', (): void => {
   });
 });
 
+describe('local Flow source directory Analyzer ownership', (): void => {
+  const unassignedFinding = {
+    fingerprint: 'a'.repeat(64),
+    rule: 'MissingDescription',
+    severity: 'warning' as const,
+    message: 'Add a description.',
+    element: null,
+    path: 'line 1:1',
+    locations: [
+      {
+        file: '/outside/Other.flow-meta.xml',
+        startLine: 1,
+        startColumn: 1,
+        endLine: 1,
+        endColumn: 2,
+        primary: true,
+      },
+    ],
+  };
+
+  it('rejects unassigned primary Analyzer locations from directory lint', (): void => {
+    const root = source('Root');
+    expect(() => lintFlowSourceDirectory({ directory: '/flows', sources: [root] }, [unassignedFinding])).to.throw(
+      'could not be assigned'
+    );
+  });
+
+  it('rejects unassigned primary Analyzer locations from directory check', (): void => {
+    const root = source('Root');
+    expect(() =>
+      checkFlowSourceDirectory(
+        { directory: '/flows', sources: [root] },
+        {
+          checks: ['lint'],
+          excluded: [],
+          lintFindings: [unassignedFinding],
+          recursive: false,
+          maxDepth: 0,
+        }
+      )
+    ).to.throw('could not be assigned');
+  });
+});
+
 describe('local Flow source directory discovery', (): void => {
   it('fails as soon as the directory contains more than 2,000 Flow files', async (): Promise<void> => {
     const directory = await mkdtemp(join(tmpdir(), 'sf-flow-directory-limit-'));
@@ -202,13 +254,14 @@ describe('local Flow source directory byte safety', (): void => {
       await writeFile(file, 'after discovery', 'utf8');
       await expectSourceInvalid(
         verifyFlowSourceSnapshot({
-          file,
+          sourceFile: file,
+          device: original.dev,
+          inode: original.ino,
           size: original.size,
           modifiedMilliseconds: original.mtimeMs,
           changedMilliseconds: original.ctimeMs,
-          inode: original.ino,
         }),
-        'changed during directory analysis'
+        'changed while it was being analysed'
       );
     } finally {
       await rm(directory, { recursive: true, force: true });

@@ -16,7 +16,7 @@ import { flowSourceInvalid } from '../errors/flow-errors.js';
 import type { JsonObject } from '../types/flow-analysis.js';
 import type { FlowDefinition, FlowVersion } from '../types/flow.js';
 import type { FlowDescription } from '../types/flow-inspection.js';
-import type { FlowSource, FlowSourceSnapshot } from '../types/flow-source.js';
+import type { FlowSource, FlowSourceFile, FlowSourceSnapshot } from '../types/flow-source.js';
 import { analyseFlowMetadata } from '../utils/flow-metadata-analysis.js';
 import { validateFlowApiName, validateNamespace } from '../utils/flow-name-validation.js';
 import { normaliseFlowSourceMetadata } from '../utils/flow-source-normalizer.js';
@@ -270,17 +270,26 @@ export async function verifyFlowSourceSnapshot(snapshot: FlowSourceSnapshot): Pr
   }
 }
 
-export async function loadFlowSource(file: string): Promise<FlowSource> {
+export async function readFlowSourceFile(file: string): Promise<FlowSourceFile> {
   const sourceFile = await resolveSourceFile(file);
-  const identity = sourceIdentity(sourceFile);
   const { content, snapshot } = await readSourceFile(sourceFile);
   await verifyFlowSourceSnapshot(snapshot);
-  const metadata = await parseMetadata(content, sourceFile);
+  return { sourceFile, content, snapshot };
+}
+
+export async function parseFlowSourceFile(file: FlowSourceFile): Promise<FlowSource> {
+  const identity = sourceIdentity(file.sourceFile);
+  const metadata = await parseMetadata(file.content, file.sourceFile);
+  await verifyFlowSourceSnapshot(file.snapshot);
   return {
     ...identity,
-    sourceFile,
-    snapshot,
+    sourceFile: file.sourceFile,
+    snapshot: file.snapshot,
     metadata,
-    description: descriptionFor(sourceFile, identity, metadata),
+    description: descriptionFor(file.sourceFile, identity, metadata),
   };
+}
+
+export async function loadFlowSource(file: string): Promise<FlowSource> {
+  return parseFlowSourceFile(await readFlowSourceFile(file));
 }

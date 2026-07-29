@@ -4,7 +4,7 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { flowCheckFailed, flowCodeAnalyzerFailed } from '../errors/flow-errors.js';
+import { flowCheckFailed } from '../errors/flow-errors.js';
 import type { FlowCheckKind, FlowCheckResult } from '../types/flow-check.js';
 import type {
   FlowDescribeResult,
@@ -14,6 +14,7 @@ import type {
 } from '../types/flow-inspection.js';
 import type { FlowLintDirectoryResult, FlowLintFinding, FlowLintResult } from '../types/flow-lint.js';
 import type { FlowSource } from '../types/flow-source.js';
+import { assignAnalyzerFindings } from '../utils/flow-analyzer-assignment.js';
 import { filterFlowDescriptionSections } from '../utils/flow-description-sections.js';
 import { flowContracts, lintCheckFindings } from '../utils/flow-check-analysis.js';
 import { assignFlowCheckSourceFile } from '../utils/flow-check-source-file.js';
@@ -75,31 +76,14 @@ export function lintFlowSource(
   };
 }
 
-function primaryFile(finding: FlowLintFinding): string | undefined {
-  return finding.locations?.find((location) => location.primary)?.file;
-}
-
 export function lintFlowSourceDirectory(
   directory: FlowSourceDirectory,
   findings: FlowLintFinding[],
   progress: FlowProgressReporter = noFlowProgress
 ): FlowLintDirectoryResult {
-  const sourceFiles = new Set(directory.sources.map((source) => source.sourceFile));
-  const unassigned = findings.find((finding) => {
-    const file = primaryFile(finding);
-    return file === undefined || !sourceFiles.has(file);
-  });
-  if (unassigned !== undefined) {
-    throw flowCodeAnalyzerFailed(
-      `Salesforce Code Analyzer finding "${unassigned.rule}" could not be assigned to a Flow source file.`
-    );
-  }
+  const assigned = assignAnalyzerFindings(directory.sources, findings);
   const flows = directory.sources.map((source) =>
-    lintFlowSource(
-      source,
-      findings.filter((finding) => primaryFile(finding) === source.sourceFile),
-      progress
-    )
+    lintFlowSource(source, assigned.get(source.sourceFile) ?? [], progress)
   );
   return {
     sourceDirectory: directory.directory,
@@ -225,17 +209,18 @@ function directoryCheckEntry(
   source: FlowSource,
   context: {
     directory: FlowSourceDirectory;
+    lintFindings: ReadonlyMap<string, FlowLintFinding[]>;
     selection: DirectoryCheckSelection;
     progress: FlowProgressReporter;
   }
 ): FlowCheckResult['flows'][number] {
-  const { directory, selection, progress } = context;
+  const { directory, lintFindings, selection, progress } = context;
   const result = checkFlowSource(
     source,
     {
       checks: selection.checks,
       excluded: selection.excluded,
-      lintFindings: selection.lintFindings.filter((finding) => primaryFile(finding) === source.sourceFile),
+      lintFindings: lintFindings.get(source.sourceFile) ?? [],
     },
     progress
   );
@@ -271,7 +256,10 @@ export function checkFlowSourceDirectory(
   selection: DirectoryCheckSelection,
   progress: FlowProgressReporter = noFlowProgress
 ): FlowCheckResult {
-  const results = directory.sources.map((source) => directoryCheckEntry(source, { directory, selection, progress }));
+  const lintFindings = assignAnalyzerFindings(directory.sources, selection.lintFindings);
+  const results = directory.sources.map((source) =>
+    directoryCheckEntry(source, { directory, lintFindings, selection, progress })
+  );
   const findings = results.flatMap((flow) => flow.findings);
   return {
     apiNames: results.map((flow) => flow.apiName),

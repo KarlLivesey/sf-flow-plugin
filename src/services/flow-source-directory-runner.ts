@@ -8,7 +8,7 @@ import type { FlowCheckKind, FlowCheckResult } from '../types/flow-check.js';
 import type { FlowLintDirectoryResult } from '../types/flow-lint.js';
 import type { FlowProgressReporter } from '../utils/flow-progress.js';
 import { checkFlowSourceDirectory, lintFlowSourceDirectory } from './flow-source-analysis-service.js';
-import { loadFlowSourceDirectory } from './flow-source-directory-service.js';
+import { loadFlowSourceDirectory, verifyFlowSourceDirectory } from './flow-source-directory-service.js';
 import type { SalesforceCodeAnalyzerFlowService } from './salesforce-code-analyzer-flow-service.js';
 
 interface DirectoryAnalyzerRequest {
@@ -29,6 +29,7 @@ export async function lintSourceDirectory(request: DirectoryAnalyzerRequest): Pr
     rules,
     excludedRules,
   });
+  await verifyFlowSourceDirectory(directory);
   return lintFlowSourceDirectory(directory, findings, progress);
 }
 
@@ -47,6 +48,9 @@ export async function checkSourceDirectory(request: DirectoryCheckRequest): Prom
     ? (progress('running-code-analyzer', directory.directory),
       await analyzer.analyse({ sourceFile: directory.directory, rules: [], excludedRules: [] }))
     : [];
+  if (checks.includes('lint')) {
+    await verifyFlowSourceDirectory(directory);
+  }
   return checkFlowSourceDirectory(
     directory,
     { checks, excluded: excludedChecks, lintFindings, recursive, maxDepth },
