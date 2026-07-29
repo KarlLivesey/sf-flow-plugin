@@ -20,12 +20,11 @@ import type { FlowSource, FlowSourceSnapshot } from '../types/flow-source.js';
 import { analyseFlowMetadata } from '../utils/flow-metadata-analysis.js';
 import { validateFlowApiName, validateNamespace } from '../utils/flow-name-validation.js';
 import { normaliseFlowSourceMetadata } from '../utils/flow-source-normalizer.js';
+import { containsForbiddenXmlDeclaration, decodeFlowSource } from '../utils/flow-source-xml.js';
 
 const FLOW_SOURCE_SUFFIX = '.flow-meta.xml';
 const FLOW_METADATA_NAMESPACE = 'http://soap.sforce.com/2006/04/metadata';
 const MAX_FLOW_SOURCE_BYTES = 20 * 1024 * 1024;
-
-const XML_DECLARATION_PATTERN = /<!\s*(?:DOCTYPE|ENTITY)\b/iu;
 
 const flowMetadataSchema = zod
   .object({
@@ -66,7 +65,7 @@ function sourceIdentity(file: string): { apiName: string; namespace: string | nu
 }
 
 async function parseXmlDocument(content: string, file: string): Promise<unknown> {
-  if (XML_DECLARATION_PATTERN.test(content)) {
+  if (containsForbiddenXmlDeclaration(content)) {
     throw flowSourceInvalid(`Flow source file "${file}" contains a forbidden document type or entity declaration.`);
   }
   try {
@@ -200,22 +199,70 @@ async function readOpenedSource(
   if (!snapshotsMatch(beforeSnapshot, afterSnapshot) || buffer.byteLength !== after.size) {
     throw sourceChanged(sourceFile);
   }
-  return { content: buffer.toString('utf8'), snapshot: afterSnapshot };
+  return { content: decodeFlowSource(buffer, sourceFile), snapshot: afterSnapshot };
+}
+
+function normaliseSourceReadFailure(sourceFile: string, error: unknown): Error {
+  return error instanceof Error && error.name === 'FlowSourceInvalid'
+    ? error
+    : flowSourceInvalid(`Flow source file "${sourceFile}" could not be read.`, error);
+}
+
+async function captureCloseFailure(fileHandle: FileHandle | undefined): Promise<unknown> {
+  try {
+    await fileHandle?.close();
+    return undefined;
+  } catch (error: unknown) {
+    return error;
+  }
+}
+
+export function completeSourceRead(context: {
+  sourceFile: string;
+  result: { content: string; snapshot: FlowSourceSnapshot } | undefined;
+  primaryFailure: Error | undefined;
+  closeFailure: unknown;
+}): { content: string; snapshot: FlowSourceSnapshot } {
+  if (context.primaryFailure !== undefined && context.closeFailure !== undefined) {
+    throw flowSourceInvalid(
+      context.primaryFailure.message,
+      new AggregateError(
+        [context.primaryFailure, context.closeFailure],
+        'Reading and closing the Flow source file both failed.'
+      )
+    );
+  }
+  if (context.primaryFailure !== undefined) {
+    throw context.primaryFailure;
+  }
+  if (context.closeFailure !== undefined) {
+    throw flowSourceInvalid(
+      `Flow source file "${context.sourceFile}" could not be closed after reading.`,
+      context.closeFailure
+    );
+  }
+  if (context.result === undefined) {
+    throw flowSourceInvalid(`Flow source file "${context.sourceFile}" could not be read.`);
+  }
+  return context.result;
 }
 
 async function readSourceFile(sourceFile: string): Promise<{ content: string; snapshot: FlowSourceSnapshot }> {
   let fileHandle: Awaited<ReturnType<typeof open>> | undefined;
+  let result: { content: string; snapshot: FlowSourceSnapshot } | undefined;
+  let primaryFailure: Error | undefined;
   try {
     fileHandle = await open(sourceFile, 'r');
-    return await readOpenedSource(sourceFile, fileHandle);
+    result = await readOpenedSource(sourceFile, fileHandle);
   } catch (error: unknown) {
-    if (error instanceof Error && error.name === 'FlowSourceInvalid') {
-      throw error;
-    }
-    throw flowSourceInvalid(`Flow source file "${sourceFile}" could not be read.`, error);
-  } finally {
-    await fileHandle?.close();
+    primaryFailure = normaliseSourceReadFailure(sourceFile, error);
   }
+  return completeSourceRead({
+    sourceFile,
+    result,
+    primaryFailure,
+    closeFailure: await captureCloseFailure(fileHandle),
+  });
 }
 
 export async function verifyFlowSourceSnapshot(snapshot: FlowSourceSnapshot): Promise<void> {
