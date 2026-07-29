@@ -15,7 +15,7 @@ import {
 import { calculateBenchmarkStatistics } from '../../src/utils/flow-benchmark-statistics.js';
 
 describe('Flow benchmark log analysis', (): void => {
-  it('uses the final maximum CPU line from a Salesforce ApexLog', (): void => {
+  it('uses the final maximum CPU line from a Salesforce debug log', (): void => {
     expect(
       parseApexCpuTime('Maximum CPU time: 12 out of 10000\nother detail\nMaximum CPU time: 37 out of 10000')
     ).to.equal(37);

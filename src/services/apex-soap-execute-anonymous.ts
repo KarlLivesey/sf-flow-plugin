@@ -86,6 +86,11 @@ export class ApexSoapResponseValidationError extends Error {
   }
 }
 
+interface ApexSoapResponse {
+  execution: FlowDebugApexResult;
+  rawLog: string;
+}
+
 function xmlEscape(value: string): string {
   return value
     .replaceAll('&', '&amp;')
@@ -172,16 +177,18 @@ export class ApexSoapExecuteAnonymous {
     const started = performance.now();
     const deadline =
       request.timeoutMilliseconds === undefined ? undefined : started + Math.max(0, request.timeoutMilliseconds);
+    let response: ApexSoapResponse;
     try {
-      return await this.send(request, remainingTimeout(deadline), started);
+      response = await this.send(request, remainingTimeout(deadline));
     } catch (error: unknown) {
       if (!invalidSession(error)) {
         throw error;
       }
       remainingTimeout(deadline);
       await this.connection.refreshAuth();
-      return this.send(request, remainingTimeout(deadline), started);
+      response = await this.send(request, remainingTimeout(deadline));
     }
+    return { ...response, durationMilliseconds: performance.now() - started };
   }
 
   private auth(): { accessToken: string; orgId: string } {
@@ -195,9 +202,8 @@ export class ApexSoapExecuteAnonymous {
 
   private async send(
     request: ApexSoapExecuteRequest,
-    timeoutMilliseconds: number | undefined,
-    started: number
-  ): Promise<ApexSoapExecuteResult> {
+    timeoutMilliseconds: number | undefined
+  ): Promise<ApexSoapResponse> {
     const auth = this.auth();
     const response = await this.connection.request(
       {
@@ -208,7 +214,6 @@ export class ApexSoapExecuteAnonymous {
       },
       timeoutMilliseconds === undefined ? undefined : { timeout: timeoutMilliseconds }
     );
-    const durationMilliseconds = performance.now() - started;
     const fields = responseFields(response);
     const rawLog = debugLogSchema.parse(fields.rawLog);
     const execution = executionSchema.safeParse(fields.result);
@@ -218,7 +223,6 @@ export class ApexSoapExecuteAnonymous {
     return {
       execution: execution.data,
       rawLog,
-      durationMilliseconds,
     };
   }
 }

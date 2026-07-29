@@ -150,14 +150,6 @@ Checking target org safety
 
 Invoking Flow
 
-# stages.configuring-trace
+# stages.configuring-debug
 
-Configuring temporary trace
-
-# stages.retrieving-debug-log
-
-Retrieving correlated debug log
-
-# stages.restoring-trace
-
-Restoring trace configuration
+Configuring request-scoped debug logging

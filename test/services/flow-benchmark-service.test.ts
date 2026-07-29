@@ -41,12 +41,7 @@ describe('FlowBenchmarkService successful measurements', (): void => {
       flowBenchmarkRequest({ concurrency: 2, iterations: 4, warmup: 1 })
     );
 
-    expect(gateways.benchmark.opened[0]).to.include({
-      executionCoverageMilliseconds: 600_000,
-      traceDurationMilliseconds: 780_000,
-    });
-    expect(gateways.benchmark.session).to.include({ closed: true, preparedBatches: 3 });
-    expect(gateways.benchmark.session.executed.map((request) => request.input)).to.deep.equal([
+    expect(gateways.benchmark.executed.map((request) => request.input)).to.deep.equal([
       { percentage: 10 },
       { percentage: 10 },
       { percentage: 20 },
@@ -54,6 +49,8 @@ describe('FlowBenchmarkService successful measurements', (): void => {
       { percentage: 20 },
     ]);
     expectSuccessfulMeasurements(artifact);
+    expect(artifact.result).to.include({ logLevel: 'detailed' });
+    expect(artifact.result.samples[0]).not.to.have.property('apexLogId');
     expect(artifact.rawLogStage).to.equal(null);
   });
 });
@@ -78,11 +75,11 @@ describe('FlowBenchmarkService raw log staging', (): void => {
     }
   });
 
-  it('drains every claimed execution before a raw-log write failure closes the session', async (): Promise<void> => {
+  it('drains every claimed execution before reporting a raw-log write failure', async (): Promise<void> => {
     const directory = await mkdtemp(join(tmpdir(), 'sf-flow-service-drain-'));
     const gateways = flowBenchmarkGateways();
     let secondExecutionFinished = false;
-    gateways.benchmark.session.onExecute = async (sample): Promise<void> => {
+    gateways.benchmark.onExecute = async (sample): Promise<void> => {
       if (sample === 1) {
         const stage = (await readdir(directory)).find((entry) => entry.startsWith('.sf-flow-benchmark-'));
         await rm(join(directory, stage ?? 'missing-stage'), { recursive: true, force: true });
@@ -99,7 +96,6 @@ describe('FlowBenchmarkService raw log staging', (): void => {
         .catch((caught: unknown) => caught);
       expect(error).to.have.property('name', 'FlowBenchmarkFailed');
       expect(secondExecutionFinished).to.equal(true);
-      expect(gateways.benchmark.session.closed).to.equal(true);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -107,15 +103,14 @@ describe('FlowBenchmarkService raw log staging', (): void => {
 });
 
 describe('FlowBenchmarkService failed measurements', (): void => {
-  it('stops scheduling after failure by default and always restores the tracing session', async (): Promise<void> => {
+  it('stops scheduling after failure by default', async (): Promise<void> => {
     const gateways = flowBenchmarkGateways();
-    gateways.benchmark.session.failAt = 2;
+    gateways.benchmark.failAt = 2;
     const artifact = await new FlowBenchmarkService(gateways).benchmark(
       flowBenchmarkRequest({ iterations: 4, warmup: 0 })
     );
 
-    expect(gateways.benchmark.session.executed).to.have.length(2);
-    expect(gateways.benchmark.session.closed).to.equal(true);
+    expect(gateways.benchmark.executed).to.have.length(2);
     expect(artifact.result).to.include({
       successful: false,
       completedSamples: 2,
@@ -132,12 +127,12 @@ describe('FlowBenchmarkService failed measurements', (): void => {
 
   it('continues after failures and includes failed timings only when requested', async (): Promise<void> => {
     const gateways = flowBenchmarkGateways();
-    gateways.benchmark.session.malformedAt = 2;
+    gateways.benchmark.malformedAt = 2;
     const artifact = await new FlowBenchmarkService(gateways).benchmark(
       flowBenchmarkRequest({ iterations: 3, warmup: 0, continueOnError: true, includeFailed: true })
     );
 
-    expect(gateways.benchmark.session.executed).to.have.length(3);
+    expect(gateways.benchmark.executed).to.have.length(3);
     expect(artifact.result).to.include({ successful: false, failedSamples: 1, includedSamples: 3 });
     expect(artifact.result.wallClock).to.deep.include({ count: 3, minimum: 5, maximum: 15, mean: 10 });
     expect(artifact.result.cpuTime).to.deep.include({ count: 2, minimum: 10, maximum: 30, mean: 20 });
@@ -148,8 +143,8 @@ describe('FlowBenchmarkService failed measurements', (): void => {
 describe('FlowBenchmarkService concurrent ordering', (): void => {
   it('returns warm-up samples in planned order after a concurrent wave stops on failure', async (): Promise<void> => {
     const gateways = flowBenchmarkGateways();
-    gateways.benchmark.session.failAt = 1;
-    gateways.benchmark.session.onExecute = async (sample): Promise<void> => {
+    gateways.benchmark.failAt = 1;
+    gateways.benchmark.onExecute = async (sample): Promise<void> => {
       await wait(sample === 1 ? 20 : 0);
     };
     const artifact = await new FlowBenchmarkService(gateways).benchmark(
@@ -157,16 +152,16 @@ describe('FlowBenchmarkService concurrent ordering', (): void => {
     );
     expect(artifact.result.samples.map((sample) => sample.sample)).to.deep.equal([1, 2]);
     expect(artifact.result.samples.map((sample) => sample.phase)).to.deep.equal(['warmup', 'warmup']);
-    expect(gateways.benchmark.session.executed).to.have.length(2);
+    expect(gateways.benchmark.executed).to.have.length(2);
   });
 });
 
 describe('FlowBenchmarkService dry run', (): void => {
-  it('validates every varied input without opening a tracing session', async (): Promise<void> => {
+  it('validates every varied input without executing a SOAP sample', async (): Promise<void> => {
     const gateways = flowBenchmarkGateways();
     const artifact = await new FlowBenchmarkService(gateways).benchmark(flowBenchmarkRequest({ dryRun: true }));
 
-    expect(gateways.benchmark.opened).to.deep.equal([]);
+    expect(gateways.benchmark.executed).to.deep.equal([]);
     expect(artifact.rawLogStage).to.equal(null);
     expect(artifact.result).to.include({
       dryRun: true,
@@ -178,7 +173,7 @@ describe('FlowBenchmarkService dry run', (): void => {
 
   it('rejects mixed-version measurements when activation changes during the measured phase', async (): Promise<void> => {
     const gateways = flowBenchmarkGateways();
-    gateways.benchmark.session.onExecute = async (sample): Promise<void> => {
+    gateways.benchmark.onExecute = async (sample): Promise<void> => {
       if (sample === 3) {
         await gateways.definition.setActiveVersion('300000000000001', null);
       }
@@ -189,12 +184,11 @@ describe('FlowBenchmarkService dry run', (): void => {
 
     expect(error).to.have.property('name', 'FlowBenchmarkFailed');
     expect(error).to.have.property('message').that.includes('active version changed after measured sampling');
-    expect(gateways.benchmark.session.closed).to.equal(true);
   });
 
   it('revalidates activation after warm-up and before scheduling measured samples', async (): Promise<void> => {
     const gateways = flowBenchmarkGateways();
-    gateways.benchmark.session.onExecute = async (sample): Promise<void> => {
+    gateways.benchmark.onExecute = async (sample): Promise<void> => {
       if (sample === 1) {
         await gateways.definition.setActiveVersion('300000000000001', null);
       }
@@ -203,6 +197,6 @@ describe('FlowBenchmarkService dry run', (): void => {
       .benchmark(flowBenchmarkRequest({ iterations: 2, warmup: 1 }))
       .catch((caught: unknown) => caught);
     expect(error).to.have.property('message').that.includes('active version changed before measured sampling');
-    expect(gateways.benchmark.session.executed).to.have.length(1);
+    expect(gateways.benchmark.executed).to.have.length(1);
   });
 });

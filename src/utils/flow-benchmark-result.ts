@@ -32,6 +32,7 @@ export function createFlowBenchmarkResult(context: BenchmarkResultContext): Flow
     targetOrg: request.targetOrg,
     production: prepared.production,
     dryRun: request.dryRun,
+    logLevel: request.logLevel,
     successful: request.dryRun ? null : measured.length === request.iterations && failedSamples === 0,
     iterations: request.iterations,
     warmup: request.warmup,

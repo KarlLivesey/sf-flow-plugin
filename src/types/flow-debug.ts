@@ -14,7 +14,7 @@ export interface FlowDebugExecutionRequest {
   input: JsonObject;
   outputVariables: string[];
   logLevel: FlowDebugLogLevel;
-  waitMilliseconds: number;
+  waitMilliseconds?: number;
 }
 
 export interface FlowDebugApexResult {

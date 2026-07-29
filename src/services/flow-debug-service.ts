@@ -55,7 +55,7 @@ interface ValidatedDebugInput {
 }
 
 const transportStages: Readonly<Record<FlowDebugTransportStage, FlowProgressStage>> = {
-  'configuring-debug': 'configuring-trace',
+  'configuring-debug': 'configuring-debug',
   'executing-apex': 'invoking-flow',
 };
 
@@ -233,7 +233,7 @@ export class FlowDebugService {
         input: prepared.input,
         outputVariables: prepared.outputVariables,
         logLevel: request.logLevel,
-        waitMilliseconds: request.waitMilliseconds,
+        ...(request.waitMilliseconds === undefined ? {} : { waitMilliseconds: request.waitMilliseconds }),
       },
       (stage, detail) => {
         progress(transportStages[stage], detail);

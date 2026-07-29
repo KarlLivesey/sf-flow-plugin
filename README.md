@@ -812,7 +812,6 @@ sf flow benchmark \
   [--exclude-warmup-logs] \
   [--output-file FILE] \
   [--log-level detailed|finest] \
-  [--wait MINUTES] \
   [--dry-run] \
   [--confirm] \
   [--if-active-version NUMBER] \
@@ -828,39 +827,39 @@ Execute Anonymous transactions. It performs 10 warm-up samples and 100 measured 
 round-robin order. The command imposes no maximum workload, concurrency, input-file-size, input-count or combined
 sample limit. Effective measured concurrency is the smaller of the requested concurrency and iteration count.
 
-Every completed sample reports wall-clock time, Salesforce CPU time, rollback confirmation and its ApexLog ID. The
-summary reports minimum, maximum, mean and nearest-rank p50, p90, p95 and p99 values for measured wall-clock and CPU
-time, plus separate total and measured-phase wall-clock time. Measured throughput uses only measured-phase elapsed
-time, not warm-up time. Repeat `--percentile` to replace the default percentile set. Warm-up samples are excluded from
-statistics.
+Every completed sample reports client-observed Apex SOAP wall-clock time, Salesforce CPU time and rollback
+confirmation. Wall-clock time includes transfer of the request-scoped raw log returned with the SOAP response; raw-log
+file writes remain outside sample timing. The summary reports minimum, maximum, mean and nearest-rank p50, p90, p95
+and p99 values for measured wall-clock and CPU time, plus separate total and measured-phase wall-clock time. Measured
+throughput uses only measured-phase elapsed time, not warm-up time. Repeat `--percentile` to replace the default
+percentile set. Warm-up samples are excluded from statistics. The structured result records `logLevel`; use the same
+log level when comparing benchmarks because response size and latency vary with logging detail.
 
 The command stops scheduling new samples after the first failure by default; samples already in progress may finish.
 Use `--continue-on-error` to schedule the remaining samples. Failed or rollback-unconfirmed samples are excluded from
 statistics unless `--include-failed` is supplied and the relevant timing exists. Any failure gives the command a
-non-zero exit status. A failure before Salesforce returns from Execute Anonymous has `wallClockMilliseconds: null`;
-log-retrieval failures retain the already known execution duration rather than including log polling time.
+non-zero exit status. Transport failures retain the client-observed elapsed time when it is available.
 
-`--raw-log-dir` streams each complete standard Salesforce ApexLog to a private staging directory and publishes the
+`--raw-log-dir` streams each complete raw log returned by Apex SOAP to a private staging directory and publishes the
 directory only after successful benchmark completion. Warm-up logs are included unless `--exclude-warmup-logs` is
 supplied. Without this flag, raw log text is discarded immediately after parsing. Retained logs can be processed by
 Apex log analysers and flame-graph tooling. They are unredacted and can contain sensitive Flow data; new files use
 owner-only permissions on POSIX systems.
 
-`--dry-run` validates the Flow, every varied input, generated Apex size, production context, tracing permissions,
-active-version guard and output destinations without creating a trace, executing samples or creating a raw-log
-directory. Production execution requires `--confirm`.
+`--dry-run` validates the Flow, every varied input, generated SOAP request size, production context, SOAP
+authentication, active-version guard and output destinations without executing samples or creating a raw-log
+directory. Production execution requires `--confirm`. This preflight cannot conclusively prove Execute Anonymous
+permission without executing Apex.
 
-Each sample establishes an Apex savepoint and verifies the correlated rollback marker. Rollback affects database work
-in the current transaction only: it cannot reverse callouts, email, asynchronous work or effects committed by another
-transaction, and establishing a savepoint can prevent callouts from running. The command uses bounded temporary trace
-windows and renews tracing between controlled batches when required, outside sample timing. One session-level
-collector queries ApexLogs and downloads each candidate body once for concurrent samples. The previous trace
-configuration is restored afterwards. A forced process termination can prevent cleanup; inspect temporary
-`SfFlowPlugin_*` tracing records if that occurs.
+Each sample establishes an Apex savepoint and verifies the correlation, completion and rollback markers in the log
+returned by its own SOAP response. Rollback affects database work in the current transaction only: it cannot reverse
+callouts, email, asynchronous work or effects committed by another transaction, and establishing a savepoint can
+prevent callouts from running. The command does not create trace configuration, query `ApexLog` or retry ambiguous
+timeouts and server failures.
 
 The active version is revalidated immediately before and after measured sampling. A change invalidates the benchmark
 instead of reporting mixed-version statistics. Invocation by Flow API name and version checks are separate Salesforce
-requests, so a narrow point-in-time race cannot be eliminated. Salesforce org, API, tracing and Apex-log limits remain
+requests, so a narrow point-in-time race cannot be eliminated. Salesforce org, API and Apex limits remain
 authoritative.
 
 ## `sf flow run`

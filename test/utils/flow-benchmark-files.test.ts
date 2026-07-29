@@ -16,7 +16,10 @@ import {
   prepareFlowBenchmarkDestinations,
   writeFlowBenchmarkRawLog,
 } from '../../src/utils/flow-benchmark-files.js';
-import { persistFlowBenchmark } from '../../src/utils/flow-benchmark-output-transaction.js';
+import {
+  persistFlowBenchmark,
+  retainedBenchmarkRecoveryPaths,
+} from '../../src/utils/flow-benchmark-output-transaction.js';
 
 const result: FlowBenchmarkArtifact['result'] = {
   apiName: 'Calculate_Discount',
@@ -26,6 +29,7 @@ const result: FlowBenchmarkArtifact['result'] = {
   targetOrg: 'admin@example.com',
   production: false,
   dryRun: false,
+  logLevel: 'detailed',
   successful: true,
   iterations: 1,
   warmup: 1,
@@ -86,7 +90,7 @@ async function createRollbackFixture(): Promise<{
 }
 
 describe('Flow benchmark files', (): void => {
-  it('writes owner-only Apex logs and can exclude warm-up logs', async (): Promise<void> => {
+  it('writes owner-only debug logs and can exclude warm-up logs', async (): Promise<void> => {
     const directory = await mkdtemp(join(tmpdir(), 'sf-flow-benchmark-'));
     const logDirectory = join(directory, 'nested', 'logs');
     try {
@@ -148,5 +152,26 @@ describe('Flow benchmark output transaction', (): void => {
     } finally {
       await rm(fixture.directory, { recursive: true, force: true });
     }
+  });
+
+  it('reports only a surviving raw-log stage after raw cleanup alone fails', async (): Promise<void> => {
+    const retained = await retainedBenchmarkRecoveryPaths(['/staging/structured', '/staging/raw'], (file) =>
+      Promise.resolve(file.endsWith('/raw'))
+    );
+    expect(retained).to.deep.equal(['/staging/raw']);
+  });
+
+  it('reports only a surviving structured stage after structured rollback alone fails', async (): Promise<void> => {
+    const retained = await retainedBenchmarkRecoveryPaths(['/staging/structured', '/staging/raw'], (file) =>
+      Promise.resolve(file.endsWith('/structured'))
+    );
+    expect(retained).to.deep.equal(['/staging/structured']);
+  });
+
+  it('reports every surviving stage when both recovery operations fail', async (): Promise<void> => {
+    const retained = await retainedBenchmarkRecoveryPaths(['/staging/structured', '/staging/raw'], () =>
+      Promise.resolve(true)
+    );
+    expect(retained).to.deep.equal(['/staging/structured', '/staging/raw']);
   });
 });

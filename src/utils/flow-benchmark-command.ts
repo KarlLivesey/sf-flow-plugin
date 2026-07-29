@@ -29,7 +29,6 @@ export interface BenchmarkFlagValues {
   'dry-run': boolean;
   confirm: boolean;
   'log-level': FlowDebugLogLevel;
-  wait: number;
   'if-active-version': number | undefined;
   namespace: string | undefined;
   'api-version': string | undefined;
@@ -52,7 +51,6 @@ export async function createFlowBenchmarkRequest(
     dryRun: flags['dry-run'],
     confirm: flags.confirm,
     logLevel: flags['log-level'],
-    waitMilliseconds: flags.wait * 60_000,
     retainWarmupLogs: !flags['exclude-warmup-logs'],
     ...(destinations.rawLogDir === undefined ? {} : { rawLogDirectory: destinations.rawLogDir }),
     ...(flags['if-active-version'] === undefined ? {} : { expectedActiveVersion: flags['if-active-version'] }),

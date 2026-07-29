@@ -26,6 +26,9 @@
         "dryRun": {
           "type": "boolean"
         },
+        "logLevel": {
+          "$ref": "#/definitions/FlowDebugLogLevel"
+        },
         "successful": {
           "type": ["boolean", "null"]
         },
@@ -94,6 +97,7 @@
         "targetOrg",
         "production",
         "dryRun",
+        "logLevel",
         "successful",
         "iterations",
         "warmup",
@@ -113,6 +117,10 @@
     },
     "FlowVersionNumber": {
       "type": "number"
+    },
+    "FlowDebugLogLevel": {
+      "type": "string",
+      "enum": ["basic", "detailed", "finest"]
     },
     "FlowBenchmarkStatistics": {
       "type": "object",
@@ -176,9 +184,6 @@
         "cpuTimeMilliseconds": {
           "type": ["number", "null"]
         },
-        "apexLogId": {
-          "type": ["string", "null"]
-        },
         "errorCode": {
           "type": ["string", "null"]
         }
@@ -191,7 +196,6 @@
         "rollbackConfirmed",
         "wallClockMilliseconds",
         "cpuTimeMilliseconds",
-        "apexLogId",
         "errorCode"
       ],
       "additionalProperties": false

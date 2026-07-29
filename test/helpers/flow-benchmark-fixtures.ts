@@ -5,26 +5,18 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import type {
+  FlowBenchmarkGateway,
   FlowBenchmarkRequest,
-  FlowBenchmarkSession,
-  FlowBenchmarkSessionGateway,
-  FlowBenchmarkSessionRequest,
   FlowBenchmarkTransportSample,
 } from '../../src/types/flow-benchmark.js';
 import type { FlowDebugExecutionRequest } from '../../src/types/flow-debug.js';
 import { correlationId, debugLog, flowDebugGateways } from './flow-debug-fixtures.js';
 
-export class FakeBenchmarkSession implements FlowBenchmarkSession {
+export class FakeBenchmarkGateway implements FlowBenchmarkGateway {
   public readonly executed: FlowDebugExecutionRequest[] = [];
-  public closed = false;
   public failAt: number | undefined;
   public malformedAt: number | undefined;
-  public preparedBatches = 0;
   public onExecute: ((sample: number) => Promise<void>) | undefined;
-
-  public async close(): Promise<void> {
-    this.closed = true;
-  }
 
   public async execute(request: FlowDebugExecutionRequest): Promise<FlowBenchmarkTransportSample> {
     this.executed.push(request);
@@ -44,7 +36,7 @@ export class FakeBenchmarkSession implements FlowBenchmarkSession {
         correlationId: sampleCorrelation,
         execution: { compiled: true, success: true, line: -1, column: -1 },
         log: {
-          id: `07L${String(sample).padStart(12, '0')}`,
+          id: null,
           status: 'Success',
           operation: 'executeAnonymous',
           startTime: '2026-07-28T10:00:00.000Z',
@@ -54,20 +46,6 @@ export class FakeBenchmarkSession implements FlowBenchmarkSession {
         rawLog,
       },
     };
-  }
-
-  public async prepareBatch(): Promise<void> {
-    this.preparedBatches += 1;
-  }
-}
-
-export class FakeBenchmarkGateway implements FlowBenchmarkSessionGateway {
-  public readonly session = new FakeBenchmarkSession();
-  public opened: FlowBenchmarkSessionRequest[] = [];
-
-  public async open(request: FlowBenchmarkSessionRequest): Promise<FlowBenchmarkSession> {
-    this.opened.push(request);
-    return this.session;
   }
 }
 
@@ -91,7 +69,6 @@ export function flowBenchmarkRequest(overrides: Partial<FlowBenchmarkRequest> = 
     dryRun: false,
     confirm: false,
     logLevel: 'detailed',
-    waitMilliseconds: 120_000,
     retainWarmupLogs: true,
     ...overrides,
   };

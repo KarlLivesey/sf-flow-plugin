@@ -25,7 +25,6 @@ export interface CompletedBenchmarkSample {
 interface FailedSampleContext {
   wallClockMilliseconds: number | null;
   errorCode: string;
-  apexLogId?: string;
 }
 
 export function safeBenchmarkErrorCode(error: unknown): string {
@@ -48,7 +47,6 @@ export function failedBenchmarkSample(
       rollbackConfirmed: false,
       wallClockMilliseconds: context.wallClockMilliseconds,
       cpuTimeMilliseconds: null,
-      apexLogId: context.apexLogId ?? null,
       errorCode: context.errorCode,
     },
     rawLog: null,
@@ -74,7 +72,6 @@ export function completedBenchmarkSample(
         rollbackConfirmed,
         wallClockMilliseconds: transportSample.wallClockMilliseconds,
         cpuTimeMilliseconds: parseApexCpuTime(transport.rawLog),
-        apexLogId: transport.log.id,
         errorCode:
           parsed.error?.type ??
           (successful ? null : rollbackConfirmed ? 'FlowBenchmarkSampleFailed' : 'FlowDebugRollbackFailed'),
@@ -85,7 +82,6 @@ export function completedBenchmarkSample(
     const failed = failedBenchmarkSample(planned, {
       wallClockMilliseconds: transportSample.wallClockMilliseconds,
       errorCode: 'FlowDebugFailed',
-      apexLogId: transport.log.id,
     });
     return {
       ...failed,

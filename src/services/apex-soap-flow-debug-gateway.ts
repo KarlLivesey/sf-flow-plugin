@@ -108,7 +108,9 @@ export class ApexSoapFlowDebugGateway {
       const result = await this.soap.execute({
         apexSource: context.apexSource,
         logLevel: context.request.logLevel,
-        timeoutMilliseconds: context.request.waitMilliseconds,
+        ...(context.request.waitMilliseconds === undefined
+          ? {}
+          : { timeoutMilliseconds: context.request.waitMilliseconds }),
       });
       return {
         correlationId: context.correlationId,

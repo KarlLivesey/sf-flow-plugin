@@ -6,12 +6,7 @@
  */
 import { flowBenchmarkFailed, flowInputInvalid } from '../errors/flow-errors.js';
 import type { FlowMetadataGateway, JsonObject } from '../types/flow-analysis.js';
-import type {
-  FlowBenchmarkArtifact,
-  FlowBenchmarkRequest,
-  FlowBenchmarkSession,
-  FlowBenchmarkSessionGateway,
-} from '../types/flow-benchmark.js';
+import type { FlowBenchmarkArtifact, FlowBenchmarkGateway, FlowBenchmarkRequest } from '../types/flow-benchmark.js';
 import type { FlowDebugGateway } from '../types/flow-debug.js';
 import type { FlowRollbackRequest } from '../types/flow-invocation.js';
 import type { FlowDefinitionGateway } from '../types/flow.js';
@@ -27,15 +22,10 @@ import { qualifiedFlowName, selectFlowDefinition } from '../utils/flow-state.js'
 import { FlowDebugService, type PreparedDebug } from './flow-debug-service.js';
 import { FlowBenchmarkPhaseRunner } from './flow-benchmark-phase-runner.js';
 
-const MINIMUM_TRACE_DURATION_MILLISECONDS = 10 * 60_000;
-const MAXIMUM_TRACE_DURATION_MILLISECONDS = 60 * 60_000;
-const EXECUTION_TRACE_COVERAGE_MILLISECONDS = 10 * 60_000;
-const TRACE_RENEWAL_MARGIN_MILLISECONDS = 60_000;
-
 interface FlowBenchmarkGateways {
   definition: FlowDefinitionGateway & FlowMetadataGateway;
   debug: FlowDebugGateway;
-  benchmark: FlowBenchmarkSessionGateway;
+  benchmark: FlowBenchmarkGateway;
 }
 
 interface BenchmarkExecutionContext {
@@ -60,7 +50,6 @@ function rollbackRequest(request: FlowBenchmarkRequest, input: JsonObject): Flow
     confirm: request.confirm,
     logLevel: request.logLevel,
     showValues: false,
-    waitMilliseconds: request.waitMilliseconds,
     ...(request.namespace === undefined ? {} : { namespace: request.namespace }),
     ...(request.expectedActiveVersion === undefined ? {} : { expectedActiveVersion: request.expectedActiveVersion }),
   };
@@ -79,14 +68,6 @@ function validateInputs(prepared: PreparedDebug, request: FlowBenchmarkRequest):
     });
   }
   return inputs;
-}
-
-function requiredInput(inputs: JsonObject[], index: number): JsonObject {
-  const input = inputs[index];
-  if (input === undefined) {
-    throw flowInputInvalid('Flow benchmark input assignment was out of range.');
-  }
-  return input;
 }
 
 function firstBenchmarkInput(request: FlowBenchmarkRequest): JsonObject {
@@ -114,12 +95,6 @@ function dryRunArtifact(context: BenchmarkExecutionContext): FlowBenchmarkArtifa
     }),
     rawLogStage: null,
   };
-}
-
-function traceDuration(request: FlowBenchmarkRequest): number {
-  const plannedDuration =
-    EXECUTION_TRACE_COVERAGE_MILLISECONDS + request.waitMilliseconds + TRACE_RENEWAL_MARGIN_MILLISECONDS;
-  return Math.min(MAXIMUM_TRACE_DURATION_MILLISECONDS, Math.max(MINIMUM_TRACE_DURATION_MILLISECONDS, plannedDuration));
 }
 
 function orderedSamples(samples: ReadonlyArray<CompletedBenchmarkSample>): CompletedBenchmarkSample[] {
@@ -153,11 +128,11 @@ async function assertActiveVersionUnchanged(
 
 async function runPhases(
   context: BenchmarkExecutionContext,
-  session: FlowBenchmarkSession,
+  benchmark: FlowBenchmarkGateway,
   definition: FlowDefinitionGateway
 ): Promise<BenchmarkPhases> {
   const shared = {
-    session,
+    benchmark,
     prepared: context.prepared,
     request: context.request,
     inputs: context.inputs,
@@ -222,32 +197,18 @@ export class FlowBenchmarkService {
   }
 
   private async execute(context: BenchmarkExecutionContext): Promise<FlowBenchmarkArtifact> {
-    const { request, prepared, inputs } = context;
-    const session = await this.gateways.benchmark.open({
-      apiName: prepared.flow.definition.apiName,
-      namespace: prepared.flow.definition.namespace,
-      input: requiredInput(inputs, 0),
-      outputVariables: prepared.outputVariables,
-      logLevel: request.logLevel,
-      waitMilliseconds: request.waitMilliseconds,
-      executionCoverageMilliseconds: EXECUTION_TRACE_COVERAGE_MILLISECONDS,
-      traceDurationMilliseconds: traceDuration(request),
-    });
+    const { request, prepared } = context;
     const started = performance.now();
-    try {
-      const phases = await runPhases(context, session, this.gateways.definition);
-      return {
-        result: createFlowBenchmarkResult({
-          request,
-          prepared,
-          samples: phases.completed.map((entry) => entry.sample),
-          totalWallClockMilliseconds: performance.now() - started,
-          measuredWallClockMilliseconds: phases.measuredWallClockMilliseconds,
-        }),
-        rawLogStage: context.rawLogStage,
-      };
-    } finally {
-      await session.close();
-    }
+    const phases = await runPhases(context, this.gateways.benchmark, this.gateways.definition);
+    return {
+      result: createFlowBenchmarkResult({
+        request,
+        prepared,
+        samples: phases.completed.map((entry) => entry.sample),
+        totalWallClockMilliseconds: performance.now() - started,
+        measuredWallClockMilliseconds: phases.measuredWallClockMilliseconds,
+      }),
+      rawLogStage: context.rawLogStage,
+    };
   }
 }

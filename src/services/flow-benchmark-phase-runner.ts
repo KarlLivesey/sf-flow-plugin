@@ -5,7 +5,7 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import type { JsonObject } from '../types/flow-analysis.js';
-import type { FlowBenchmarkPhase, FlowBenchmarkRequest, FlowBenchmarkSession } from '../types/flow-benchmark.js';
+import type { FlowBenchmarkGateway, FlowBenchmarkPhase, FlowBenchmarkRequest } from '../types/flow-benchmark.js';
 import { FlowBenchmarkExecutionError } from '../utils/flow-benchmark-error.js';
 import { writeFlowBenchmarkRawLogs, type FlowBenchmarkRawLog } from '../utils/flow-benchmark-files.js';
 import {
@@ -25,7 +25,7 @@ export interface FlowBenchmarkPhaseResult {
 }
 
 export interface FlowBenchmarkPhaseRunnerContext {
-  session: FlowBenchmarkSession;
+  benchmark: FlowBenchmarkGateway;
   prepared: PreparedDebug;
   request: FlowBenchmarkRequest;
   inputs: JsonObject[];
@@ -84,13 +84,12 @@ export class FlowBenchmarkPhaseRunner {
 
   private async measure(planned: PlannedBenchmarkSample): Promise<CompletedBenchmarkSample> {
     try {
-      const transport = await this.context.session.execute({
+      const transport = await this.context.benchmark.execute({
         apiName: this.context.prepared.flow.definition.apiName,
         namespace: this.context.prepared.flow.definition.namespace,
         input: planned.input,
         outputVariables: this.context.prepared.outputVariables,
         logLevel: this.context.request.logLevel,
-        waitMilliseconds: this.context.request.waitMilliseconds,
       });
       return completedBenchmarkSample(planned, transport);
     } catch (error: unknown) {
@@ -127,7 +126,6 @@ export class FlowBenchmarkPhaseRunner {
     if (this.stopped || this.nextIndex >= this.context.count) {
       return { completed: this.orderedCompleted(), stopped: this.stopped, elapsedMilliseconds };
     }
-    await this.context.session.prepareBatch();
     const waveEnd = Math.min(this.context.count, this.nextIndex + this.context.request.concurrency);
     const started = performance.now();
     const completed = await this.runWave(waveEnd);

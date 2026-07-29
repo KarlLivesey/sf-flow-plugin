@@ -5,16 +5,16 @@ Benchmark an active autolaunched Salesforce Flow with rollback.
 # description
 
 Run controlled warm-up and measured samples against the active version of a directly invocable autolaunched Flow.
-Every sample uses Execute Anonymous Apex, retrieves its correlated standard Salesforce ApexLog and verifies database
-rollback.
+Every sample uses Apex SOAP Execute Anonymous with a request-scoped DebuggingHeader, parses the raw log returned in
+that response and verifies database rollback.
 
-Measured samples report individual wall-clock and Salesforce CPU time. The summary reports minimum, maximum, mean,
-requested percentiles, total benchmark wall-clock time and throughput. Input arrays are assigned deterministically in
-round-robin order.
+Measured samples report individual client-observed SOAP wall-clock time, including raw-log response transfer, and
+Salesforce CPU time. The summary reports minimum, maximum, mean, requested percentiles, total benchmark wall-clock
+time and throughput. Input arrays are assigned deterministically in round-robin order.
 
 Concurrency defaults to one. The command imposes no maximum workload, concurrency, input-file-size, input-count or
 combined sample limit. The effective measured concurrency is the smaller of the requested concurrency and iteration
-count. Salesforce remains authoritative for stricter org, API, tracing and Apex-log limits.
+count. Salesforce remains authoritative for its org, API and Apex limits.
 
 The command stops scheduling new samples after a failure by default. Concurrent samples already in progress are
 allowed to finish. Use `--continue-on-error` to run all samples. Failed samples are reported but excluded from
@@ -49,7 +49,7 @@ Number of warm-up samples excluded from statistics. Defaults to 10; use 0 to dis
 
 # flags.concurrency.summary
 
-Maximum samples to run concurrently. Defaults to 1; maximum 100.
+Samples to run concurrently. Defaults to 1.
 
 # flags.percentile.summary
 
@@ -65,11 +65,11 @@ Include available failed-sample timings in measured statistics.
 
 # flags.raw-log-dir.summary
 
-Stream complete standard Salesforce ApexLogs into a private staging directory and publish it only after success.
+Stream complete raw logs returned by Apex SOAP into a private staging directory and publish it only after success.
 
 # flags.exclude-warmup-logs.summary
 
-Exclude warm-up Apex logs from the raw-log directory.
+Exclude warm-up debug logs from the raw-log directory.
 
 # flags.output-file.summary
 
@@ -77,7 +77,7 @@ Write the structured benchmark result to this JSON file.
 
 # flags.dry-run.summary
 
-Validate the Flow, all inputs, permissions, org safety and output destinations without running samples.
+Validate the Flow, all inputs, SOAP authentication, org safety and output destinations without running samples.
 
 # flags.confirm.summary
 
@@ -85,11 +85,7 @@ Confirm benchmark execution in a production org after reviewing rollback limitat
 
 # flags.log-level.summary
 
-Temporary Salesforce debug level: detailed or finest. Defaults to detailed. Both capture Salesforce CPU time.
-
-# flags.wait.summary
-
-Minutes to wait for each correlated ApexLog. Defaults to 2; range 1 to 10.
+Request-scoped Salesforce debug level: detailed or finest. Defaults to detailed. Both capture Salesforce CPU time. Keep it fixed when comparing benchmark results.
 
 # flags.if-active-version.summary
 
@@ -101,7 +97,7 @@ Namespace that identifies a packaged Flow.
 
 # flags.api-version.summary
 
-Salesforce API version to use for Tooling API requests.
+Salesforce API version to use for Tooling and Apex SOAP API requests.
 
 # examples
 

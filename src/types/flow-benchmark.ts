@@ -21,25 +21,13 @@ export interface FlowBenchmarkRequest extends NamedFlowRequest {
   dryRun: boolean;
   confirm: boolean;
   logLevel: FlowDebugLogLevel;
-  waitMilliseconds: number;
   rawLogDirectory?: string;
   retainWarmupLogs: boolean;
   expectedActiveVersion?: FlowVersionNumber;
 }
 
-export interface FlowBenchmarkSessionRequest extends FlowDebugExecutionRequest {
-  executionCoverageMilliseconds: number;
-  traceDurationMilliseconds: number;
-}
-
-export interface FlowBenchmarkSession {
-  close(): Promise<void>;
+export interface FlowBenchmarkGateway {
   execute(request: FlowDebugExecutionRequest): Promise<FlowBenchmarkTransportSample>;
-  prepareBatch(): Promise<void>;
-}
-
-export interface FlowBenchmarkSessionGateway {
-  open(request: FlowBenchmarkSessionRequest): Promise<FlowBenchmarkSession>;
 }
 
 export interface FlowBenchmarkTransportSample {
@@ -68,7 +56,6 @@ export interface FlowBenchmarkSample {
   rollbackConfirmed: boolean;
   wallClockMilliseconds: number | null;
   cpuTimeMilliseconds: number | null;
-  apexLogId: string | null;
   errorCode: string | null;
 }
 
@@ -80,6 +67,7 @@ export interface FlowBenchmarkResult {
   targetOrg: string;
   production: boolean;
   dryRun: boolean;
+  logLevel: FlowDebugLogLevel;
   successful: boolean | null;
   iterations: number;
   warmup: number;

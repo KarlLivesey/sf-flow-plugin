@@ -21,6 +21,7 @@ const result: FlowBenchmarkResult = {
   targetOrg: 'admin@example.com',
   production: false,
   dryRun: false,
+  logLevel: 'detailed',
   successful: true,
   iterations: 4,
   warmup: 1,
@@ -55,7 +56,6 @@ function flags(): BenchmarkFlagValues {
     'dry-run': false,
     confirm: false,
     'log-level': 'detailed',
-    wait: 2,
     'if-active-version': 7,
     namespace: undefined,
     'api-version': undefined,
@@ -63,12 +63,14 @@ function flags(): BenchmarkFlagValues {
 }
 
 describe('flow benchmark command', (): void => {
-  it('defines deliberate benchmark defaults and tracing options', (): void => {
+  it('defines deliberate benchmark defaults and request-scoped log options', (): void => {
     expect(FlowBenchmark.flags.iterations.default).to.equal(100);
     expect(FlowBenchmark.flags.warmup.default).to.equal(10);
     expect(FlowBenchmark.flags.concurrency.default).to.equal(1);
+    expect(FlowBenchmark.flags.concurrency.summary).not.to.include('maximum 100');
     expect(FlowBenchmark.flags.percentile.default).to.deep.equal([50, 90, 95, 99]);
     expect(FlowBenchmark.flags['log-level'].options).to.deep.equal(['detailed', 'finest']);
+    expect(FlowBenchmark.flags).not.to.have.property('wait');
   });
 
   it('normalises percentiles and passes the complete contract to the service', async (): Promise<void> => {
@@ -93,7 +95,6 @@ describe('flow benchmark command', (): void => {
       dryRun: false,
       confirm: false,
       logLevel: 'detailed',
-      waitMilliseconds: 120_000,
       retainWarmupLogs: true,
       expectedActiveVersion: 7,
     });

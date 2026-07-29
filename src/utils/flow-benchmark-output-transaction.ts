@@ -120,9 +120,13 @@ async function recoverBenchmarkArtifacts(
     structuredStage === null ? Promise.resolve([]) : rollbackStructuredOutput(structuredStage),
   ]);
   if (logCleanup.length + outputRollback.length > 0) {
-    const retained = structuredStage?.stageDirectory ?? artifact.rawLogStage ?? 'unknown staging path';
+    const retained = await retainedBenchmarkRecoveryPaths([structuredStage?.stageDirectory, artifact.rawLogStage]);
+    const recovery =
+      retained.length === 0
+        ? 'No recoverable staging path remains.'
+        : `Recoverable staging data was retained at ${retained.map((file) => `"${file}"`).join(' and ')}.`;
     throw flowBenchmarkFailed(
-      `Could not write the Flow benchmark output and recovery was incomplete. Recoverable staging data was retained at "${retained}".`,
+      `Could not write the Flow benchmark output and recovery was incomplete. ${recovery}`,
       error
     );
   }
@@ -130,6 +134,17 @@ async function recoverBenchmarkArtifacts(
     'Could not write the Flow benchmark output. No output artifacts were committed and any previous structured output was restored.',
     error
   );
+}
+
+export async function retainedBenchmarkRecoveryPaths(
+  candidates: ReadonlyArray<string | null | undefined>,
+  exists: (file: string) => Promise<boolean> = pathExists
+): Promise<string[]> {
+  const paths = [
+    ...new Set(candidates.filter((candidate): candidate is string => candidate !== null && candidate !== undefined)),
+  ];
+  const retained = await Promise.all(paths.map(async (file) => ((await exists(file)) ? file : null)));
+  return retained.filter((file): file is string => file !== null);
 }
 
 async function publishBenchmarkLogs(

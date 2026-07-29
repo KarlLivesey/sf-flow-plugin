@@ -7,9 +7,9 @@
 import { Messages } from '@salesforce/core';
 import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
+import { ApexSoapFlowBenchmarkGateway } from '../../services/apex-soap-flow-benchmark-gateway.js';
+import { ApexSoapFlowDebugGateway } from '../../services/apex-soap-flow-debug-gateway.js';
 import { FlowBenchmarkService } from '../../services/flow-benchmark-service.js';
-import { ToolingFlowBenchmarkGateway } from '../../services/tooling-flow-benchmark-gateway.js';
-import { ToolingFlowDebugGateway } from '../../services/tooling-flow-debug-gateway.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type { FlowBenchmarkResult } from '../../types/flow-benchmark.js';
 import type { FlowDebugLogLevel } from '../../types/flow-debug.js';
@@ -112,12 +112,6 @@ export default class FlowBenchmark extends SfCommand<FlowBenchmarkResult> {
       options: ['detailed', 'finest'],
       summary: messages.getMessage('flags.log-level.summary'),
     })(),
-    wait: Flags.integer({
-      default: 2,
-      min: 1,
-      max: 10,
-      summary: messages.getMessage('flags.wait.summary'),
-    }),
     'if-active-version': Flags.custom<number>({
       parse: (input: string): Promise<number> => Promise.resolve(parsePositiveBenchmarkInteger(input)),
       summary: messages.getMessage('flags.if-active-version.summary'),
@@ -161,8 +155,8 @@ export default class FlowBenchmark extends SfCommand<FlowBenchmarkResult> {
     const artifact = await withFlowProgress(this.spinner, 'benchmark', async (progress) =>
       new FlowBenchmarkService({
         definition,
-        debug: new ToolingFlowDebugGateway(context.connection),
-        benchmark: new ToolingFlowBenchmarkGateway(context.connection),
+        debug: new ApexSoapFlowDebugGateway(context.connection),
+        benchmark: new ApexSoapFlowBenchmarkGateway(context.connection),
       }).benchmark(request, progress)
     );
     await persistFlowBenchmark(destinations, artifact);
@@ -184,6 +178,7 @@ export default class FlowBenchmark extends SfCommand<FlowBenchmarkResult> {
           totalWallClock: result.totalWallClockMilliseconds,
           measuredWallClock: result.measuredWallClockMilliseconds,
           throughput: result.throughputPerSecond ?? '-',
+          logLevel: result.logLevel,
         },
       ],
       columns: [
@@ -193,6 +188,7 @@ export default class FlowBenchmark extends SfCommand<FlowBenchmarkResult> {
         { key: 'totalWallClock', name: 'Total wall-clock (ms)' },
         { key: 'measuredWallClock', name: 'Measured wall-clock (ms)' },
         { key: 'throughput', name: 'Measured samples/s' },
+        { key: 'logLevel', name: 'Log level' },
       ],
     });
     this.writeStatistics(result);
@@ -211,7 +207,6 @@ export default class FlowBenchmark extends SfCommand<FlowBenchmarkResult> {
         { key: 'rollbackConfirmed', name: 'Rollback' },
         { key: 'wallClockMilliseconds', name: 'Wall-clock (ms)' },
         { key: 'cpuTimeMilliseconds', name: 'CPU (ms)' },
-        { key: 'apexLogId', name: 'ApexLog ID' },
         { key: 'errorCode', name: 'Error' },
       ],
     });

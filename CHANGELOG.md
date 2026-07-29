@@ -19,18 +19,18 @@ All notable user-visible changes to this project will be documented in this file
   of a directly invocable autolaunched Flow.
 - Added deterministic varied-input assignment, configurable concurrency, min/max/mean and nearest-rank percentile
   statistics for per-sample wall-clock and Salesforce CPU time, total wall-clock time and measured throughput.
-- Added optional raw ApexLog retention, production confirmation, active-version concurrency guards, failure policy
+- Added optional raw debug-log retention, production confirmation, active-version concurrency guards, failure policy
   controls and a non-executing dry-run preflight.
 
 ### Safety and compatibility
 
-- Benchmark execution reuses one temporary tracing session, restores the previous trace configuration and verifies
-  the rollback marker for every sample. Raw logs are written with owner-only permissions on POSIX systems.
+- Benchmark execution uses the shared Apex SOAP transport with one request-scoped debug log per sample and verifies
+  the completion and rollback markers for every sample. Raw logs are written with owner-only permissions on POSIX
+  systems.
 - Rollback affects database changes in the current transaction only. It cannot reverse callouts, email, asynchronous
   work or separately committed transactions; production execution therefore requires `--confirm`.
-- Benchmark workloads are bounded before tracing starts. ApexLogs are collected once per tracing session, streamed to
-  private staging only when requested and published after successful completion; long runs renew short trace windows
-  between batches.
+- Benchmark workloads accept any positive iteration and concurrency values and non-negative warm-up values. Returned
+  logs are streamed to private staging only when requested and published after successful completion.
 
 ### Changed
 

@@ -28,7 +28,7 @@ export function flowBenchmarkFailed(message: string, cause?: unknown): SfError {
   return createFlowError({
     code: 'FlowBenchmarkFailed',
     message,
-    action: 'Review the failed benchmark sample and confirm that rollback tracing remains available.',
+    action: 'Review the failed benchmark sample and confirm that Apex SOAP execution and rollback remain available.',
     ...(cause === undefined ? {} : { cause }),
   });
 }
