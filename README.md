@@ -885,9 +885,11 @@ sf flow run \
   --if-active-version 7
 ```
 
-The generated SOAP request is checked against Salesforce's SOAP message limit. Input JSON is Base64-encoded inside
-the generated Apex carried in the XML body; Base64 is not redaction, so protect HTTP diagnostic output and
-infrastructure logs.
+The generated SOAP request is checked against Salesforce's SOAP message limit. The plugin also limits serialised
+input JSON to 256 KiB and generated Apex to 1 MiB to reserve headroom beneath the synchronous Apex heap limit. These
+are conservative plugin safety limits, not exact Salesforce limits, and cannot guarantee execution because the
+Flow's own heap use varies. Input JSON is Base64-encoded inside the generated Apex carried in the XML body; Base64 is
+not redaction, so protect HTTP diagnostic output and infrastructure logs.
 
 Combine `--rollback --dry-run` to validate the Flow, the single input object, production-org context, SOAP
 authentication and output destinations without executing Apex or running the Flow. This is a point-in-time preflight:

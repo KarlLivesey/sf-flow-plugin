@@ -20,11 +20,21 @@ const booleanTextSchema = textSchema.transform((value, context) => {
   return z.NEVER;
 });
 const integerTextSchema = textSchema.transform(Number).pipe(z.number().int());
+function isEmptyPlainRecord(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value) as unknown;
+  return (prototype === Object.prototype || prototype === null) && Object.keys(value).length === 0;
+}
+
 const nullableDiagnosticSchema = z
-  .string()
-  .nullable()
-  .optional()
+  .preprocess((value) => (isEmptyPlainRecord(value) ? null : value), z.string().nullable().optional())
   .transform((value) => value ?? null);
+const debugLogSchema = z.preprocess(
+  (value) => (isEmptyPlainRecord(value) ? '' : value),
+  z.string().optional().default('')
+);
 const executionSchema: z.ZodType<FlowDebugApexResult> = z.object({
   compiled: booleanTextSchema,
   success: booleanTextSchema,
@@ -120,6 +130,23 @@ function invalidSession(error: unknown): boolean {
   );
 }
 
+function timeoutError(): Error {
+  return Object.assign(new Error('The Apex SOAP request timeout expired before the session retry could start.'), {
+    name: 'ETIMEDOUT',
+  });
+}
+
+function remainingTimeout(deadline: number | undefined): number | undefined {
+  if (deadline === undefined) {
+    return undefined;
+  }
+  const remaining = Math.floor(deadline - performance.now());
+  if (remaining <= 0) {
+    throw timeoutError();
+  }
+  return remaining;
+}
+
 export class ApexSoapExecuteAnonymous {
   public constructor(private readonly connection: Connection) {}
 
@@ -128,28 +155,36 @@ export class ApexSoapExecuteAnonymous {
   }
 
   public async execute(request: ApexSoapExecuteRequest): Promise<ApexSoapExecuteResult> {
+    const started = performance.now();
+    const deadline =
+      request.timeoutMilliseconds === undefined ? undefined : started + Math.max(0, request.timeoutMilliseconds);
     try {
-      return await this.send(request);
+      return await this.send(request, remainingTimeout(deadline), started);
     } catch (error: unknown) {
       if (!invalidSession(error)) {
         throw error;
       }
+      remainingTimeout(deadline);
       await this.connection.refreshAuth();
-      return this.send(request);
+      return this.send(request, remainingTimeout(deadline), started);
     }
   }
 
   private auth(): { accessToken: string; orgId: string } {
     const fields = this.connection.getAuthInfoFields();
+    const accessToken = this.connection.accessToken ?? fields.accessToken;
     return authSchema.parse({
-      accessToken: this.connection.accessToken ?? fields.accessToken,
-      orgId: fields.orgId ?? this.connection.accessToken?.split('!')[0],
+      accessToken,
+      orgId: fields.orgId ?? accessToken?.split('!')[0],
     });
   }
 
-  private async send(request: ApexSoapExecuteRequest): Promise<ApexSoapExecuteResult> {
+  private async send(
+    request: ApexSoapExecuteRequest,
+    timeoutMilliseconds: number | undefined,
+    started: number
+  ): Promise<ApexSoapExecuteResult> {
     const auth = this.auth();
-    const started = performance.now();
     const response = await this.connection.request(
       {
         method: 'POST',
@@ -157,13 +192,13 @@ export class ApexSoapExecuteAnonymous {
         body: createApexSoapEnvelope(auth.accessToken, request),
         headers: { 'content-type': 'text/xml', soapaction: 'executeAnonymous' },
       },
-      request.timeoutMilliseconds === undefined ? undefined : { timeout: request.timeoutMilliseconds }
+      timeoutMilliseconds === undefined ? undefined : { timeout: timeoutMilliseconds }
     );
     const durationMilliseconds = performance.now() - started;
     const fields = responseFields(response);
     return {
       execution: executionSchema.parse(fields.result),
-      rawLog: z.string().optional().default('').parse(fields.rawLog),
+      rawLog: debugLogSchema.parse(fields.rawLog),
       durationMilliseconds,
     };
   }

@@ -26,9 +26,11 @@ Output destinations are validated before Salesforce execution. Structured and ra
 different files. A rollback result reports databaseChangesRolledBack as true only when the returned log contains
 the rollback marker; it is null when Salesforce terminates before that marker can be verified.
 
-Rollback preflight validates the generated request against Salesforce's SOAP message limit. Rollback input is
-Base64-encoded inside the generated Apex carried by the SOAP body; Base64 is not redaction, so protect HTTP diagnostic
-output and infrastructure logs.
+Rollback preflight validates the generated request against Salesforce's SOAP message limit. It also applies plugin
+safety limits of 256 KiB for serialised input JSON and 1 MiB for generated Apex, reserving headroom beneath the
+synchronous Apex heap limit. These are conservative plugin policies, not exact Salesforce limits, and cannot
+guarantee execution because the Flow's own heap use varies. Rollback input is Base64-encoded inside the generated
+Apex carried by the SOAP body; Base64 is not redaction, so protect HTTP diagnostic output and infrastructure logs.
 
 # flags.api-name.summary
 

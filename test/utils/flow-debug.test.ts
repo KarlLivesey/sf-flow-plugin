@@ -52,6 +52,20 @@ describe('Flow debug Apex generation', (): void => {
   });
 });
 
+describe('Flow debug Apex safety limits', (): void => {
+  it('rejects rollback input beyond the plugin Apex heap safety limit', (): void => {
+    expect(() =>
+      createBoundedFlowDebugApex({
+        correlationId,
+        apiName: 'Calculate_Discount',
+        namespace: null,
+        input: { value: 'x'.repeat(256 * 1024) },
+        outputVariables: [],
+      })
+    ).to.throw("exceeds the plugin's 256 KiB Apex heap safety limit");
+  });
+});
+
 describe('Flow debug log value parsing', (): void => {
   it('finds the interview, trace and output while redacting values', (): void => {
     const parsed = parseFlowDebugLog(debugLog(), correlationId, false);
