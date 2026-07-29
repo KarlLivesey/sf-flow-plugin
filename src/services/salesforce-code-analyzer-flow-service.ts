@@ -29,15 +29,20 @@ const analyzerLocationSchema = z.object({
   endColumn: z.number().int().positive().optional(),
 });
 
-const analyzerViolationSchema = z.object({
-  rule: z.string().min(1),
-  engine: z.literal('flow'),
-  severity: z.number().int().min(1).max(5),
-  tags: z.array(z.string()),
-  primaryLocationIndex: z.number().int().nonnegative(),
-  locations: z.array(analyzerLocationSchema).min(1),
-  message: z.string().min(1),
-});
+const analyzerViolationSchema = z
+  .object({
+    rule: z.string().min(1),
+    engine: z.literal('flow'),
+    severity: z.number().int().min(1).max(5),
+    tags: z.array(z.string()),
+    primaryLocationIndex: z.number().int().nonnegative(),
+    locations: z.array(analyzerLocationSchema).min(1),
+    message: z.string().min(1),
+  })
+  .refine((violation) => violation.primaryLocationIndex < violation.locations.length, {
+    message: 'primaryLocationIndex must identify a location.',
+    path: ['primaryLocationIndex'],
+  });
 
 const analyzerResultSchema = z.object({
   runDir: z.string().min(1),
@@ -123,12 +128,15 @@ function lintLocations(
 
 function lintFinding(runDir: string, violation: z.infer<typeof analyzerViolationSchema>): FlowLintFinding {
   const locations = lintLocations(runDir, violation.locations, violation.primaryLocationIndex);
-  const primary = locations.find((location) => location.primary) ?? locations[0];
-  const path = primary === undefined ? null : `line ${primary.startLine}:${primary.startColumn}`;
+  const primary = locations[violation.primaryLocationIndex];
+  if (primary === undefined) {
+    throw flowCodeAnalyzerFailed('Salesforce Code Analyzer returned an invalid primary Flow location.');
+  }
+  const path = `line ${primary.startLine}:${primary.startColumn}`;
   return {
     fingerprint: createFlowLintFingerprint({
       rule: violation.rule,
-      ...(path === null ? {} : { path }),
+      path,
       evidence: [violation.message],
     }),
     rule: violation.rule,
@@ -171,10 +179,46 @@ async function readAnalyzerFindings(
     .sort(compareFindings);
 }
 
+async function removeAnalyzerTemporaryDirectory(directory: string): Promise<void> {
+  await rm(directory, { recursive: true, force: true });
+}
+
+function analyzerExecutionError(error: unknown): Error {
+  return error instanceof Error && error.name.startsWith('FlowCodeAnalyzer')
+    ? error
+    : flowCodeAnalyzerFailed('Salesforce Code Analyzer could not analyse the local Flow source file.');
+}
+
+type AnalyzerAttempt = { findings: FlowLintFinding[]; error?: never } | { error: Error; findings?: never };
+
+async function attemptAnalysis(context: {
+  runner: CodeAnalyzerProcessRunner;
+  cwd: string;
+  request: FlowCodeAnalyzerRequest;
+  outputFile: string;
+}): Promise<AnalyzerAttempt> {
+  try {
+    await context.runner.run(analyzerArguments(context.request, context.outputFile), context.cwd);
+    return { findings: await readAnalyzerFindings(context.outputFile, context.request.excludedRules) };
+  } catch (error: unknown) {
+    return { error: analyzerExecutionError(error) };
+  }
+}
+
+async function attemptCleanup(cleanup: (directory: string) => Promise<void>, directory: string): Promise<boolean> {
+  try {
+    await cleanup(directory);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export class SalesforceCodeAnalyzerFlowService {
   public constructor(
     private readonly runner: CodeAnalyzerProcessRunner = new SfCodeAnalyzerProcessRunner(),
-    private readonly cwd = process.cwd()
+    private readonly cwd = process.cwd(),
+    private readonly removeTemporaryDirectory: (directory: string) => Promise<void> = removeAnalyzerTemporaryDirectory
   ) {}
 
   public async isInstalled(): Promise<boolean> {
@@ -182,7 +226,7 @@ export class SalesforceCodeAnalyzerFlowService {
       const result = await this.runner.run(['plugins', '--json'], this.cwd);
       return installedPluginSchema.parse(JSON.parse(result.stdout) as unknown);
     } catch {
-      return false;
+      throw flowCodeAnalyzerFailed('Salesforce CLI could not inspect the installed plugin list.');
     }
   }
 
@@ -197,17 +241,17 @@ export class SalesforceCodeAnalyzerFlowService {
   public async analyse(request: FlowCodeAnalyzerRequest): Promise<FlowLintFinding[]> {
     const temporaryDirectory = await mkdtemp(join(tmpdir(), 'sf-flow-code-analyzer-'));
     const outputFile = join(temporaryDirectory, 'flow-results.json');
-    try {
-      await this.runner.run(analyzerArguments(request, outputFile), this.cwd);
-      return await readAnalyzerFindings(outputFile, request.excludedRules);
-    } catch (error: unknown) {
-      if (error instanceof Error && error.name.startsWith('FlowCodeAnalyzer')) {
-        throw error;
-      }
-      throw flowCodeAnalyzerFailed('Salesforce Code Analyzer could not analyse the local Flow source file.');
-    } finally {
-      await rm(temporaryDirectory, { recursive: true, force: true });
+    const analysis = await attemptAnalysis({ runner: this.runner, cwd: this.cwd, request, outputFile });
+    const cleaned = await attemptCleanup(this.removeTemporaryDirectory, temporaryDirectory);
+    if (analysis.error !== undefined) {
+      throw analysis.error;
     }
+    if (!cleaned) {
+      throw flowCodeAnalyzerFailed(
+        `Salesforce Code Analyzer completed, but its temporary directory could not be removed: ${temporaryDirectory}`
+      );
+    }
+    return analysis.findings;
   }
 }
 

@@ -94,7 +94,7 @@ describe('SalesforceCodeAnalyzerFlowService', (): void => {
   });
 });
 
-describe('SalesforceCodeAnalyzerFlowService defaults and failures', (): void => {
+describe('SalesforceCodeAnalyzerFlowService defaults', (): void => {
   it('uses every Flow Scanner rule by default and maps high severity to an error', async (): Promise<void> => {
     const sourceFile = resolve('Example.flow-meta.xml');
     const runner = new FakeProcessRunner(async (args) => {
@@ -124,6 +124,71 @@ describe('SalesforceCodeAnalyzerFlowService defaults and failures', (): void => 
       service.analyse({ sourceFile: resolve('Example.flow-meta.xml'), rules: [], excludedRules: [] }),
       'FlowCodeAnalyzerFailed'
     );
+  });
+});
+
+describe('SalesforceCodeAnalyzerFlowService location validation', (): void => {
+  it('rejects a primary location index outside the locations array', async (): Promise<void> => {
+    const sourceFile = resolve('Example.flow-meta.xml');
+    const runner = new FakeProcessRunner(async (args) => {
+      const outputFile = args[args.indexOf('--output-file') + 1];
+      if (outputFile !== undefined) {
+        const output = analyzerOutput(sourceFile);
+        const [violation] = (output as { violations: Array<{ primaryLocationIndex: number }> }).violations;
+        if (violation !== undefined) {
+          violation.primaryLocationIndex = 2;
+        }
+        await writeFile(outputFile, JSON.stringify(output), 'utf8');
+      }
+      return '';
+    });
+
+    await expectErrorName(
+      new SalesforceCodeAnalyzerFlowService(runner).analyse({
+        sourceFile,
+        rules: [],
+        excludedRules: [],
+      }),
+      'FlowCodeAnalyzerFailed'
+    );
+  });
+});
+
+describe('SalesforceCodeAnalyzerFlowService cleanup failures', (): void => {
+  it('preserves the analysis error when temporary cleanup also fails', async (): Promise<void> => {
+    const runner = new FakeProcessRunner(async () => {
+      throw new Error('Analyzer process failed.');
+    });
+    const service = new SalesforceCodeAnalyzerFlowService(runner, process.cwd(), async () => {
+      throw new Error('Cleanup failed.');
+    });
+
+    await expectErrorName(
+      service.analyse({ sourceFile: resolve('Example.flow-meta.xml'), rules: [], excludedRules: [] }),
+      'FlowCodeAnalyzerFailed'
+    );
+  });
+
+  it('reports a retained temporary directory when cleanup fails after successful analysis', async (): Promise<void> => {
+    const sourceFile = resolve('Example.flow-meta.xml');
+    const runner = new FakeProcessRunner(async (args) => {
+      const outputFile = args[args.indexOf('--output-file') + 1];
+      if (outputFile !== undefined) {
+        await writeFile(outputFile, JSON.stringify(analyzerOutput(sourceFile)), 'utf8');
+      }
+      return '';
+    });
+    const service = new SalesforceCodeAnalyzerFlowService(runner, process.cwd(), async () => {
+      throw new Error('Cleanup failed.');
+    });
+
+    try {
+      await service.analyse({ sourceFile, rules: [], excludedRules: [] });
+      expect.fail('Expected FlowCodeAnalyzerFailed.');
+    } catch (error: unknown) {
+      expect(error).to.have.property('name', 'FlowCodeAnalyzerFailed');
+      expect(error).to.have.property('message').that.includes('sf-flow-code-analyzer-');
+    }
   });
 });
 
@@ -163,6 +228,22 @@ describe('Salesforce Code Analyzer installation consent', (): void => {
     );
     expect(await new SalesforceCodeAnalyzerFlowService(runner).isInstalled()).to.equal(false);
     expect(runner.calls[0]).to.deep.equal(['plugins', '--json']);
+  });
+});
+
+describe('Salesforce Code Analyzer plugin inspection failures', (): void => {
+  it('reports plugin inspection failures instead of treating them as not installed', async (): Promise<void> => {
+    const runner = new FakeProcessRunner(async () => {
+      throw new Error('sf plugins failed.');
+    });
+
+    await expectErrorName(new SalesforceCodeAnalyzerFlowService(runner).isInstalled(), 'FlowCodeAnalyzerFailed');
+  });
+
+  it('reports invalid plugin inspection output instead of treating it as not installed', async (): Promise<void> => {
+    const runner = new FakeProcessRunner(async () => '{"status":0}');
+
+    await expectErrorName(new SalesforceCodeAnalyzerFlowService(runner).isInstalled(), 'FlowCodeAnalyzerFailed');
   });
 });
 
