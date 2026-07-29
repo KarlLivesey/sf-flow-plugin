@@ -212,21 +212,27 @@ function enqueueSubflow(state: LocalTraversalState, position: TraversalPosition,
   }
 }
 
+function visitTraversalPosition(state: LocalTraversalState, position: TraversalPosition): void {
+  const name = qualifiedFlowName(position.source.apiName, position.source.namespace);
+  if (state.visited.has(name)) {
+    return;
+  }
+  state.visited.add(name);
+  state.resolved.push({ source: position.source, depth: position.depth });
+  position.source.description.subflows.forEach((subflow) => {
+    enqueueSubflow(state, position, subflow);
+  });
+}
+
 function drainTraversal(state: LocalTraversalState): void {
-  while (state.queue.length > 0) {
-    const position = state.queue.shift();
+  let queueIndex = 0;
+  while (queueIndex < state.queue.length) {
+    const position = state.queue[queueIndex];
+    queueIndex += 1;
     if (position === undefined) {
       break;
     }
-    const name = qualifiedFlowName(position.source.apiName, position.source.namespace);
-    if (state.visited.has(name)) {
-      continue;
-    }
-    state.visited.add(name);
-    state.resolved.push({ source: position.source, depth: position.depth });
-    position.source.description.subflows.forEach((subflow) => {
-      enqueueSubflow(state, position, subflow);
-    });
+    visitTraversalPosition(state, position);
   }
 }
 

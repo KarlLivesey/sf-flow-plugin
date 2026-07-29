@@ -149,16 +149,17 @@ class FlowMetadataTraversal {
   }
 
   private async expandBreadthFirst(queue: TraversalQueueEntry[]): Promise<void> {
-    const current = queue.shift();
-    if (current === undefined) {
-      return;
+    for (const current of queue) {
+      for (const subflow of current.description.subflows) {
+        // Sequential resolution preserves Salesforce request ordering without repeatedly copying the queue.
+        // eslint-disable-next-line no-await-in-loop
+        const next = await this.resolveSubflow(subflow.flowName, current.context);
+        if (next !== undefined) {
+          // eslint-disable-next-line no-await-in-loop
+          queue.push({ context: next, description: await this.visit(next) });
+        }
+      }
     }
-    const expanded = await current.description.subflows.reduce(async (previous, subflow) => {
-      const entries = await previous;
-      const next = await this.resolveSubflow(subflow.flowName, current.context);
-      return next === undefined ? entries : [...entries, { context: next, description: await this.visit(next) }];
-    }, Promise.resolve([] as TraversalQueueEntry[]));
-    await this.expandBreadthFirst([...queue, ...expanded]);
   }
 
   private async findSubflowDefinition(flowName: string, parent: VisitContext): Promise<FlowDefinition | undefined> {

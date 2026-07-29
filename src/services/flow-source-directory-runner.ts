@@ -48,9 +48,7 @@ export async function checkSourceDirectory(request: DirectoryCheckRequest): Prom
     ? (progress('running-code-analyzer', directory.directory),
       await analyzer.analyse({ sourceFile: directory.directory, rules: [], excludedRules: [] }))
     : [];
-  if (checks.includes('lint')) {
-    await verifyFlowSourceDirectory(directory);
-  }
+  await verifyFlowSourceDirectory(directory);
   return checkFlowSourceDirectory(
     directory,
     { checks, excluded: excludedChecks, lintFindings, recursive, maxDepth },
