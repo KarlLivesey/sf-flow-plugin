@@ -7,9 +7,14 @@
 import type { Connection } from '@salesforce/core';
 import { expect } from 'chai';
 
-import FlowCompare, { parseComparisonVersionSelector } from '../../../src/commands/flow/compare.js';
+import FlowCompare, {
+  comparisonIdentity,
+  type CompareFlagValues,
+  parseComparisonVersionSelector,
+} from '../../../src/commands/flow/compare.js';
 import { FlowComparisonService } from '../../../src/services/flow-comparison-service.js';
 import type { FlowCompareResult } from '../../../src/types/flow-analysis.js';
+import type { FlowSource } from '../../../src/types/flow-source.js';
 import { renderFlowComparison } from '../../../src/utils/flow-comparison-renderer.js';
 import { createCommandOrg } from '../../helpers/command-org.js';
 import { commandTestContext as $$, commandUx } from '../../helpers/command-test-context.js';
@@ -44,6 +49,13 @@ describe('flow compare flags', (): void => {
   it('defaults to comparing active with latest', (): void => {
     expect(FlowCompare.flags.from.default).to.equal('active');
     expect(FlowCompare.flags.to.default).to.equal('latest');
+  });
+
+  it('preserves an explicit unmanaged identity from a local source filename', (): void => {
+    const identity = comparisonIdentity({ 'api-name': undefined, namespace: undefined } as CompareFlagValues, {
+      from: { apiName: 'Example', namespace: null } as FlowSource,
+    });
+    expect(identity).to.deep.equal({ apiName: 'Example', namespace: null });
   });
 
   it('rejects combining the single-org and cross-org flags', (): void => {

@@ -107,6 +107,47 @@ function canonicalGateway(): FakeFlowGateway {
   return fake;
 }
 
+function managedAndUnmanagedCanonicalGateway(): FakeFlowGateway {
+  const managedDefinitionId = '300000000000202';
+  const managedVersion = flowVersion(managedDefinitionId, 1, 'Draft');
+  const target = new FakeFlowGateway(
+    [
+      flowDefinition({
+        id: canonicalDefinitionId,
+        apiName: 'Canonical_Flow',
+        activeVersionId: null,
+        latestVersionId: canonicalVersion.id,
+      }),
+      {
+        ...flowDefinition({
+          id: managedDefinitionId,
+          apiName: 'Canonical_Flow',
+          activeVersionId: null,
+          latestVersionId: managedVersion.id,
+        }),
+        namespace: 'managed',
+      },
+    ],
+    [canonicalVersion, managedVersion]
+  );
+  target.metadata.set(canonicalVersion.id, canonicalMetadata);
+  target.metadata.set(managedVersion.id, { ...canonicalMetadata, label: 'Managed Flow' });
+  return target;
+}
+
+async function withCanonicalSource<T>(
+  operation: (source: Awaited<ReturnType<typeof loadFlowSource>>) => Promise<T>
+): Promise<T> {
+  const directory = await mkdtemp(join(tmpdir(), 'flow-comparison-source-'));
+  const sourceFile = join(directory, 'Canonical_Flow.flow-meta.xml');
+  try {
+    await writeFile(sourceFile, renderFlowMetadataXml(canonicalMetadata, 'draft'), 'utf8');
+    return await operation(await loadFlowSource(sourceFile));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
 describe('FlowComparisonService', (): void => {
   it('compares active and latest metadata without lifecycle status noise', async (): Promise<void> => {
     const result = await new FlowComparisonService(gateway()).compare(request());
@@ -159,6 +200,27 @@ describe('FlowComparisonService source-to-org canonical comparison', (): void =>
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
+  });
+});
+
+describe('FlowComparisonService source-to-org namespace identity', (): void => {
+  it('selects the unmanaged org Flow when the local filename has no namespace', async (): Promise<void> => {
+    const target = managedAndUnmanagedCanonicalGateway();
+    const result = await withCanonicalSource((source) =>
+      new FlowComparisonService(undefined, target).compare(
+        request({
+          apiName: source.apiName,
+          namespace: source.namespace,
+          fromOrg: 'local source',
+          toOrg: 'admin@example.com',
+          to: 'latest',
+        }),
+        noFlowProgress,
+        { from: source }
+      )
+    );
+    expect(target.definitionQueries[0]).to.deep.equal({ apiName: 'Canonical_Flow', namespace: null });
+    expect(result).to.include({ namespace: null, toDefinitionId: canonicalDefinitionId });
   });
 });
 

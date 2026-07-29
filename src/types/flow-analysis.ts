@@ -111,7 +111,8 @@ export interface FlowDependenciesResult {
   targetOrg: string;
 }
 
-export interface FlowCompareRequest extends NamedFlowRequest {
+export interface FlowCompareRequest extends Omit<NamedFlowRequest, 'namespace'> {
+  namespace?: string | null;
   from: FlowComparisonVersionSelector;
   to: FlowComparisonVersionSelector;
   fromOrg: string;

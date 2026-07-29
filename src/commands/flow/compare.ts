@@ -113,18 +113,18 @@ function createRequest(
   };
 }
 
-function comparisonIdentity(
+export function comparisonIdentity(
   flags: CompareFlagValues,
   sources: { from?: FlowSource; to?: FlowSource }
-): { apiName: string; namespace: string | undefined } {
+): { apiName: string; namespace: string | null | undefined } {
   const identity = sources.from ?? sources.to;
   const apiName = flags['api-name'] ?? identity?.apiName;
   if (apiName === undefined) {
     throw flowComparisonFailed('--api-name is required when neither comparison side is a local source file.');
   }
   validateFlowApiName(apiName);
-  const namespace = flags.namespace ?? identity?.namespace ?? undefined;
-  if (namespace !== undefined) {
+  const namespace = flags.namespace ?? identity?.namespace;
+  if (typeof namespace === 'string') {
     validateNamespace(namespace);
   }
   return { apiName, namespace };
