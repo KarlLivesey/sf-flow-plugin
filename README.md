@@ -950,7 +950,7 @@ sf flow debug \
 
 `sf flow debug` is the clearer equivalent of `sf flow run --rollback`; it selects rollback debugging automatically
 and uses the same implementation and safeguards. `sf flow run --rollback` remains available. The rollback limitations,
-trace handling, dry-run contract and output security guidance documented above apply identically.
+request-scoped SOAP log handling, dry-run contract and output security guidance documented above apply identically.
 
 ## `sf flow deactivate`
 

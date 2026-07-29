@@ -194,7 +194,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string"
+          "type": ["string", "null"]
         },
         "status": {
           "type": "string"
