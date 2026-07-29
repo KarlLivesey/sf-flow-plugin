@@ -14,7 +14,6 @@ import type {
 } from '../types/flow-debug.js';
 import type { FlowRollbackRequest, FlowRunResult } from '../types/flow-invocation.js';
 import type { FlowDefinition, FlowDefinitionGateway, FlowDefinitionLookup, FlowVersion } from '../types/flow.js';
-import { createBoundedFlowDebugApex } from '../utils/flow-debug-apex.js';
 import { assertExpectedActiveVersion } from '../utils/flow-concurrency.js';
 import { parseFlowDebugLog } from '../utils/flow-debug-log.js';
 import {
@@ -52,7 +51,6 @@ interface ValidatedDebugInput {
   outputVariables: string[];
 }
 
-const SIZE_CHECK_CORRELATION_ID = '00000000-0000-0000-0000-000000000000';
 const transportStages: Readonly<Record<FlowDebugTransportStage, FlowProgressStage>> = {
   'configuring-debug': 'configuring-trace',
   'executing-apex': 'invoking-flow',
@@ -91,16 +89,6 @@ function assertDebuggable(flow: ResolvedDebugFlow): void {
   }
 }
 
-function validateTransportSize(flow: ResolvedDebugFlow, input: JsonObject, outputVariables: string[]): void {
-  createBoundedFlowDebugApex({
-    correlationId: SIZE_CHECK_CORRELATION_ID,
-    apiName: flow.definition.apiName,
-    namespace: flow.definition.namespace,
-    input,
-    outputVariables,
-  });
-}
-
 function validateDebugInput(
   flow: ResolvedDebugFlow,
   request: FlowRollbackRequest,
@@ -113,8 +101,29 @@ function validateDebugInput(
     throw flowInputInvalid('Flow debug requires one input object.');
   }
   const outputVariables = description.variables.filter((variable) => variable.output).map((variable) => variable.name);
-  validateTransportSize(flow, input, outputVariables);
   return { input, outputVariables };
+}
+
+export type FlowDebugFailureLogWriter = (rawLog: string) => Promise<void>;
+
+async function throwAfterPreservingRawLog(
+  error: unknown,
+  rawLog: string,
+  writer: FlowDebugFailureLogWriter | undefined
+): Promise<never> {
+  if (writer === undefined) {
+    throw error;
+  }
+  try {
+    await writer(rawLog);
+  } catch (persistenceError: unknown) {
+    const message = error instanceof Error ? error.message : 'Flow debug result validation failed.';
+    throw new AggregateError(
+      [error, persistenceError],
+      `${message} The raw Salesforce debug log also could not be written to the requested destination.`
+    );
+  }
+  throw error;
 }
 
 function parseDebugLog(transport: FlowDebugTransportResult, showValues: boolean): ReturnType<typeof parseFlowDebugLog> {
@@ -145,21 +154,30 @@ export class FlowDebugService {
 
   public async debug(
     request: FlowRollbackRequest,
-    progress: FlowProgressReporter = noFlowProgress
+    progress: FlowProgressReporter = noFlowProgress,
+    failureLogWriter?: FlowDebugFailureLogWriter
   ): Promise<FlowDebugArtifact<FlowRunResult>> {
     const prepared = await this.prepare(request, progress);
     if (request.dryRun) {
       return createFlowDebugDryRunArtifact(request, prepared);
     }
-    const executed = await this.execute(prepared, request, progress);
-    return createFlowDebugArtifact({ request, prepared, executed });
+    const execution = await this.execute(prepared, request, progress);
+    try {
+      const executed: ExecutedDebug = {
+        ...execution,
+        parsed: parseDebugLog(execution.transport, request.showValues),
+      };
+      return createFlowDebugArtifact({ request, prepared, executed });
+    } catch (error: unknown) {
+      return throwAfterPreservingRawLog(error, execution.transport.rawLog, failureLogWriter);
+    }
   }
 
   private async execute(
     prepared: PreparedDebug,
     request: FlowRollbackRequest,
     progress: FlowProgressReporter
-  ): Promise<ExecutedDebug> {
+  ): Promise<Omit<ExecutedDebug, 'parsed'>> {
     const started = performance.now();
     const transport = await this.gateways.debug.execute(
       {
@@ -177,7 +195,6 @@ export class FlowDebugService {
     return {
       transport,
       durationMilliseconds: Math.round(performance.now() - started),
-      parsed: parseDebugLog(transport, request.showValues),
     };
   }
 

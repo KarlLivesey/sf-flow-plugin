@@ -121,6 +121,20 @@ describe('flow run rollback command', (): void => {
   });
 });
 
+describe('flow run rollback timeout', (): void => {
+  it('accepts rollback waits above the former ten-minute plugin ceiling', async (): Promise<void> => {
+    $$.SANDBOX.stub(FlowRun.prototype, 'parseFlags').resolves({ ...flags(), rollback: true, wait: 11 });
+    const debug = $$.SANDBOX.stub(FlowDebugService.prototype, 'debug').resolves({
+      result: rollbackRunResult(true),
+      rawLog: 'correlated log',
+    });
+
+    await FlowRun.run(['--json']);
+
+    expect(debug.firstCall.args[0]).to.include({ waitMilliseconds: 660_000 });
+  });
+});
+
 describe('flow run rollback dry-run command', (): void => {
   it('accepts rollback with dry-run as a non-executing preflight', async (): Promise<void> => {
     const commandFlags = {

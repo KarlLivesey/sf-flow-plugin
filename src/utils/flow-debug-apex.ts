@@ -6,7 +6,6 @@
  */
 import { Buffer } from 'node:buffer';
 
-import { flowInputInvalid } from '../errors/flow-errors.js';
 import type { JsonObject } from '../types/flow-analysis.js';
 
 export interface FlowDebugApexOptions {
@@ -18,20 +17,6 @@ export interface FlowDebugApexOptions {
 }
 
 const OUTPUT_CHUNK_SIZE = 1000;
-const MAX_APEX_SOAP_MESSAGE_BYTES = 50 * 1024 * 1024;
-const MAX_FLOW_DEBUG_INPUT_BYTES = 256 * 1024;
-const MAX_FLOW_DEBUG_APEX_BYTES = 1024 * 1024;
-const SOAP_ENVELOPE_RESERVE_BYTES = 4096;
-
-function soapEncodedBytes(value: string): number {
-  const escaped = value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&apos;');
-  return Buffer.byteLength(escaped, 'utf8');
-}
 
 function apexString(value: string): string {
   return `'${value.replaceAll('\\', '\\\\').replaceAll(/'/gu, "\\'")}'`;
@@ -85,26 +70,4 @@ try {
   System.debug(LoggingLevel.ERROR, sfFlowMarker + '|ROLLBACK');
   System.debug(LoggingLevel.ERROR, sfFlowMarker + '|END');
 }`;
-}
-
-export function createBoundedFlowDebugApex(options: FlowDebugApexOptions): string {
-  const inputBytes = Buffer.byteLength(JSON.stringify(options.input), 'utf8');
-  if (inputBytes > MAX_FLOW_DEBUG_INPUT_BYTES) {
-    throw flowInputInvalid(
-      `Flow rollback input contains ${inputBytes} bytes of JSON and exceeds the plugin's 256 KiB Apex heap safety limit.`
-    );
-  }
-  const source = createFlowDebugApex(options);
-  const bytes = soapEncodedBytes(source);
-  if (bytes > MAX_FLOW_DEBUG_APEX_BYTES) {
-    throw flowInputInvalid(
-      `Flow rollback input produces ${bytes} bytes of generated Apex and exceeds the plugin's 1 MiB Apex heap safety limit.`
-    );
-  }
-  if (bytes + SOAP_ENVELOPE_RESERVE_BYTES > MAX_APEX_SOAP_MESSAGE_BYTES) {
-    throw flowInputInvalid(
-      `Flow rollback input produces ${bytes} bytes of generated Apex and exceeds the Salesforce 50 MiB SOAP message limit.`
-    );
-  }
-  return source;
 }

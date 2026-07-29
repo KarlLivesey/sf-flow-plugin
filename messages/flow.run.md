@@ -26,11 +26,8 @@ Output destinations are validated before Salesforce execution. Structured and ra
 different files. A rollback result reports databaseChangesRolledBack as true only when the returned log contains
 the rollback marker; it is null when Salesforce terminates before that marker can be verified.
 
-Rollback preflight validates the generated request against Salesforce's SOAP message limit. It also applies plugin
-safety limits of 256 KiB for serialised input JSON and 1 MiB for generated Apex, reserving headroom beneath the
-synchronous Apex heap limit. These are conservative plugin policies, not exact Salesforce limits, and cannot
-guarantee execution because the Flow's own heap use varies. Rollback input is Base64-encoded inside the generated
-Apex carried by the SOAP body; Base64 is not redaction, so protect HTTP diagnostic output and infrastructure logs.
+Rollback input is Base64-encoded inside the generated Apex carried by the SOAP body; Base64 is not redaction, so
+protect HTTP diagnostic output and infrastructure logs. Salesforce applies the authoritative Apex and SOAP limits.
 
 # flags.api-name.summary
 
@@ -78,7 +75,7 @@ Show Flow values and full caught error messages in rollback trace output.
 
 # flags.wait.summary
 
-SOAP request timeout in minutes for rollback execution. Defaults to 2; range 1 to 10.
+SOAP request timeout in positive whole minutes for rollback execution. Defaults to 2.
 
 # flags.fail-on-flow-error.summary
 

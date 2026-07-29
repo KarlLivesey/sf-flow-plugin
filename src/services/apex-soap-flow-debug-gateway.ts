@@ -15,7 +15,7 @@ import type {
   FlowDebugTransportProgress,
   FlowDebugTransportResult,
 } from '../types/flow-debug.js';
-import { createBoundedFlowDebugApex } from '../utils/flow-debug-apex.js';
+import { createFlowDebugApex } from '../utils/flow-debug-apex.js';
 import { qualifiedFlowName } from '../utils/flow-state.js';
 import { ApexSoapExecuteAnonymous } from './apex-soap-execute-anonymous.js';
 import {
@@ -81,7 +81,7 @@ export class ApexSoapFlowDebugGateway {
   ): Promise<FlowDebugTransportResult> {
     const correlationId = randomUUID();
     const apiName = qualifiedFlowName(request.apiName, request.namespace);
-    const apexSource = createBoundedFlowDebugApex({ correlationId, ...request });
+    const apexSource = createFlowDebugApex({ correlationId, ...request });
     reportProgress(progress, 'configuring-debug', `${apiName} (${request.logLevel})`);
     reportProgress(progress, 'executing-apex', `${apiName} (rollback)`);
     return this.executeSoap({ request, apiName, correlationId, apexSource });

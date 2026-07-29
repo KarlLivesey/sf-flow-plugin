@@ -19,7 +19,7 @@ import type { FlowRollbackRequest, FlowRunRequest, FlowRunResult } from '../../t
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
 import { readFlowInputs } from '../../utils/flow-input-file.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
-import { persistFlowRunFiles, prepareFlowRunFiles } from '../../utils/flow-run-files.js';
+import { persistFailedFlowDebugLog, persistFlowRunFiles, prepareFlowRunFiles } from '../../utils/flow-run-files.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -74,8 +74,11 @@ async function createRollbackRequest(
   if (inputs.length !== 1 || input === undefined) {
     throw flowInputInvalid(`Flow rollback accepts exactly one input object; received ${inputs.length}.`);
   }
-  if (waitMinutes < 1 || waitMinutes > 10) {
-    throw flowInputInvalid(`Flow rollback log wait must be between 1 and 10 minutes; received ${waitMinutes}.`);
+  const waitMilliseconds = waitMinutes * 60_000;
+  if (!Number.isSafeInteger(waitMinutes) || waitMinutes < 1 || !Number.isSafeInteger(waitMilliseconds)) {
+    throw flowInputInvalid(
+      `Flow rollback log wait must be a positive whole-minute value with a safely representable millisecond value; received ${waitMinutes}.`
+    );
   }
   return {
     ...createNamedFlowRequest(flags, context),
@@ -84,7 +87,7 @@ async function createRollbackRequest(
     confirm: flags.confirm,
     logLevel: flags['log-level'] ?? 'detailed',
     showValues: flags['show-values'] ?? false,
-    waitMilliseconds: waitMinutes * 60_000,
+    waitMilliseconds,
     ...(flags['if-active-version'] === undefined ? {} : { expectedActiveVersion: flags['if-active-version'] }),
   };
 }
@@ -188,7 +191,9 @@ export default class FlowRun extends SfCommand<FlowRunResult> {
           new FlowDebugService({
             definition: definitionGateway,
             debug: new ApexSoapFlowDebugGateway(context.connection),
-          }).debug(await createRollbackRequest(flags, context), progress)
+          }).debug(await createRollbackRequest(flags, context), progress, async (rawLog) =>
+            persistFailedFlowDebugLog(destinations, rawLog)
+          )
         )
       : {
           result: await withFlowProgress(this.spinner, 'run', async (progress) =>

@@ -201,6 +201,48 @@ describe('FlowDebugService log integrity', (): void => {
   });
 });
 
+describe('FlowDebugService failed-log preservation', (): void => {
+  it('passes the only raw SOAP log to the requested failure writer before rethrowing validation failure', async (): Promise<void> => {
+    const gateways = flowDebugGateways();
+    gateways.debug.transport.log.id = null;
+    gateways.debug.transport.rawLog = debugLog().replace('|OUTPUT|0|', '|OUTPUT|1|');
+    const written: string[] = [];
+    const error = await new FlowDebugService(gateways)
+      .debug(
+        flowDebugRequest(),
+        (): void => undefined,
+        (rawLog): Promise<void> => {
+          written.push(rawLog);
+          return Promise.resolve();
+        }
+      )
+      .catch((caught: unknown) => caught);
+
+    expect(error).to.have.property('name', 'FlowDebugFailed');
+    expect(written).to.deep.equal([gateways.debug.transport.rawLog]);
+  });
+
+  it('preserves validation and raw-log persistence failures without exposing the raw log in the message', async (): Promise<void> => {
+    const gateways = flowDebugGateways();
+    const sensitiveRawLog = debugLog().replace(`|${correlationIdForTest()}|ROLLBACK`, '|wrong|ROLLBACK');
+    gateways.debug.transport.rawLog = sensitiveRawLog;
+    const persistenceFailure = new Error('disk unavailable');
+    const error = await new FlowDebugService(gateways)
+      .debug(
+        flowDebugRequest(),
+        (): void => undefined,
+        (): Promise<void> => Promise.reject(persistenceFailure)
+      )
+      .catch((caught: unknown) => caught);
+
+    expect(error).to.be.instanceOf(AggregateError);
+    expect(error).to.have.property('message').that.does.not.include(sensitiveRawLog);
+    expect((error as AggregateError).errors).to.have.length(2);
+    expect((error as AggregateError).errors[0]).to.have.property('name', 'FlowDebugRollbackFailed');
+    expect((error as AggregateError).errors[1]).to.equal(persistenceFailure);
+  });
+});
+
 describe('FlowDebugService managed Flow identity', (): void => {
   it('qualifies a managed Flow when no active version exists', async (): Promise<void> => {
     const managed = {

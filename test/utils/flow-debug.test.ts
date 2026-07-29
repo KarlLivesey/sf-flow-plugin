@@ -6,7 +6,7 @@
  */
 import { expect } from 'chai';
 
-import { createBoundedFlowDebugApex, createFlowDebugApex } from '../../src/utils/flow-debug-apex.js';
+import { createFlowDebugApex } from '../../src/utils/flow-debug-apex.js';
 import { parseFlowDebugLog } from '../../src/utils/flow-debug-log.js';
 import { correlationId, debugLog, interviewId } from '../helpers/flow-debug-fixtures.js';
 
@@ -40,29 +40,15 @@ describe('Flow debug Apex generation', (): void => {
     expect(source).to.include('Database.rollback');
   });
 
-  it('does not retain the REST Execute Anonymous URI limit for SOAP requests', (): void => {
-    const source = createBoundedFlowDebugApex({
+  it('does not impose a plugin payload ceiling on SOAP requests', (): void => {
+    const source = createFlowDebugApex({
       correlationId,
       apiName: 'Calculate_Discount',
       namespace: null,
-      input: { value: 'x'.repeat(12_000) },
+      input: { value: 'x'.repeat(300 * 1024) },
       outputVariables: [],
     });
     expect(source).to.include('Database.rollback(sfFlowSavepoint)');
-  });
-});
-
-describe('Flow debug Apex safety limits', (): void => {
-  it('rejects rollback input beyond the plugin Apex heap safety limit', (): void => {
-    expect(() =>
-      createBoundedFlowDebugApex({
-        correlationId,
-        apiName: 'Calculate_Discount',
-        namespace: null,
-        input: { value: 'x'.repeat(256 * 1024) },
-        outputVariables: [],
-      })
-    ).to.throw("exceeds the plugin's 256 KiB Apex heap safety limit");
   });
 });
 
