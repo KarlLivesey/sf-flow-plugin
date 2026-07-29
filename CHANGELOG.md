@@ -2,7 +2,7 @@
 
 All notable user-visible changes to this project will be documented in this file.
 
-## 1.5.0 - 2026-07-28
+## 1.5.0 - 2026-07-29
 
 ### Added
 
