@@ -10,6 +10,7 @@ import type { FlowDefinitionGateway } from '../types/flow.js';
 import type { FlowDescribeRequest, FlowDescribeResult } from '../types/flow-inspection.js';
 import type {
   FlowMetricsCommandResult,
+  FlowMetricEntry,
   FlowMetricsRequest,
   FlowMetricsResult,
   FlowRuntimeMetrics,
@@ -26,6 +27,12 @@ interface ResolvedRuntimeFlow {
   version: number;
 }
 
+interface ResolvedMetricsTraversal {
+  requestedVersion: FlowMetricsResult['requestedVersion'];
+  resolvedVersion: number;
+  targetOrg: string;
+}
+
 function describeRequest(request: FlowMetricsRequest): FlowDescribeRequest {
   return {
     ...request,
@@ -33,23 +40,60 @@ function describeRequest(request: FlowMetricsRequest): FlowDescribeRequest {
   };
 }
 
+function resolvedRuntimeFlow(described: FlowDescribeResult): ResolvedRuntimeFlow {
+  if (described.resolvedVersion === null) {
+    throw flowMetricsFailed(`Org-backed Flow "${described.apiName}" resolved without a version number.`);
+  }
+  return {
+    apiName: described.apiName,
+    namespace: described.namespace,
+    version: described.resolvedVersion,
+  };
+}
+
+function resolvedMetricsTraversal(described: FlowDescribeResult): ResolvedMetricsTraversal {
+  if (described.requestedVersion === null || described.resolvedVersion === null || described.targetOrg === null) {
+    throw flowMetricsFailed(`Org-backed Flow "${described.apiName}" resolved without its org or version identity.`);
+  }
+  return {
+    requestedVersion: described.requestedVersion,
+    resolvedVersion: described.resolvedVersion,
+    targetOrg: described.targetOrg,
+  };
+}
+
+function orgMetricEntry(entry: ReturnType<typeof analyseFlowMetrics>): FlowMetricEntry {
+  if (entry.version === null) {
+    throw flowMetricsFailed(`Org-backed Flow "${entry.apiName}" resolved without a version number.`);
+  }
+  return { ...entry, version: entry.version };
+}
+
+function orgVersionId(flow: FlowDescribeResult['flows'][number]): string {
+  if (flow.versionId === null) {
+    throw flowMetricsFailed(`Org-backed Flow "${flow.apiName}" resolved without a version ID.`);
+  }
+  return flow.versionId;
+}
+
 export async function calculateResolvedFlowMetrics(
   described: FlowDescribeResult,
   metadataGateway: FlowMetadataGateway,
   progress: FlowProgressReporter = noFlowProgress
 ): Promise<FlowMetricsResult> {
+  const resolved = resolvedMetricsTraversal(described);
   const flows = await Promise.all(
     described.flows.map(async (flow) => {
       progress('loading-metadata', `${flow.qualifiedName} v${flow.versionNumber} (metrics)`);
-      return analyseFlowMetrics(await metadataGateway.getVersionMetadata(flow.versionId), flow);
+      return orgMetricEntry(analyseFlowMetrics(await metadataGateway.getVersionMetadata(orgVersionId(flow)), flow));
     })
   );
   progress('analysing-results', `${described.apiName} (${flows.length} Flow versions)`);
   return {
     apiName: described.apiName,
     namespace: described.namespace,
-    requestedVersion: described.requestedVersion,
-    resolvedVersion: described.resolvedVersion,
+    requestedVersion: resolved.requestedVersion,
+    resolvedVersion: resolved.resolvedVersion,
     subflowVersion: described.subflowVersion,
     recursive: described.recursive,
     maxDepth: described.maxDepth,
@@ -57,7 +101,7 @@ export async function calculateResolvedFlowMetrics(
     referencedObjects: [...new Set(flows.flatMap((flow) => flow.referencedObjects))].sort(),
     flows,
     warnings: described.warnings,
-    targetOrg: described.targetOrg,
+    targetOrg: resolved.targetOrg,
   };
 }
 
@@ -79,15 +123,7 @@ export class FlowMetricsService {
         progress
       );
       const metrics = await calculateResolvedFlowMetrics(described, metadataGateway, progress);
-      const dataCloud = await this.loadDataCloudMetrics(
-        request,
-        {
-          apiName: described.apiName,
-          namespace: described.namespace,
-          version: described.resolvedVersion,
-        },
-        progress
-      );
+      const dataCloud = await this.loadDataCloudMetrics(request, resolvedRuntimeFlow(described), progress);
       return {
         ...metrics,
         dataCloud,

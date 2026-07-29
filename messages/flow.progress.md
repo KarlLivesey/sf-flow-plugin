@@ -6,6 +6,10 @@ Activating Flow
 
 Auditing Flows
 
+# actions.benchmark
+
+Benchmarking Flow
+
 # actions.bundle
 
 Bundling Flow source
@@ -82,6 +86,14 @@ Loading Flow versions
 
 Loading Flow metadata
 
+# stages.loading-source
+
+Loading local Flow source
+
+# stages.running-code-analyzer
+
+Running Salesforce Code Analyzer Flow Scanner
+
 # stages.checking-permissions
 
 Checking permissions
@@ -138,14 +150,6 @@ Checking target org safety
 
 Invoking Flow
 
-# stages.configuring-trace
+# stages.configuring-debug
 
-Configuring temporary trace
-
-# stages.retrieving-debug-log
-
-Retrieving correlated debug log
-
-# stages.restoring-trace
-
-Restoring trace configuration
+Configuring request-scoped debug logging

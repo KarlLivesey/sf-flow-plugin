@@ -185,9 +185,8 @@ function mermaidHeader(options: FlowGraphRenderOptions, theme: ResolvedFlowGraph
 function flowBlock(flow: RenderFlow, options: FlowGraphRenderOptions): MermaidFlowBlock {
   const connectors = mermaidConnectors(flow, options.labelWidth);
   const resources = mermaidResources(flow, options);
-  const label = mermaidText(
-    `${flow.description.qualifiedName} v${flow.description.versionNumber} · ${flow.description.status}`
-  );
+  const version = flow.description.versionNumber === null ? 'local source' : `v${flow.description.versionNumber}`;
+  const label = mermaidText(`${flow.description.qualifiedName} ${version} · ${flow.description.status}`);
   const elements = flow.elements.map((element) =>
     mermaidNode(flow.elementIds.get(element.name) ?? '', element, options.labelWidth)
   );

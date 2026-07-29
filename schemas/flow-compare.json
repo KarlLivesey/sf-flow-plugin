@@ -12,19 +12,33 @@
           "type": ["string", "null"]
         },
         "definitionId": {
-          "type": "string"
+          "type": ["string", "null"]
         },
         "fromDefinitionId": {
-          "type": "string"
+          "type": ["string", "null"]
         },
         "toDefinitionId": {
-          "type": "string"
+          "type": ["string", "null"]
         },
         "requestedFrom": {
-          "$ref": "#/definitions/FlowComparisonVersionSelector"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowComparisonVersionSelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "requestedTo": {
-          "$ref": "#/definitions/FlowComparisonVersionSelector"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowComparisonVersionSelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "scopes": {
           "type": "array",
@@ -42,10 +56,30 @@
           }
         },
         "fromVersion": {
-          "$ref": "#/definitions/FlowVersionNumber"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowVersionNumber"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "toVersion": {
-          "$ref": "#/definitions/FlowVersionNumber"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowVersionNumber"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fromSourceFile": {
+          "type": ["string", "null"]
+        },
+        "toSourceFile": {
+          "type": ["string", "null"]
         },
         "changes": {
           "type": "array",
@@ -66,13 +100,13 @@
           "type": "boolean"
         },
         "targetOrg": {
-          "type": "string"
+          "type": ["string", "null"]
         },
         "fromOrg": {
-          "type": "string"
+          "type": ["string", "null"]
         },
         "toOrg": {
-          "type": "string"
+          "type": ["string", "null"]
         },
         "crossOrg": {
           "type": "boolean"
@@ -91,6 +125,8 @@
         "ignorePaths",
         "fromVersion",
         "toVersion",
+        "fromSourceFile",
+        "toSourceFile",
         "changes",
         "added",
         "removed",

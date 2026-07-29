@@ -39,6 +39,8 @@ describe('flow check command', (): void => {
   it('passes repeatable names and selected checks to the service', async (): Promise<void> => {
     const flags = {
       'api-name': ['Flow_A', 'Flow_B'],
+      'source-file': undefined,
+      'source-dir': undefined,
       'target-org': createCommandOrg({} as Connection),
       'flow-version': 'latest' as const,
       only: ['lint', 'metrics'] as const,
@@ -52,6 +54,7 @@ describe('flow check command', (): void => {
       'output-file': undefined,
       namespace: undefined,
       'api-version': undefined,
+      'no-prompt': false,
     };
     $$.SANDBOX.stub(FlowCheck.prototype, 'parseFlags').resolves({
       ...flags,
@@ -78,6 +81,8 @@ describe('flow check command qualified output', (): void => {
   it('qualifies Flow names in the interactive findings table', async (): Promise<void> => {
     const flags = {
       'api-name': ['Flow_A'],
+      'source-file': undefined,
+      'source-dir': undefined,
       'target-org': createCommandOrg({} as Connection),
       'flow-version': 'latest' as const,
       only: undefined,
@@ -91,6 +96,7 @@ describe('flow check command qualified output', (): void => {
       'output-file': undefined,
       namespace: undefined,
       'api-version': undefined,
+      'no-prompt': false,
     };
     const finding = {
       apiName: 'Flow_A',

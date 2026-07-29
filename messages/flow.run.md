@@ -19,17 +19,15 @@ always withheld, while its stable status code is retained when available. Arbitr
 in terminal, JSON and output-file results.
 
 Add `--rollback` to run exactly one input object through Execute Anonymous Apex, roll back database changes in the
-current transaction and retrieve the related Salesforce ApexLog using an exact per-run correlation marker. Rollback
-mode temporarily configures tracing for the authenticated user and restores it after execution. It can prevent
-callouts from running and cannot reverse external effects or work committed by another transaction.
+current transaction and return its request-scoped debug log inline through the Apex SOAP API. It can prevent callouts
+from running and cannot reverse external effects or work committed by another transaction.
 
 Output destinations are validated before Salesforce execution. Structured and raw-log output must resolve to
-different files. A rollback result reports databaseChangesRolledBack as true only when the correlated log contains
+different files. A rollback result reports databaseChangesRolledBack as true only when the returned log contains
 the rollback marker; it is null when Salesforce terminates before that marker can be verified.
 
-Rollback preflight also validates that the generated request stays conservatively below Salesforce's 16 KB combined
-REST URI-and-header limit. Rollback input is Base64-encoded inside the generated Apex carried by that URI; Base64 is
-not redaction, so protect HTTP diagnostic output and infrastructure logs that could capture request URLs.
+Rollback input is Base64-encoded inside the generated Apex carried by the SOAP body; Base64 is not redaction, so
+protect HTTP diagnostic output and infrastructure logs. Salesforce applies the authoritative Apex and SOAP limits.
 
 # flags.api-name.summary
 
@@ -53,7 +51,7 @@ Write the structured invocation result to this JSON file.
 
 # flags.raw-log-file.summary
 
-Write the complete unredacted Salesforce ApexLog to a file. Requires --rollback; a dry run validates the destination but creates no file.
+Write the complete unredacted debug log returned by Apex SOAP to a file. Requires --rollback; a dry run validates the destination but creates no file.
 
 # flags.dry-run.summary
 
@@ -61,7 +59,7 @@ Validate eligibility, inputs, org safety and selected execution-mode access with
 
 # flags.rollback.summary
 
-Run one invocation, roll back its database changes and retrieve its correlated Salesforce debug log.
+Run one invocation, roll back its database changes and return its request-scoped Salesforce debug log.
 
 # flags.confirm.summary
 
@@ -69,7 +67,7 @@ Confirm execution in a production org after reviewing the Flow's potential side 
 
 # flags.log-level.summary
 
-Temporary Salesforce debug level for --rollback: basic, detailed or finest. Defaults to detailed.
+Request-scoped Salesforce debug level for --rollback: basic, detailed or finest. Defaults to detailed.
 
 # flags.show-values.summary
 
@@ -77,11 +75,15 @@ Show Flow values and full caught error messages in rollback trace output.
 
 # flags.wait.summary
 
-Minutes to wait for Salesforce to make the correlated ApexLog available. Defaults to 2; range 1 to 10.
+SOAP request timeout in positive whole minutes for rollback execution. Defaults to 2.
 
 # flags.fail-on-flow-error.summary
 
 Exit with status 1 when Salesforce reports an unsuccessful Flow invocation.
+
+# flags.if-active-version.summary
+
+Continue only when this Flow version is still active.
 
 # flags.namespace.summary
 
@@ -89,7 +91,7 @@ Namespace that identifies a packaged Flow.
 
 # flags.api-version.summary
 
-Salesforce API version to use for Tooling and REST API requests.
+Salesforce API version to use for Tooling, REST and Apex SOAP API requests.
 
 # examples
 
@@ -105,9 +107,9 @@ Salesforce API version to use for Tooling and REST API requests.
 
   <%= config.bin %> <%= command.id %> --api-name Calculate_Discount --input-file inputs.json --fail-on-flow-error --json
 
-- Run one invocation, roll back database changes and show its correlated Flow trace:
+- Run one invocation, require active version 7, roll back database changes and show its Flow trace:
 
-  <%= config.bin %> <%= command.id %> --api-name Calculate_Discount --input accountId=001000000000001 --rollback
+  <%= config.bin %> <%= command.id %> --api-name Calculate_Discount --input accountId=001000000000001 --rollback --if-active-version 7
 
 # warnings.side-effects
 
@@ -125,7 +127,7 @@ The raw Salesforce debug log is unredacted and can contain sensitive values.
 
 # warnings.rollback-unconfirmed
 
-The correlated log did not confirm database rollback. Treat the execution outcome as unknown and inspect ApexLog %s.
+The returned debug log did not confirm database rollback. Treat the execution outcome as unknown and inspect the raw log.
 
 # info.title
 
@@ -137,7 +139,7 @@ Dry run only: eligibility, declared inputs, production safety and REST action ac
 
 # info.rollback-dry-run
 
-Dry run only: rollback eligibility, inputs, production safety, tracing-object permissions and ApexLog access were checked. Apex execution permission and runtime success cannot be proven without executing Apex.
+Dry run only: rollback eligibility, inputs, production safety, SOAP authentication and output destinations were checked. Apex execution permission and runtime success cannot be proven without executing Apex.
 
 # info.request-duration
 
@@ -145,7 +147,7 @@ REST action request duration: %s ms
 
 # info.trace-title
 
-Correlated Flow trace from ApexLog %s
+Flow trace returned by Apex SOAP
 
 # info.rollback-duration
 
@@ -153,4 +155,4 @@ Rollback debug operation duration: %s ms
 
 # info.rollback-confirmed
 
-Database rollback confirmed by the correlated log.
+Database rollback confirmed by the returned debug log.

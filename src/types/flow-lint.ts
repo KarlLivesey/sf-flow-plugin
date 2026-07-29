@@ -18,6 +18,15 @@ export type FlowLintRule =
 
 export type FlowLintSeverity = 'error' | 'warning';
 
+export interface FlowLintLocation {
+  file: string;
+  startLine: number;
+  startColumn: number;
+  endLine: number | null;
+  endColumn: number | null;
+  primary: boolean;
+}
+
 export interface FlowLintRequest extends NamedFlowRequest {
   version: FlowComparisonVersionSelector;
   rules: FlowLintRule[];
@@ -26,19 +35,22 @@ export interface FlowLintRequest extends NamedFlowRequest {
 
 export interface FlowLintFinding {
   fingerprint: string;
-  rule: FlowLintRule;
+  rule: string;
   severity: FlowLintSeverity;
   message: string;
   element: string | null;
   path: string | null;
+  analyzerSeverity?: number;
+  tags?: string[];
+  locations?: FlowLintLocation[];
 }
 
 export interface FlowLintResult {
   apiName: string;
   namespace: string | null;
-  definitionId: string;
-  requestedVersion: FlowComparisonVersionSelector;
-  resolvedVersion: FlowVersionNumber;
+  definitionId: string | null;
+  requestedVersion: FlowComparisonVersionSelector | null;
+  resolvedVersion: FlowVersionNumber | null;
   status: string;
   findings: FlowLintFinding[];
   newFindings: FlowLintFinding[];
@@ -47,7 +59,20 @@ export interface FlowLintResult {
   warnings: number;
   newErrors: number;
   newWarnings: number;
-  targetOrg: string;
+  targetOrg: string | null;
+  sourceFile?: string;
+}
+
+export interface FlowLintDirectoryResult {
+  sourceDirectory: string;
+  flows: FlowLintResult[];
+  findings: FlowLintFinding[];
+  newFindings: FlowLintFinding[];
+  baselineFindings: FlowLintFinding[];
+  errors: number;
+  warnings: number;
+  newErrors: number;
+  newWarnings: number;
 }
 
 export type FlowLintFailSeverity = 'error' | 'warning';

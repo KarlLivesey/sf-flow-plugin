@@ -47,14 +47,16 @@ function renderValue(name: string, value: JsonValue, depth: number): string[] {
     : [`${indentation}<${name}>`, ...children, `${indentation}</${name}>`];
 }
 
-function sourceMetadata(metadata: JsonObject, status: FlowExportStatus): JsonObject {
+function sourceMetadata(metadata: JsonObject, status?: FlowExportStatus): JsonObject {
   const source = { ...metadata };
   delete source.fullName;
-  source.status = status === 'active' ? 'Active' : 'Draft';
+  if (status !== undefined) {
+    source.status = status === 'active' ? 'Active' : 'Draft';
+  }
   return source;
 }
 
-export function renderFlowMetadataXml(metadata: JsonObject, status: FlowExportStatus): string {
+function renderMetadata(metadata: JsonObject, status?: FlowExportStatus): string {
   const lines = Object.entries(sourceMetadata(metadata, status)).flatMap(([name, value]) =>
     renderValue(name, value, 1)
   );
@@ -65,4 +67,12 @@ export function renderFlowMetadataXml(metadata: JsonObject, status: FlowExportSt
     '</Flow>',
     '',
   ].join('\n');
+}
+
+export function renderFlowMetadataXml(metadata: JsonObject, status: FlowExportStatus): string {
+  return renderMetadata(metadata, status);
+}
+
+export function renderFlowMetadataXmlForComparison(metadata: JsonObject): string {
+  return renderMetadata(metadata);
 }

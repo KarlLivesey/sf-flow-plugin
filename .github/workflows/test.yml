@@ -17,6 +17,32 @@ jobs:
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect Markdown-only changes
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          markdown_only=false
+          if [[ "$EVENT_NAME" != "workflow_dispatch" && -n "$BASE_SHA" && ! "$BASE_SHA" =~ ^0+$ ]]; then
+            changed_count=0
+            markdown_only=true
+            while IFS= read -r -d '' changed_file; do
+              changed_count=$((changed_count + 1))
+              if [[ "$changed_file" != *.md ]]; then
+                markdown_only=false
+              fi
+            done < <(git diff --name-only -z "$BASE_SHA" "$HEAD_SHA")
+            if (( changed_count == 0 )); then
+              markdown_only=false
+            fi
+          fi
+          echo "markdown_only=$markdown_only" >> "$GITHUB_OUTPUT"
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
@@ -30,8 +56,26 @@ jobs:
       - name: Install exact dependencies
         run: yarn install --frozen-lockfile
 
+      - name: Validate Markdown-only changes
+        if: steps.changes.outputs.markdown_only == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          git diff --check "$BASE_SHA" "$HEAD_SHA"
+          markdown_files=()
+          while IFS= read -r -d '' markdown_file; do
+            markdown_files[${#markdown_files[@]}]="$markdown_file"
+          done < <(git diff --name-only --diff-filter=ACMRT -z "$BASE_SHA" "$HEAD_SHA" -- '*.md')
+          if (( ${#markdown_files[@]} > 0 )); then
+            yarn prettier --check "${markdown_files[@]}"
+          fi
+
       - name: Run the complete quality gate
+        if: steps.changes.outputs.markdown_only != 'true'
         run: yarn run check
 
       - name: Verify package preparation
+        if: steps.changes.outputs.markdown_only != 'true'
         run: npm pack --dry-run

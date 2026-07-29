@@ -32,6 +32,8 @@ const result: FlowLintResult = {
 
 function flags(): {
   'api-name': string;
+  'source-file': undefined;
+  'source-dir': undefined;
   'target-org': ReturnType<typeof createCommandOrg>;
   'flow-version': 'latest';
   'fail-on': undefined;
@@ -42,9 +44,12 @@ function flags(): {
   baseline: undefined;
   namespace: undefined;
   'api-version': undefined;
+  'no-prompt': false;
 } {
   return {
     'api-name': 'Root_Flow',
+    'source-file': undefined,
+    'source-dir': undefined,
     'target-org': createCommandOrg({} as Connection),
     'flow-version': 'latest',
     'fail-on': undefined,
@@ -55,13 +60,14 @@ function flags(): {
     baseline: undefined,
     namespace: undefined,
     'api-version': undefined,
+    'no-prompt': false,
   };
 }
 
 describe('flow lint command', (): void => {
   it('defaults to linting the latest Flow version', (): void => {
     expect(FlowLint.flags['flow-version'].default).to.equal('latest');
-    expect(FlowLint.flags['target-org'].required).to.equal(false);
+    expect(FlowLint.flags['target-org'].required).not.to.equal(true);
   });
 
   it('passes the requested Flow to the lint service', async (): Promise<void> => {

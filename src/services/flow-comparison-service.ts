@@ -9,6 +9,7 @@ import { flowComparisonScopeSchema } from '../schemas/flow.js';
 import type {
   FlowCompareRequest,
   FlowCompareResult,
+  FlowCompareSources,
   FlowComparisonChange,
   FlowComparisonVersionSelector,
   FlowMetadataGateway,
@@ -18,6 +19,7 @@ import type { FlowDefinition, FlowDefinitionGateway, FlowDefinitionLookup, FlowV
 import { compareFlowMetadata } from '../utils/flow-metadata-diff.js';
 import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
 import { qualifiedFlowName, selectFlowDefinition } from '../utils/flow-state.js';
+import { compareFlowSources } from './flow-source-comparison-service.js';
 
 interface VersionContext {
   definition: FlowDefinition;
@@ -32,7 +34,7 @@ interface ResolvedComparison {
   changes: FlowComparisonChange[];
 }
 
-interface ComparisonGateways {
+interface RequiredComparisonGateways {
   from: FlowDefinitionGateway & FlowMetadataGateway;
   to: FlowDefinitionGateway & FlowMetadataGateway;
 }
@@ -119,6 +121,8 @@ function createResult(request: FlowCompareRequest, comparison: ResolvedCompariso
     ignorePaths: request.ignorePaths,
     fromVersion: fromVersion.versionNumber,
     toVersion: toVersion.versionNumber,
+    fromSourceFile: null,
+    toSourceFile: null,
     changes,
     added: changeCount(changes, 'added'),
     removed: changeCount(changes, 'removed'),
@@ -129,6 +133,16 @@ function createResult(request: FlowCompareRequest, comparison: ResolvedCompariso
     toOrg: request.toOrg,
     crossOrg: request.fromOrg !== request.toOrg,
   };
+}
+
+function requiredGateway(
+  gateway: (FlowDefinitionGateway & FlowMetadataGateway) | undefined,
+  side: 'source' | 'target'
+): FlowDefinitionGateway & FlowMetadataGateway {
+  if (gateway === undefined) {
+    throw flowComparisonFailed(`The ${side} comparison side requires an authenticated Salesforce org.`);
+  }
+  return gateway;
 }
 
 function ignoredPath(path: string, ignored: ReadonlyArray<string>): boolean {
@@ -147,7 +161,7 @@ function shouldRethrow(error: unknown): boolean {
 }
 
 async function resolveComparison(
-  gateways: ComparisonGateways,
+  gateways: RequiredComparisonGateways,
   request: FlowCompareRequest,
   progress: FlowProgressReporter
 ): Promise<ResolvedComparison> {
@@ -179,7 +193,7 @@ async function resolveVersionContext(context: VersionContextRequest): Promise<Ve
 }
 
 async function resolveContexts(
-  gateways: ComparisonGateways,
+  gateways: RequiredComparisonGateways,
   request: FlowCompareRequest,
   progress: FlowProgressReporter
 ): Promise<{ from: VersionContext; to: VersionContext }> {
@@ -204,7 +218,7 @@ async function resolveContexts(
 }
 
 async function resolveSides(
-  gateways: ComparisonGateways,
+  gateways: RequiredComparisonGateways,
   request: FlowCompareRequest,
   progress: FlowProgressReporter
 ): Promise<ResolvedSides> {
@@ -219,7 +233,7 @@ async function resolveSides(
 }
 
 async function loadMetadata(
-  gateways: ComparisonGateways,
+  gateways: RequiredComparisonGateways,
   sides: ResolvedSides,
   progress: FlowProgressReporter
 ): Promise<{ fromMetadata: JsonObject; toMetadata: JsonObject }> {
@@ -231,10 +245,10 @@ async function loadMetadata(
 }
 
 export class FlowComparisonService {
-  private readonly toGateway: FlowDefinitionGateway & FlowMetadataGateway;
+  private readonly toGateway: (FlowDefinitionGateway & FlowMetadataGateway) | undefined;
 
   public constructor(
-    private readonly fromGateway: FlowDefinitionGateway & FlowMetadataGateway,
+    private readonly fromGateway?: FlowDefinitionGateway & FlowMetadataGateway,
     toGateway?: FlowDefinitionGateway & FlowMetadataGateway
   ) {
     this.toGateway = toGateway ?? fromGateway;
@@ -242,7 +256,8 @@ export class FlowComparisonService {
 
   public async compare(
     request: FlowCompareRequest,
-    progress: FlowProgressReporter = noFlowProgress
+    progress: FlowProgressReporter = noFlowProgress,
+    sources: FlowCompareSources = {}
   ): Promise<FlowCompareResult> {
     if (
       !request.scopes.every((scope) => flowComparisonScopeSchema.safeParse(scope).success) ||
@@ -251,7 +266,22 @@ export class FlowComparisonService {
       throw flowComparisonFailed('The Flow comparison scope is invalid.');
     }
     try {
-      const comparison = await resolveComparison({ from: this.fromGateway, to: this.toGateway }, request, progress);
+      if (sources.from !== undefined || sources.to !== undefined) {
+        return await compareFlowSources({
+          gateways: { from: this.fromGateway, to: this.toGateway },
+          request,
+          sources,
+          progress,
+        });
+      }
+      const comparison = await resolveComparison(
+        {
+          from: requiredGateway(this.fromGateway, 'source'),
+          to: requiredGateway(this.toGateway, 'target'),
+        },
+        request,
+        progress
+      );
       return createResult(request, comparison);
     } catch (error: unknown) {
       if (shouldRethrow(error)) {

@@ -14,7 +14,7 @@ export interface FlowDebugExecutionRequest {
   input: JsonObject;
   outputVariables: string[];
   logLevel: FlowDebugLogLevel;
-  waitMilliseconds: number;
+  waitMilliseconds?: number;
 }
 
 export interface FlowDebugApexResult {
@@ -22,10 +22,13 @@ export interface FlowDebugApexResult {
   success: boolean;
   line: number;
   column: number;
+  compileProblem: string | null;
+  exceptionMessage: string | null;
+  exceptionStackTrace: string | null;
 }
 
 export interface FlowDebugLogRecord {
-  id: string;
+  id: string | null;
   status: string;
   operation: string;
   startTime: string;
@@ -40,7 +43,7 @@ export interface FlowDebugTransportResult {
   rawLog: string;
 }
 
-export type FlowDebugTransportStage = 'configuring-trace' | 'executing-apex' | 'retrieving-log' | 'restoring-trace';
+export type FlowDebugTransportStage = 'configuring-debug' | 'executing-apex';
 
 export type FlowDebugTransportProgress = (stage: FlowDebugTransportStage, detail: string) => void;
 

@@ -6,75 +6,10 @@
  */
 import { z } from 'zod';
 
-import type { FlowDebugApexResult, FlowDebugLogLevel } from '../types/flow-debug.js';
-
-const salesforceIdSchema = z.string().regex(/^[a-zA-Z0-9]{15,18}$/u);
-
-export const identitySchema = z.object({ id: z.url() }).transform((identity) => {
-  const userId = new URL(identity.id).pathname.split('/').filter(Boolean).at(-1);
-  return { userId: salesforceIdSchema.parse(userId) };
-});
+import type { FlowDebugLogLevel } from '../types/flow-debug.js';
 
 export const organisationResultSchema = z.object({
   records: z.array(z.object({ IsSandbox: z.boolean() })).min(1),
-});
-
-export const debugObjectPermissionSchema = z.object({
-  createable: z.boolean(),
-  deletable: z.boolean(),
-  updateable: z.boolean(),
-});
-
-export const debugLogPermissionSchema = z.object({
-  queryable: z.boolean(),
-  retrieveable: z.boolean(),
-});
-
-export const saveResultSchema = z.discriminatedUnion('success', [
-  z.object({ success: z.literal(true), id: z.string().min(1), errors: z.array(z.never()) }),
-  z.object({
-    success: z.literal(false),
-    errors: z.array(z.object({ errorCode: z.string(), message: z.string() })),
-  }),
-]);
-
-export const deleteResultSchema = z.discriminatedUnion('success', [
-  z.object({ success: z.literal(true), id: z.string().optional(), errors: z.array(z.never()) }),
-  z.object({
-    success: z.literal(false),
-    errors: z.array(z.object({ errorCode: z.string(), message: z.string() })),
-  }),
-]);
-
-export const traceFlagQuerySchema = z.object({
-  records: z.array(
-    z.object({
-      Id: z.string(),
-      DebugLevelId: z.string(),
-      StartDate: z.string(),
-      ExpirationDate: z.string(),
-    })
-  ),
-});
-
-export const apexLogQuerySchema = z.object({
-  records: z.array(
-    z.object({
-      Id: z.string(),
-      Status: z.string(),
-      Operation: z.string(),
-      StartTime: z.string(),
-      DurationMilliseconds: z.number(),
-      LogLength: z.number(),
-    })
-  ),
-});
-
-export const apexExecutionSchema: z.ZodType<FlowDebugApexResult> = z.object({
-  compiled: z.boolean(),
-  success: z.boolean(),
-  line: z.number().int(),
-  column: z.number().int(),
 });
 
 export const LOG_LEVELS: Readonly<Record<FlowDebugLogLevel, Readonly<Record<string, string>>>> = {
@@ -138,7 +73,10 @@ export function transportCodes(error: unknown): string[] {
 }
 
 export function isPermissionFailure(error: unknown): boolean {
-  return transportCodes(error).some((code) => code === '401' || code === '403' || permissionCodes.has(code));
+  if (transportCodes(error).some((code) => code === '401' || code === '403' || permissionCodes.has(code))) {
+    return true;
+  }
+  return error instanceof Error && [...permissionCodes].some((code) => error.message.includes(code));
 }
 
 export function isPermissionCode(code: string | undefined): boolean {

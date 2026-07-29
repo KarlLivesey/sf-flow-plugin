@@ -48,6 +48,7 @@ describe('flow describe command execution', (): void => {
   it('passes recursive traversal options to the service', async (): Promise<void> => {
     const flags = {
       'api-name': 'Order_Processing',
+      'source-file': undefined,
       'target-org': createCommandOrg({} as Connection),
       'flow-version': 'active' as const,
       'subflow-version': 'latest' as const,

@@ -15,6 +15,7 @@ interface DiffContext {
 export interface FlowMetadataDiffOptions {
   scopes?: ReadonlyArray<FlowComparisonScope>;
   ignoreOrder?: boolean;
+  includeStatus?: boolean;
 }
 
 const ELEMENT_COLLECTIONS = new Set([
@@ -166,9 +167,11 @@ function diffValues(before: JsonValue | undefined, after: JsonValue | undefined,
   }
 }
 
-function normaliseMetadata(metadata: JsonObject): JsonObject {
+function normaliseMetadata(metadata: JsonObject, includeStatus: boolean): JsonObject {
   const normalised = { ...metadata };
-  delete normalised.status;
+  if (!includeStatus) {
+    delete normalised.status;
+  }
   return normalised;
 }
 
@@ -196,7 +199,8 @@ export function compareFlowMetadata(
   options: FlowMetadataDiffOptions = {}
 ): FlowComparisonChange[] {
   const changes: FlowComparisonChange[] = [];
-  diffObjects(normaliseMetadata(before), normaliseMetadata(after), {
+  const includeStatus = options.includeStatus ?? false;
+  diffObjects(normaliseMetadata(before, includeStatus), normaliseMetadata(after, includeStatus), {
     path: '$',
     changes,
     ignoreOrder: options.ignoreOrder ?? false,

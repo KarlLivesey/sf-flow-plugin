@@ -104,7 +104,7 @@ export interface FlowDefinitionMetadataUpdate {
 
 export interface FlowDefinitionLookup {
   apiName: string;
-  namespace?: string;
+  namespace?: string | null;
 }
 
 export interface FlowDefinitionGateway {

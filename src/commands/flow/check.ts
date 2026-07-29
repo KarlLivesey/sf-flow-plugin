@@ -10,6 +10,10 @@ import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
 import { flowCheckFailed } from '../../errors/flow-errors.js';
 import { FlowCheckService } from '../../services/flow-check-service.js';
+import { checkFlowSource } from '../../services/flow-source-analysis-service.js';
+import { checkSourceDirectory } from '../../services/flow-source-directory-runner.js';
+import { loadFlowSource, verifyFlowSourceSnapshot } from '../../services/flow-source-service.js';
+import type { SalesforceCodeAnalyzerFlowService } from '../../services/salesforce-code-analyzer-flow-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type { FlowComparisonVersionSelector } from '../../types/flow-analysis.js';
 import type {
@@ -24,15 +28,20 @@ import { FLOW_CHECK_KINDS, formatFlowCheckHuman, formatFlowCheckSarif } from '..
 import { createFlowCommandContext } from '../../utils/flow-command.js';
 import { validateFlowApiName, validateNamespace } from '../../utils/flow-name-validation.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
+import type { FlowProgressReporter } from '../../utils/flow-progress.js';
 import { writeFlowReportFile } from '../../utils/flow-report-file.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
+import { validateFlowSourceFlags } from '../../utils/flow-source-command.js';
+import { prepareSourceCheck } from '../../utils/flow-source-check-command.js';
 import { parseInspectionVersionSelector } from './describe.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('sf-flow-plugin', 'flow.check');
 
 export interface CheckFlagValues {
-  'api-name': string[];
+  'api-name': string[] | undefined;
+  'source-file': string | undefined;
+  'source-dir': string | undefined;
   'target-org': Org | undefined;
   'flow-version': FlowComparisonVersionSelector;
   only: FlowCheckKind[] | undefined;
@@ -46,9 +55,13 @@ export interface CheckFlagValues {
   'output-file': string | undefined;
   namespace: string | undefined;
   'api-version': string | undefined;
+  'no-prompt': boolean;
 }
 
 function createRequest(flags: CheckFlagValues, context: ReturnType<typeof createFlowCommandContext>): FlowCheckRequest {
+  if (flags['api-name'] === undefined) {
+    throw new Error('At least one API name is required for org-backed Flow checks.');
+  }
   flags['api-name'].forEach(validateFlowApiName);
   if (flags.namespace !== undefined) {
     validateNamespace(flags.namespace);
@@ -72,6 +85,41 @@ function shouldFail(result: FlowCheckResult, severity: FlowCheckSeverity): boole
   return severity === 'warning' ? result.errors + result.warnings > 0 : result.errors > 0;
 }
 
+async function checkOrg(
+  flags: CheckFlagValues,
+  progress: Parameters<FlowCheckService['check']>[1]
+): Promise<FlowCheckResult> {
+  const context = createFlowCommandContext(flags);
+  return new FlowCheckService(new ToolingFlowDefinitionGateway(context.connection)).check(
+    createRequest(flags, context),
+    progress
+  );
+}
+
+interface CheckSourceContext {
+  flags: CheckFlagValues;
+  checks: FlowCheckKind[];
+  analyzer: SalesforceCodeAnalyzerFlowService;
+  progress: FlowProgressReporter;
+}
+
+async function checkSource(context: CheckSourceContext): Promise<FlowCheckResult> {
+  const { flags, checks, analyzer, progress } = context;
+  if (flags['source-file'] === undefined) {
+    throw new Error('A source file is required for local Flow checks.');
+  }
+  progress('loading-source', flags['source-file']);
+  const source = await loadFlowSource(flags['source-file']);
+  const lintFindings = checks.includes('lint')
+    ? (progress('running-code-analyzer', source.sourceFile),
+      await analyzer.analyse({ sourceFile: source.sourceFile, rules: [], excludedRules: [] }))
+    : [];
+  if (checks.includes('lint')) {
+    await verifyFlowSourceSnapshot(source.snapshot);
+  }
+  return checkFlowSource(source, { checks, excluded: flags.exclude ?? [], lintFindings }, progress);
+}
+
 export default class FlowCheck extends SfCommand<FlowCheckResult> {
   public static override readonly summary = messages.getMessage('summary');
   public static override readonly description = messages.getMessage('description');
@@ -80,13 +128,22 @@ export default class FlowCheck extends SfCommand<FlowCheckResult> {
   public static override readonly flags = {
     'api-name': Flags.string({
       char: 'n',
+      exactlyOne: ['api-name', 'source-file', 'source-dir'],
       multiple: true,
-      required: true,
       summary: messages.getMessage('flags.api-name.summary'),
     }),
-    'target-org': Flags.requiredOrg({
+    'source-file': Flags.file({
+      exactlyOne: ['api-name', 'source-file', 'source-dir'],
+      exists: true,
+      summary: messages.getMessage('flags.source-file.summary'),
+    }),
+    'source-dir': Flags.directory({
+      exactlyOne: ['api-name', 'source-file', 'source-dir'],
+      exists: true,
+      summary: messages.getMessage('flags.source-dir.summary'),
+    }),
+    'target-org': Flags.optionalOrg({
       char: 'o',
-      required: false,
       summary: messages.getMessage('flags.target-org.summary'),
     }),
     'flow-version': Flags.custom<FlowComparisonVersionSelector>({
@@ -143,16 +200,37 @@ export default class FlowCheck extends SfCommand<FlowCheckResult> {
     'api-version': Flags.orgApiVersion({
       summary: messages.getMessage('flags.api-version.summary'),
     }),
+    'no-prompt': Flags.boolean({
+      default: false,
+      summary: messages.getMessage('flags.no-prompt.summary'),
+    }),
   };
 
   public async run(): Promise<FlowCheckResult> {
     const flags = await this.parseFlags();
-    const context = createFlowCommandContext(flags);
+    const source = await prepareSourceCheck(this, {
+      sourceFile: flags['source-file'],
+      sourceDirectory: flags['source-dir'],
+      only: flags.only ?? [],
+      exclude: flags.exclude ?? [],
+      noPrompt: flags['no-prompt'],
+    });
     const result = await withFlowProgress(this.spinner, 'check', async (progress) =>
-      new FlowCheckService(new ToolingFlowDefinitionGateway(context.connection)).check(
-        createRequest(flags, context),
-        progress
-      )
+      flags['source-dir'] !== undefined
+        ? checkSourceDirectory({
+            sourceDirectory: flags['source-dir'],
+            checks: source.checks ?? [],
+            excludedChecks: flags.exclude ?? [],
+            recursive: flags.recursive,
+            maxDepth: flags['max-depth'],
+            rules: [],
+            excludedRules: [],
+            analyzer: source.analyzer,
+            progress,
+          })
+        : flags['source-file'] === undefined
+        ? checkOrg(flags, progress)
+        : checkSource({ flags, checks: source.checks ?? [], analyzer: source.analyzer, progress })
     );
     await this.writeOutput(result, flags);
     if (shouldFail(result, flags['fail-on'])) {
@@ -163,6 +241,21 @@ export default class FlowCheck extends SfCommand<FlowCheckResult> {
 
   public async parseFlags(): Promise<CheckFlagValues> {
     const { flags } = await this.parse(FlowCheck);
+    validateFlowSourceFlags(this.argv, [
+      'target-org',
+      'flow-version',
+      'subflow-version',
+      'recursive',
+      'max-depth',
+      'allow-truncated',
+      'namespace',
+      'api-version',
+    ]);
+    validateFlowSourceFlags(
+      this.argv,
+      ['target-org', 'flow-version', 'subflow-version', 'allow-truncated', 'namespace', 'api-version'],
+      'source-dir'
+    );
     return flags;
   }
 

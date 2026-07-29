@@ -77,6 +77,17 @@ describe('Flow input flag parsing', (): void => {
   it('reports invalid JSON input files safely', async (): Promise<void> => {
     await expectErrorName(readFlowInputs('/file/that/does/not/exist.json', []), 'FlowInputInvalid');
   });
+
+  it('rejects malformed UTF-8 instead of replacing bytes inside valid JSON', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'sf-flow-input-utf8-'));
+    const inputFile = join(directory, 'inputs.json');
+    try {
+      await writeFile(inputFile, Buffer.from([0x7b, 0x22, 0x76, 0x22, 0x3a, 0x22, 0xc3, 0x28, 0x22, 0x7d]));
+      await expectErrorName(readFlowInputs(inputFile, []), 'FlowInputInvalid');
+    } finally {
+      await rm(directory, { recursive: true });
+    }
+  });
 });
 
 describe('Flow input schema validation', (): void => {

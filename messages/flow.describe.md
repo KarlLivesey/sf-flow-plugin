@@ -4,11 +4,17 @@ Describe the structure and dependencies of a Salesforce Flow version.
 
 # description
 
-Summarise Flow elements, variables, formulas, Apex actions, subflows and referenced objects. Recursive traversal follows selected subflow versions with visited-definition and depth protection.
+Summarise Flow elements, variables, formulas, Apex actions, subflows and referenced objects. Recursive org traversal
+follows selected subflow versions with visited-definition and depth protection. Use `--source-file` for one local Flow
+without an org; recursive traversal is unavailable when only one source file is supplied.
 
 # flags.api-name.summary
 
 API name of the Flow definition.
+
+# flags.source-file.summary
+
+Local .flow-meta.xml file to describe without authenticating to an org.
 
 # flags.target-org.summary
 
@@ -55,6 +61,10 @@ Salesforce API version to use for the Tooling API requests.
 - Show only inputs, outputs and referenced components:
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --only inputs --only outputs --only references
+
+- Describe a local Flow source file without an org:
+
+  <%= config.bin %> <%= command.id %> --source-file force-app/main/default/flows/Order_Processing.flow-meta.xml
 
 # info.title
 

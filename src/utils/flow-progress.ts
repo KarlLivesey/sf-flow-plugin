@@ -13,6 +13,7 @@ const messages = Messages.loadMessages('sf-flow-plugin', 'flow.progress');
 export type FlowProgressAction =
   | 'activate'
   | 'audit'
+  | 'benchmark'
   | 'bundle'
   | 'compare'
   | 'check'
@@ -34,6 +35,8 @@ export type FlowProgressStage =
   | 'loading-flows'
   | 'loading-versions'
   | 'loading-metadata'
+  | 'loading-source'
+  | 'running-code-analyzer'
   | 'checking-permissions'
   | 'checking-current-state'
   | 'applying-change'
@@ -48,9 +51,7 @@ export type FlowProgressStage =
   | 'validating-inputs'
   | 'checking-org'
   | 'invoking-flow'
-  | 'configuring-trace'
-  | 'retrieving-debug-log'
-  | 'restoring-trace';
+  | 'configuring-debug';
 
 export type FlowProgressReporter = (stage: FlowProgressStage, detail?: string) => void;
 
@@ -59,6 +60,7 @@ export const noFlowProgress: FlowProgressReporter = () => undefined;
 const actionMessages: Record<FlowProgressAction, string> = {
   activate: messages.getMessage('actions.activate'),
   audit: messages.getMessage('actions.audit'),
+  benchmark: messages.getMessage('actions.benchmark'),
   bundle: messages.getMessage('actions.bundle'),
   compare: messages.getMessage('actions.compare'),
   check: messages.getMessage('actions.check'),
@@ -87,6 +89,8 @@ const stageMessages: Record<FlowProgressStage, string> = {
   'loading-data-cloud-metrics': messages.getMessage('stages.loading-data-cloud-metrics'),
   'loading-flows': messages.getMessage('stages.loading-flows'),
   'loading-metadata': messages.getMessage('stages.loading-metadata'),
+  'loading-source': messages.getMessage('stages.loading-source'),
+  'running-code-analyzer': messages.getMessage('stages.running-code-analyzer'),
   'loading-versions': messages.getMessage('stages.loading-versions'),
   'rendering-graph': messages.getMessage('stages.rendering-graph'),
   'resolving-flow': messages.getMessage('stages.resolving-flow'),
@@ -95,9 +99,7 @@ const stageMessages: Record<FlowProgressStage, string> = {
   'validating-inputs': messages.getMessage('stages.validating-inputs'),
   'checking-org': messages.getMessage('stages.checking-org'),
   'invoking-flow': messages.getMessage('stages.invoking-flow'),
-  'configuring-trace': messages.getMessage('stages.configuring-trace'),
-  'retrieving-debug-log': messages.getMessage('stages.retrieving-debug-log'),
-  'restoring-trace': messages.getMessage('stages.restoring-trace'),
+  'configuring-debug': messages.getMessage('stages.configuring-debug'),
 };
 
 interface FlowProgressWork<Result> {

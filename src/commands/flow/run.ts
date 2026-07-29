@@ -9,21 +9,28 @@ import type { Org } from '@salesforce/core';
 import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
 import { flowInputInvalid } from '../../errors/flow-errors.js';
+import { ApexSoapFlowDebugGateway } from '../../services/apex-soap-flow-debug-gateway.js';
 import { FlowDebugService } from '../../services/flow-debug-service.js';
 import { FlowRunService } from '../../services/flow-run-service.js';
 import { RestFlowInvocationGateway } from '../../services/rest-flow-invocation-gateway.js';
-import { ToolingFlowDebugGateway } from '../../services/tooling-flow-debug-gateway.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type { FlowDebugLogLevel } from '../../types/flow-debug.js';
 import type { FlowRollbackRequest, FlowRunRequest, FlowRunResult } from '../../types/flow-invocation.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
 import { readFlowInputs } from '../../utils/flow-input-file.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
-import { persistFlowRunFiles, prepareFlowRunFiles } from '../../utils/flow-run-files.js';
+import { persistFailedFlowDebugLog, persistFlowRunFiles, prepareFlowRunFiles } from '../../utils/flow-run-files.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('sf-flow-plugin', 'flow.run');
+
+function positiveVersion(input: string): number {
+  if (!/^[1-9]\d*$/u.test(input) || !Number.isSafeInteger(Number(input))) {
+    throw flowInputInvalid(`Expected active Flow version "${input}" is not a positive safe integer.`);
+  }
+  return Number(input);
+}
 
 export interface RunFlagValues {
   'api-name': string;
@@ -39,6 +46,7 @@ export interface RunFlagValues {
   'show-values': boolean | undefined;
   wait: number | undefined;
   'fail-on-flow-error': boolean;
+  'if-active-version': number | undefined;
   namespace: string | undefined;
   'api-version': string | undefined;
 }
@@ -52,6 +60,7 @@ async function createRunRequest(
     invocations: await readFlowInputs(flags['input-file'], flags.input),
     dryRun: flags['dry-run'],
     confirm: flags.confirm,
+    ...(flags['if-active-version'] === undefined ? {} : { expectedActiveVersion: flags['if-active-version'] }),
   };
 }
 
@@ -65,8 +74,11 @@ async function createRollbackRequest(
   if (inputs.length !== 1 || input === undefined) {
     throw flowInputInvalid(`Flow rollback accepts exactly one input object; received ${inputs.length}.`);
   }
-  if (waitMinutes < 1 || waitMinutes > 10) {
-    throw flowInputInvalid(`Flow rollback log wait must be between 1 and 10 minutes; received ${waitMinutes}.`);
+  const waitMilliseconds = waitMinutes * 60_000;
+  if (!Number.isSafeInteger(waitMinutes) || waitMinutes < 1 || !Number.isSafeInteger(waitMilliseconds)) {
+    throw flowInputInvalid(
+      `Flow rollback log wait must be a positive whole-minute value with a safely representable millisecond value; received ${waitMinutes}.`
+    );
   }
   return {
     ...createNamedFlowRequest(flags, context),
@@ -75,8 +87,113 @@ async function createRollbackRequest(
     confirm: flags.confirm,
     logLevel: flags['log-level'] ?? 'detailed',
     showValues: flags['show-values'] ?? false,
-    waitMilliseconds: waitMinutes * 60_000,
+    waitMilliseconds,
+    ...(flags['if-active-version'] === undefined ? {} : { expectedActiveVersion: flags['if-active-version'] }),
   };
+}
+
+type FlowRunCommand = SfCommand<FlowRunResult>;
+
+function warnSideEffects(command: FlowRunCommand, flags: RunFlagValues): void {
+  if (command.jsonEnabled()) {
+    return;
+  }
+  if (flags.rollback && !flags['dry-run']) {
+    command.warn(messages.getMessage('warnings.rollback'));
+    if (flags['raw-log-file'] !== undefined) {
+      command.warn(messages.getMessage('warnings.raw-log'));
+    }
+  } else if (!flags['dry-run']) {
+    command.warn(messages.getMessage('warnings.side-effects'));
+  }
+}
+
+function writeRollbackStatus(command: FlowRunCommand, result: FlowRunResult): void {
+  if (command.jsonEnabled() || result.debug?.debugLog === null || result.debug?.debugLog === undefined) {
+    return;
+  }
+  if (result.debug.databaseChangesRolledBack === true) {
+    command.log(messages.getMessage('info.rollback-confirmed'));
+  } else {
+    command.warn(messages.getMessage('warnings.rollback-unconfirmed'));
+  }
+}
+
+function writeHumanOutput(command: FlowRunCommand, result: FlowRunResult): void {
+  command.table({
+    title: messages.getMessage('info.title', [qualifiedFlowName(result.apiName, result.namespace), result.version]),
+    data: result.invocations.map((invocation, index) => ({
+      invocation: index + 1,
+      interviewId: invocation.interviewId ?? '',
+      outcome: invocation.success === null ? 'Not executed' : invocation.success ? 'Succeeded' : 'Failed',
+      executed: invocation.executed,
+      outputs: JSON.stringify(invocation.outputs),
+      errors: invocation.errors.map((error) => error.message).join('; '),
+    })),
+    columns: [
+      { key: 'invocation', name: 'Invocation' },
+      { key: 'interviewId', name: 'Interview ID' },
+      { key: 'outcome', name: 'Outcome' },
+      { key: 'executed', name: 'Executed' },
+      { key: 'outputs', name: 'Outputs' },
+      { key: 'errors', name: 'Errors' },
+    ],
+  });
+  if (result.dryRun && !command.jsonEnabled()) {
+    command.log(messages.getMessage(result.debug === undefined ? 'info.dry-run' : 'info.rollback-dry-run'));
+  } else if (result.debug?.debugLog !== undefined && result.debug.debugLog !== null) {
+    command.table({
+      title: messages.getMessage('info.trace-title'),
+      data: result.debug.events.map((event) => ({ ...event })),
+      columns: [
+        { key: 'sequence', name: '#' },
+        { key: 'timestamp', name: 'Timestamp' },
+        { key: 'event', name: 'Event' },
+        { key: 'elementType', name: 'Element Type' },
+        { key: 'elementName', name: 'Element' },
+        { key: 'detail', name: 'Detail' },
+      ],
+    });
+    writeRollbackStatus(command, result);
+    command.log(messages.getMessage('info.rollback-duration', [result.durationMilliseconds]));
+  } else if (!command.jsonEnabled()) {
+    command.log(messages.getMessage('info.request-duration', [result.durationMilliseconds]));
+  }
+}
+
+export async function executeFlowRunCommand(
+  command: FlowRunCommand,
+  flags: RunFlagValues,
+  context: ReturnType<typeof createFlowCommandContext>
+): Promise<FlowRunResult> {
+  const definitionGateway = new ToolingFlowDefinitionGateway(context.connection);
+  const destinations = await prepareFlowRunFiles(flags['output-file'], flags['raw-log-file']);
+  warnSideEffects(command, flags);
+  const artifact = flags.rollback
+    ? await withFlowProgress(command.spinner, 'run', async (progress) =>
+        new FlowDebugService({
+          definition: definitionGateway,
+          debug: new ApexSoapFlowDebugGateway(context.connection),
+        }).debug(await createRollbackRequest(flags, context), progress, async (rawLog) =>
+          persistFailedFlowDebugLog(destinations, rawLog)
+        )
+      )
+    : {
+        result: await withFlowProgress(command.spinner, 'run', async (progress) =>
+          new FlowRunService({
+            definition: definitionGateway,
+            invocation: new RestFlowInvocationGateway(context.connection),
+          }).run(await createRunRequest(flags, context), progress)
+        ),
+        rawLog: '',
+      };
+  await persistFlowRunFiles(destinations, artifact);
+  const { result } = artifact;
+  writeHumanOutput(command, result);
+  if (flags['fail-on-flow-error'] && result.successful === false) {
+    process.exitCode = 1;
+  }
+  return result;
 }
 
 export default class FlowRun extends SfCommand<FlowRunResult> {
@@ -142,6 +259,10 @@ export default class FlowRun extends SfCommand<FlowRunResult> {
       default: false,
       summary: messages.getMessage('flags.fail-on-flow-error.summary'),
     }),
+    'if-active-version': Flags.custom<number>({
+      parse: (input: string): Promise<number> => Promise.resolve(positiveVersion(input)),
+      summary: messages.getMessage('flags.if-active-version.summary'),
+    })(),
     namespace: Flags.string({
       summary: messages.getMessage('flags.namespace.summary'),
     }),
@@ -154,110 +275,11 @@ export default class FlowRun extends SfCommand<FlowRunResult> {
     const flags = await this.parseFlags();
     validateNamedFlowFlags(flags);
     const context = createFlowCommandContext(flags);
-    return this.execute(flags, context);
+    return executeFlowRunCommand(this, flags, context);
   }
 
   public async parseFlags(): Promise<RunFlagValues> {
     const { flags } = await this.parse(FlowRun);
     return flags;
-  }
-
-  private async execute(
-    flags: RunFlagValues,
-    context: ReturnType<typeof createFlowCommandContext>
-  ): Promise<FlowRunResult> {
-    const definitionGateway = new ToolingFlowDefinitionGateway(context.connection);
-    const destinations = await prepareFlowRunFiles(flags['output-file'], flags['raw-log-file']);
-    this.warnSideEffects(flags);
-    const artifact = flags.rollback
-      ? await withFlowProgress(this.spinner, 'run', async (progress) =>
-          new FlowDebugService({
-            definition: definitionGateway,
-            debug: new ToolingFlowDebugGateway(context.connection),
-          }).debug(await createRollbackRequest(flags, context), progress)
-        )
-      : {
-          result: await withFlowProgress(this.spinner, 'run', async (progress) =>
-            new FlowRunService({
-              definition: definitionGateway,
-              invocation: new RestFlowInvocationGateway(context.connection),
-            }).run(await createRunRequest(flags, context), progress)
-          ),
-          rawLog: '',
-        };
-    await persistFlowRunFiles(destinations, artifact);
-    const { result } = artifact;
-    this.writeHumanOutput(result);
-    if (flags['fail-on-flow-error'] && result.successful === false) {
-      process.exitCode = 1;
-    }
-    return result;
-  }
-
-  private warnSideEffects(flags: RunFlagValues): void {
-    if (this.jsonEnabled()) {
-      return;
-    }
-    if (flags.rollback && !flags['dry-run']) {
-      this.warn(messages.getMessage('warnings.rollback'));
-      if (flags['raw-log-file'] !== undefined) {
-        this.warn(messages.getMessage('warnings.raw-log'));
-      }
-    } else if (!flags['dry-run']) {
-      this.warn(messages.getMessage('warnings.side-effects'));
-    }
-  }
-
-  private writeHumanOutput(result: FlowRunResult): void {
-    this.table({
-      title: messages.getMessage('info.title', [qualifiedFlowName(result.apiName, result.namespace), result.version]),
-      data: result.invocations.map((invocation, index) => ({
-        invocation: index + 1,
-        interviewId: invocation.interviewId ?? '',
-        outcome: invocation.success === null ? 'Not executed' : invocation.success ? 'Succeeded' : 'Failed',
-        executed: invocation.executed,
-        outputs: JSON.stringify(invocation.outputs),
-        errors: invocation.errors.map((error) => error.message).join('; '),
-      })),
-      columns: [
-        { key: 'invocation', name: 'Invocation' },
-        { key: 'interviewId', name: 'Interview ID' },
-        { key: 'outcome', name: 'Outcome' },
-        { key: 'executed', name: 'Executed' },
-        { key: 'outputs', name: 'Outputs' },
-        { key: 'errors', name: 'Errors' },
-      ],
-    });
-    if (result.dryRun && !this.jsonEnabled()) {
-      this.log(messages.getMessage(result.debug === undefined ? 'info.dry-run' : 'info.rollback-dry-run'));
-    } else if (result.debug?.debugLog !== undefined && result.debug.debugLog !== null) {
-      this.table({
-        title: messages.getMessage('info.trace-title', [result.debug.debugLog.id]),
-        data: result.debug.events.map((event) => ({ ...event })),
-        columns: [
-          { key: 'sequence', name: '#' },
-          { key: 'timestamp', name: 'Timestamp' },
-          { key: 'event', name: 'Event' },
-          { key: 'elementType', name: 'Element Type' },
-          { key: 'elementName', name: 'Element' },
-          { key: 'detail', name: 'Detail' },
-        ],
-      });
-      this.writeRollbackStatus(result);
-      this.log(messages.getMessage('info.rollback-duration', [result.durationMilliseconds]));
-    } else if (!this.jsonEnabled()) {
-      this.log(messages.getMessage('info.request-duration', [result.durationMilliseconds]));
-    }
-  }
-
-  private writeRollbackStatus(result: FlowRunResult): void {
-    if (this.jsonEnabled() || result.debug?.debugLog === null || result.debug?.debugLog === undefined) {
-      return;
-    }
-    if (result.debug.databaseChangesRolledBack === true) {
-      this.log(messages.getMessage('info.rollback-confirmed'));
-    } else {
-      this.warn(messages.getMessage('warnings.rollback-unconfirmed', [result.debug.debugLog.id]));
-    }
   }
 }
