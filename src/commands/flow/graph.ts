@@ -149,15 +149,6 @@ export default class FlowGraph extends SfCommand<FlowGraphResult> {
   public static override readonly flags = flowGraphFlags;
 
   public async run(): Promise<FlowGraphResult> {
-    validateFlowSourceFlags(this.argv, [
-      'target-org',
-      'flow-version',
-      'subflow-version',
-      'recursive',
-      'max-depth',
-      'namespace',
-      'api-version',
-    ]);
     const flags = await this.parseFlags();
     validateFormat(flags);
     const result = await withFlowProgress(this.spinner, 'graph', async (progress) =>
@@ -175,6 +166,15 @@ export default class FlowGraph extends SfCommand<FlowGraphResult> {
 
   public async parseFlags(): Promise<GraphFlagValues> {
     const { flags } = await this.parse(FlowGraph);
+    validateFlowSourceFlags(this.argv, [
+      'target-org',
+      'flow-version',
+      'subflow-version',
+      'recursive',
+      'max-depth',
+      'namespace',
+      'api-version',
+    ]);
     return flags;
   }
 

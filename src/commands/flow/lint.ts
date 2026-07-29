@@ -198,7 +198,6 @@ export default class FlowLint extends SfCommand<FlowLintResult> {
   };
 
   public async run(): Promise<FlowLintResult> {
-    validateFlowSourceFlags(this.argv, ['target-org', 'flow-version', 'namespace', 'api-version']);
     const flags = await this.parseFlags();
     const analyzer = await prepareLintAnalyzer(this, flags);
     const lintResult = await withFlowProgress(this.spinner, 'lint', async (progress) =>
@@ -214,6 +213,7 @@ export default class FlowLint extends SfCommand<FlowLintResult> {
 
   public async parseFlags(): Promise<LintFlagValues> {
     const { flags } = await this.parse(FlowLint);
+    validateFlowSourceFlags(this.argv, ['target-org', 'flow-version', 'namespace', 'api-version']);
     return flags;
   }
 

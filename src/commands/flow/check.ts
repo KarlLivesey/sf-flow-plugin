@@ -212,16 +212,6 @@ export default class FlowCheck extends SfCommand<FlowCheckResult> {
   };
 
   public async run(): Promise<FlowCheckResult> {
-    validateFlowSourceFlags(this.argv, [
-      'target-org',
-      'flow-version',
-      'subflow-version',
-      'recursive',
-      'max-depth',
-      'allow-truncated',
-      'namespace',
-      'api-version',
-    ]);
     const flags = await this.parseFlags();
     const source = await prepareSourceCheck(this, flags);
     const result = await withFlowProgress(this.spinner, 'check', async (progress) =>
@@ -238,6 +228,16 @@ export default class FlowCheck extends SfCommand<FlowCheckResult> {
 
   public async parseFlags(): Promise<CheckFlagValues> {
     const { flags } = await this.parse(FlowCheck);
+    validateFlowSourceFlags(this.argv, [
+      'target-org',
+      'flow-version',
+      'subflow-version',
+      'recursive',
+      'max-depth',
+      'allow-truncated',
+      'namespace',
+      'api-version',
+    ]);
     return flags;
   }
 

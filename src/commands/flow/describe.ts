@@ -201,15 +201,6 @@ export default class FlowDescribe extends SfCommand<FlowDescribeResult> {
   };
 
   public async run(): Promise<FlowDescribeResult> {
-    validateFlowSourceFlags(this.argv, [
-      'target-org',
-      'flow-version',
-      'subflow-version',
-      'recursive',
-      'max-depth',
-      'namespace',
-      'api-version',
-    ]);
     const flags = await this.parseFlags();
     const result = await withFlowProgress(this.spinner, 'describe', async (progress) =>
       flags['source-file'] === undefined
@@ -223,6 +214,15 @@ export default class FlowDescribe extends SfCommand<FlowDescribeResult> {
 
   public async parseFlags(): Promise<DescribeFlagValues> {
     const { flags } = await this.parse(FlowDescribe);
+    validateFlowSourceFlags(this.argv, [
+      'target-org',
+      'flow-version',
+      'subflow-version',
+      'recursive',
+      'max-depth',
+      'namespace',
+      'api-version',
+    ]);
     return flags;
   }
 
