@@ -28,6 +28,8 @@ const comparison: FlowCompareResult = {
   ignorePaths: [],
   fromVersion: 1,
   toVersion: 2,
+  fromSourceFile: null,
+  toSourceFile: null,
   changes: [{ kind: 'changed', path: '$.label', before: 'One|A', after: { value: 'Two' } }],
   added: 0,
   removed: 0,

@@ -33,6 +33,7 @@ const result: FlowLintResult = {
 function flags(): {
   'api-name': string;
   'source-file': undefined;
+  'source-dir': undefined;
   'target-org': ReturnType<typeof createCommandOrg>;
   'flow-version': 'latest';
   'fail-on': undefined;
@@ -48,6 +49,7 @@ function flags(): {
   return {
     'api-name': 'Root_Flow',
     'source-file': undefined,
+    'source-dir': undefined,
     'target-org': createCommandOrg({} as Connection),
     'flow-version': 'latest',
     'fail-on': undefined,

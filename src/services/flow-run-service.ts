@@ -16,6 +16,7 @@ import type {
 } from '../types/flow-invocation.js';
 import type { FlowDefinition, FlowDefinitionGateway, FlowDefinitionLookup, FlowVersion } from '../types/flow.js';
 import { analyseFlowMetadata } from '../utils/flow-metadata-analysis.js';
+import { assertExpectedActiveVersion } from '../utils/flow-concurrency.js';
 import { validateFlowInputs } from '../utils/flow-input-schema.js';
 import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
 import { redactFlowObject } from '../utils/flow-redaction.js';
@@ -259,6 +260,7 @@ export class FlowRunService {
     const apiName = qualifiedFlowName(definition.apiName, definition.namespace);
     progress('loading-versions', `${apiName} (active)`);
     const version = activeVersion(definition, await this.gateways.definition.findVersions(definition.id));
+    assertExpectedActiveVersion(apiName, request.expectedActiveVersion, version.versionNumber);
     progress('loading-metadata', `${apiName} v${version.versionNumber}`);
     const metadata = await this.gateways.definition.getVersionMetadata(version.id);
     return { definition, version, apiName, metadata };

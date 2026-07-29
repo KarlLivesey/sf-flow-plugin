@@ -19,12 +19,28 @@ function unifiedValue(input: JsonValue | undefined): string {
   return input === undefined ? '' : JSON.stringify(input);
 }
 
+function sideLabel(result: FlowCompareResult, side: 'from' | 'to'): string {
+  const sourceFile = side === 'from' ? result.fromSourceFile : result.toSourceFile;
+  if (sourceFile !== null) {
+    return sourceFile;
+  }
+  const version = side === 'from' ? result.fromVersion : result.toVersion;
+  const org = side === 'from' ? result.fromOrg : result.toOrg;
+  return `v${String(version)} (${String(org)})`;
+}
+
+function sideReference(result: FlowCompareResult, side: 'from' | 'to'): string {
+  const sourceFile = side === 'from' ? result.fromSourceFile : result.toSourceFile;
+  const version = side === 'from' ? result.fromVersion : result.toVersion;
+  return sourceFile ?? String(version);
+}
+
 function renderSummary(result: FlowCompareResult): string {
   const flowName = qualifiedFlowName(result.apiName, result.namespace);
   return [
     `Flow: ${flowName}`,
-    `From: v${result.fromVersion} (${result.fromOrg})`,
-    `To: v${result.toVersion} (${result.toOrg})`,
+    `From: ${sideLabel(result, 'from')}`,
+    `To: ${sideLabel(result, 'to')}`,
     `Changes: ${result.changes.length} (${result.added} added, ${result.removed} removed, ${result.changed} changed)`,
   ].join('\n');
 }
@@ -35,7 +51,7 @@ function renderUnifiedChange(change: FlowComparisonChange): string[] {
 
 function renderUnified(result: FlowCompareResult): string {
   const flowName = qualifiedFlowName(result.apiName, result.namespace);
-  const header = [`--- ${flowName}@${result.fromVersion}`, `+++ ${flowName}@${result.toVersion}`];
+  const header = [`--- ${flowName}@${sideReference(result, 'from')}`, `+++ ${flowName}@${sideReference(result, 'to')}`];
   return [...header, ...result.changes.flatMap(renderUnifiedChange)].join('\n');
 }
 
@@ -48,7 +64,7 @@ function renderMarkdown(result: FlowCompareResult): string {
   return [
     `# Flow comparison: ${flowName}`,
     '',
-    `Version ${result.fromVersion} in ${result.fromOrg} → version ${result.toVersion} in ${result.toOrg}.`,
+    `${sideLabel(result, 'from')} → ${sideLabel(result, 'to')}.`,
     '',
     '| Change | Path | Before | After |',
     '| --- | --- | --- | --- |',

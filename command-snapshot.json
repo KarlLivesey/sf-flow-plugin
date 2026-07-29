@@ -39,6 +39,37 @@
   },
   {
     "alias": [],
+    "command": "flow:benchmark",
+    "flagAliases": [],
+    "flagChars": ["n", "o"],
+    "flags": [
+      "api-name",
+      "api-version",
+      "concurrency",
+      "confirm",
+      "continue-on-error",
+      "dry-run",
+      "exclude-warmup-logs",
+      "flags-dir",
+      "if-active-version",
+      "include-failed",
+      "input",
+      "input-file",
+      "iterations",
+      "json",
+      "log-level",
+      "namespace",
+      "output-file",
+      "percentile",
+      "raw-log-dir",
+      "target-org",
+      "wait",
+      "warmup"
+    ],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
     "command": "flow:bundle",
     "flagAliases": [],
     "flagChars": ["n", "o"],
@@ -79,6 +110,7 @@
       "output-file",
       "recursive",
       "result-format",
+      "source-dir",
       "source-file",
       "subflow-version",
       "target-org"
@@ -97,6 +129,7 @@
       "flags-dir",
       "format",
       "from",
+      "from-file",
       "from-org",
       "ignore-order",
       "ignore-path",
@@ -106,6 +139,7 @@
       "output-file",
       "target-org",
       "to",
+      "to-file",
       "to-org"
     ],
     "plugin": "sf-flow-plugin"
@@ -125,6 +159,32 @@
       "json",
       "namespace",
       "target-org"
+    ],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
+    "command": "flow:debug",
+    "flagAliases": [],
+    "flagChars": ["n", "o"],
+    "flags": [
+      "api-name",
+      "api-version",
+      "confirm",
+      "dry-run",
+      "fail-on-flow-error",
+      "flags-dir",
+      "if-active-version",
+      "input",
+      "input-file",
+      "json",
+      "log-level",
+      "namespace",
+      "output-file",
+      "raw-log-file",
+      "show-values",
+      "target-org",
+      "wait"
     ],
     "plugin": "sf-flow-plugin"
   },
@@ -269,6 +329,7 @@
       "output-file",
       "result-format",
       "rule",
+      "source-dir",
       "source-file",
       "target-org"
     ],
@@ -352,6 +413,7 @@
       "dry-run",
       "fail-on-flow-error",
       "flags-dir",
+      "if-active-version",
       "input",
       "input-file",
       "json",

@@ -6,6 +6,7 @@
  */
 import { expect } from 'chai';
 
+import { ApexSoapResponseValidationError } from '../../src/services/apex-soap-execute-anonymous.js';
 import { FlowDebugService } from '../../src/services/flow-debug-service.js';
 import { expectErrorName, FakeFlowGateway, flowDefinition } from '../helpers/fake-flow-gateway.js';
 import {
@@ -16,6 +17,30 @@ import {
   flowDebugRequest,
   interviewId,
 } from '../helpers/flow-debug-fixtures.js';
+
+const testCorrelationId = flowDebugGateways().debug.transport.correlationId;
+
+async function runtimeFailure(showValues: boolean): Promise<Awaited<ReturnType<FlowDebugService['debug']>>> {
+  const gateways = flowDebugGateways();
+  gateways.debug.transport.execution.success = false;
+  gateways.debug.transport.execution.exceptionMessage = 'Secret customer value';
+  gateways.debug.transport.rawLog = '';
+  return new FlowDebugService(gateways).debug(flowDebugRequest({ showValues }));
+}
+
+function assertStablePersistenceFailure(error: unknown, rawLog: string, persistenceFailure: Error): void {
+  expect(error).to.have.property('name', 'FlowDebugRollbackFailed');
+  expect(error).to.have.property('message').that.includes('finished without the expected database rollback');
+  expect(error)
+    .to.have.nested.property('actions[0]')
+    .that.equals('Treat the execution outcome as unsafe and inspect the returned or saved raw debug log.');
+  const cause = (error as Error & { cause?: unknown }).cause;
+  expect(cause).to.be.instanceOf(AggregateError);
+  expect((cause as AggregateError).errors).to.have.length(2);
+  expect((cause as AggregateError).errors[0]).to.have.property('name', 'FlowDebugRollbackFailed');
+  expect((cause as AggregateError).errors[1]).to.equal(persistenceFailure);
+  expect(JSON.stringify((cause as AggregateError).errors)).not.to.include(rawLog);
+}
 
 describe('FlowDebugService rollback execution', (): void => {
   it('validates one invocation, rolls back and returns its correlated trace', async (): Promise<void> => {
@@ -29,10 +54,7 @@ describe('FlowDebugService rollback execution', (): void => {
       logLevel: 'detailed',
     });
     expect(gateways.debug.availabilityChecks).to.deep.equal(['Calculate_Discount']);
-    expect(artifact.result).to.include({
-      successful: true,
-      dryRun: false,
-    });
+    expect(artifact.result).to.include({ successful: true, dryRun: false });
     expect(artifact.result.debug).to.deep.include({
       correlationId: gateways.debug.transport.correlationId,
       databaseChangesRolledBack: true,
@@ -72,10 +94,60 @@ describe('FlowDebugService rollback outcomes', (): void => {
   it('reports rollback as unknown when Salesforce terminates before its marker', async (): Promise<void> => {
     const gateways = flowDebugGateways();
     gateways.debug.transport.execution.success = false;
-    gateways.debug.transport.rawLog = `10:00:00.0 (1)|USER_DEBUG|[1]|ERROR|SF_FLOW_PLUGIN_DEBUG|${correlationIdForTest()}|BEGIN`;
+    gateways.debug.transport.rawLog = `10:00:00.0 (1)|USER_DEBUG|[1]|ERROR|SF_FLOW_PLUGIN_DEBUG|${testCorrelationId}|BEGIN`;
     const artifact = await new FlowDebugService(gateways).debug(flowDebugRequest());
     expect(artifact.result).to.include({ successful: false });
     expect(artifact.result.debug?.databaseChangesRolledBack).to.equal(null);
+  });
+});
+
+describe('FlowDebugService Apex diagnostics', (): void => {
+  it('reports a compile failure as not executed and preserves its inline log', async (): Promise<void> => {
+    const gateways = flowDebugGateways();
+    gateways.debug.transport.execution = {
+      compiled: false,
+      success: false,
+      line: 2,
+      column: 5,
+      compileProblem: 'Unexpected token\nat generated line 2',
+      exceptionMessage: null,
+      exceptionStackTrace: null,
+    };
+    gateways.debug.transport.rawLog = 'compile diagnostic log';
+    const artifact = await new FlowDebugService(gateways).debug(flowDebugRequest());
+
+    expect(artifact.result).to.include({ successful: false });
+    expect(artifact.result.invocations[0]).to.deep.include({ executed: false, success: false });
+    expect(artifact.result.invocations[0]?.errors[0]).to.deep.equal({
+      code: 'APEX_COMPILE_ERROR',
+      message: 'Generated Apex could not be compiled: Unexpected token at generated line 2',
+    });
+    expect(artifact.rawLog).to.equal('compile diagnostic log');
+  });
+
+  it('shows runtime exception text only when values were explicitly requested', async (): Promise<void> => {
+    const hidden = await runtimeFailure(false);
+    const shown = await runtimeFailure(true);
+
+    expect(hidden.result.invocations[0]?.errors[0]?.message).not.to.include('Secret customer value');
+    expect(shown.result.invocations[0]?.errors[0]?.message).to.include('Secret customer value');
+  });
+
+  it('omits an empty compile diagnostic instead of rendering an empty suffix', async (): Promise<void> => {
+    const gateways = flowDebugGateways();
+    gateways.debug.transport.execution = {
+      compiled: false,
+      success: false,
+      line: 2,
+      column: 5,
+      compileProblem: ' \n\t ',
+      exceptionMessage: null,
+      exceptionStackTrace: null,
+    };
+    gateways.debug.transport.rawLog = '';
+
+    const artifact = await new FlowDebugService(gateways).debug(flowDebugRequest());
+    expect(artifact.result.invocations[0]?.errors[0]?.message).to.equal('Generated Apex could not be compiled.');
   });
 });
 
@@ -96,14 +168,12 @@ describe('FlowDebugService safety', (): void => {
     });
   });
 
-  it('rejects an oversized Execute Anonymous request during dry-run preflight', async (): Promise<void> => {
+  it('does not apply the former REST URI limit during SOAP dry-run preflight', async (): Promise<void> => {
     const gateways = flowDebugGateways();
     const input = { percentage: '10', secretToken: 'x'.repeat(12_000) };
-    await expectErrorName(
-      new FlowDebugService(gateways).debug(flowDebugRequest({ dryRun: true, input })),
-      'FlowInputInvalid'
-    );
-    expect(gateways.debug.availabilityChecks).to.deep.equal([]);
+    const artifact = await new FlowDebugService(gateways).debug(flowDebugRequest({ dryRun: true, input }));
+    expect(artifact.result.dryRun).to.equal(true);
+    expect(gateways.debug.availabilityChecks).to.deep.equal(['Calculate_Discount']);
   });
 
   it('requires confirmation for production even when rollback is enabled', async (): Promise<void> => {
@@ -126,7 +196,7 @@ describe('FlowDebugService log integrity', (): void => {
     it(`rejects a successful transaction without its ${expected.marker} marker`, async (): Promise<void> => {
       const gateways = flowDebugGateways();
       gateways.debug.transport.rawLog = debugLog().replace(
-        `|${correlationIdForTest()}|${expected.marker}`,
+        `|${testCorrelationId}|${expected.marker}`,
         `|wrong|${expected.marker}`
       );
       await expectErrorName(new FlowDebugService(gateways).debug(flowDebugRequest()), expected.error);
@@ -140,8 +210,71 @@ describe('FlowDebugService log integrity', (): void => {
     expect(error).to.have.property('name', 'FlowDebugFailed');
     expect(error).to.have.property(
       'message',
-      'The correlated Salesforce debug log was malformed or incomplete. ApexLog ID: 07L000000000001.'
+      'The Salesforce Apex SOAP debug log was malformed or incomplete. ApexLog ID: 07L000000000001.'
     );
+  });
+});
+
+describe('FlowDebugService failed-log preservation', (): void => {
+  it('writes a returned SOAP log before reporting malformed execution fields', async (): Promise<void> => {
+    const gateways = flowDebugGateways();
+    const sensitiveRawLog = 'sensitive malformed-response log';
+    const schemaFailure = new Error('execution schema rejected the response');
+    gateways.debug.execute = (): Promise<never> =>
+      Promise.reject(new ApexSoapResponseValidationError(schemaFailure, sensitiveRawLog));
+    const written: string[] = [];
+    const error = await new FlowDebugService(gateways)
+      .debug(
+        flowDebugRequest(),
+        (): void => undefined,
+        (rawLog): Promise<void> => {
+          written.push(rawLog);
+          return Promise.resolve();
+        }
+      )
+      .catch((caught: unknown) => caught);
+    expect(error).to.have.property('name', 'FlowDebugFailed');
+    expect((error as Error & { cause?: unknown }).cause).to.equal(schemaFailure);
+    expect(error).to.have.property('message').that.does.not.include(sensitiveRawLog);
+    expect(written).to.deep.equal([sensitiveRawLog]);
+  });
+});
+
+describe('FlowDebugService parsed-log failure preservation', (): void => {
+  it('passes the only raw SOAP log to the requested failure writer before rethrowing validation failure', async (): Promise<void> => {
+    const gateways = flowDebugGateways();
+    gateways.debug.transport.log.id = null;
+    gateways.debug.transport.rawLog = debugLog().replace('|OUTPUT|0|', '|OUTPUT|1|');
+    const written: string[] = [];
+    const error = await new FlowDebugService(gateways)
+      .debug(
+        flowDebugRequest(),
+        (): void => undefined,
+        (rawLog): Promise<void> => {
+          written.push(rawLog);
+          return Promise.resolve();
+        }
+      )
+      .catch((caught: unknown) => caught);
+
+    expect(error).to.have.property('name', 'FlowDebugFailed');
+    expect(written).to.deep.equal([gateways.debug.transport.rawLog]);
+  });
+
+  it('preserves validation and raw-log persistence failures without exposing the raw log in the message', async (): Promise<void> => {
+    const gateways = flowDebugGateways();
+    const sensitiveRawLog = debugLog().replace(`|${testCorrelationId}|ROLLBACK`, '|wrong|ROLLBACK');
+    gateways.debug.transport.rawLog = sensitiveRawLog;
+    const persistenceFailure = new Error('disk unavailable');
+    const error = await new FlowDebugService(gateways)
+      .debug(
+        flowDebugRequest(),
+        (): void => undefined,
+        (): Promise<void> => Promise.reject(persistenceFailure)
+      )
+      .catch((caught: unknown) => caught);
+
+    assertStablePersistenceFailure(error, sensitiveRawLog, persistenceFailure);
   });
 });
 
@@ -165,7 +298,3 @@ describe('FlowDebugService managed Flow identity', (): void => {
     expect(error).to.have.property('message').that.includes('managed__Calculate_Discount');
   });
 });
-
-function correlationIdForTest(): string {
-  return flowDebugGateways().debug.transport.correlationId;
-}

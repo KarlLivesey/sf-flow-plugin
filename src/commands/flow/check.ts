@@ -10,9 +10,10 @@ import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
 import { flowCheckFailed } from '../../errors/flow-errors.js';
 import { FlowCheckService } from '../../services/flow-check-service.js';
-import { checkFlowSource, selectedSourceChecks } from '../../services/flow-source-analysis-service.js';
+import { checkFlowSource } from '../../services/flow-source-analysis-service.js';
+import { checkSourceDirectory } from '../../services/flow-source-directory-runner.js';
 import { loadFlowSource, verifyFlowSourceSnapshot } from '../../services/flow-source-service.js';
-import { SalesforceCodeAnalyzerFlowService } from '../../services/salesforce-code-analyzer-flow-service.js';
+import type { SalesforceCodeAnalyzerFlowService } from '../../services/salesforce-code-analyzer-flow-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type { FlowComparisonVersionSelector } from '../../types/flow-analysis.js';
 import type {
@@ -24,7 +25,6 @@ import type {
 } from '../../types/flow-check.js';
 import type { FlowSubflowVersionSelector } from '../../types/flow-inspection.js';
 import { FLOW_CHECK_KINDS, formatFlowCheckHuman, formatFlowCheckSarif } from '../../utils/flow-check-analysis.js';
-import { prepareSalesforceCodeAnalyzer } from '../../utils/flow-code-analyzer-command.js';
 import { createFlowCommandContext } from '../../utils/flow-command.js';
 import { validateFlowApiName, validateNamespace } from '../../utils/flow-name-validation.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
@@ -32,6 +32,7 @@ import type { FlowProgressReporter } from '../../utils/flow-progress.js';
 import { writeFlowReportFile } from '../../utils/flow-report-file.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
 import { validateFlowSourceFlags } from '../../utils/flow-source-command.js';
+import { prepareSourceCheck } from '../../utils/flow-source-check-command.js';
 import { parseInspectionVersionSelector } from './describe.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -40,6 +41,7 @@ const messages = Messages.loadMessages('sf-flow-plugin', 'flow.check');
 export interface CheckFlagValues {
   'api-name': string[] | undefined;
   'source-file': string | undefined;
+  'source-dir': string | undefined;
   'target-org': Org | undefined;
   'flow-version': FlowComparisonVersionSelector;
   only: FlowCheckKind[] | undefined;
@@ -118,21 +120,6 @@ async function checkSource(context: CheckSourceContext): Promise<FlowCheckResult
   return checkFlowSource(source, { checks, excluded: flags.exclude ?? [], lintFindings }, progress);
 }
 
-interface PreparedSourceCheck {
-  analyzer: SalesforceCodeAnalyzerFlowService;
-  checks: FlowCheckKind[] | null;
-}
-
-async function prepareSourceCheck(command: FlowCheck, flags: CheckFlagValues): Promise<PreparedSourceCheck> {
-  const analyzer = new SalesforceCodeAnalyzerFlowService();
-  const checks =
-    flags['source-file'] === undefined ? null : selectedSourceChecks(flags.only ?? [], flags.exclude ?? []);
-  if (checks?.includes('lint') === true) {
-    await prepareSalesforceCodeAnalyzer(command, analyzer, flags['no-prompt']);
-  }
-  return { analyzer, checks };
-}
-
 export default class FlowCheck extends SfCommand<FlowCheckResult> {
   public static override readonly summary = messages.getMessage('summary');
   public static override readonly description = messages.getMessage('description');
@@ -141,14 +128,19 @@ export default class FlowCheck extends SfCommand<FlowCheckResult> {
   public static override readonly flags = {
     'api-name': Flags.string({
       char: 'n',
-      exactlyOne: ['api-name', 'source-file'],
+      exactlyOne: ['api-name', 'source-file', 'source-dir'],
       multiple: true,
       summary: messages.getMessage('flags.api-name.summary'),
     }),
     'source-file': Flags.file({
-      exactlyOne: ['api-name', 'source-file'],
+      exactlyOne: ['api-name', 'source-file', 'source-dir'],
       exists: true,
       summary: messages.getMessage('flags.source-file.summary'),
+    }),
+    'source-dir': Flags.directory({
+      exactlyOne: ['api-name', 'source-file', 'source-dir'],
+      exists: true,
+      summary: messages.getMessage('flags.source-dir.summary'),
     }),
     'target-org': Flags.optionalOrg({
       char: 'o',
@@ -216,9 +208,27 @@ export default class FlowCheck extends SfCommand<FlowCheckResult> {
 
   public async run(): Promise<FlowCheckResult> {
     const flags = await this.parseFlags();
-    const source = await prepareSourceCheck(this, flags);
+    const source = await prepareSourceCheck(this, {
+      sourceFile: flags['source-file'],
+      sourceDirectory: flags['source-dir'],
+      only: flags.only ?? [],
+      exclude: flags.exclude ?? [],
+      noPrompt: flags['no-prompt'],
+    });
     const result = await withFlowProgress(this.spinner, 'check', async (progress) =>
-      flags['source-file'] === undefined
+      flags['source-dir'] !== undefined
+        ? checkSourceDirectory({
+            sourceDirectory: flags['source-dir'],
+            checks: source.checks ?? [],
+            excludedChecks: flags.exclude ?? [],
+            recursive: flags.recursive,
+            maxDepth: flags['max-depth'],
+            rules: [],
+            excludedRules: [],
+            analyzer: source.analyzer,
+            progress,
+          })
+        : flags['source-file'] === undefined
         ? checkOrg(flags, progress)
         : checkSource({ flags, checks: source.checks ?? [], analyzer: source.analyzer, progress })
     );
@@ -241,6 +251,11 @@ export default class FlowCheck extends SfCommand<FlowCheckResult> {
       'namespace',
       'api-version',
     ]);
+    validateFlowSourceFlags(
+      this.argv,
+      ['target-org', 'flow-version', 'subflow-version', 'allow-truncated', 'namespace', 'api-version'],
+      'source-dir'
+    );
     return flags;
   }
 

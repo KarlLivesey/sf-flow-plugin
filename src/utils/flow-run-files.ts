@@ -115,3 +115,9 @@ export async function persistFlowRunFiles(
     await writeRawLogFile(destinations.rawLogFile, artifact.rawLog);
   }
 }
+
+export async function persistFailedFlowDebugLog(destinations: FlowRunFileDestinations, rawLog: string): Promise<void> {
+  if (destinations.rawLogFile !== undefined) {
+    await writeRawLogFile(destinations.rawLogFile, rawLog);
+  }
+}

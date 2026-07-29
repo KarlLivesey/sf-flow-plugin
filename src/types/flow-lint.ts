@@ -63,6 +63,18 @@ export interface FlowLintResult {
   sourceFile?: string;
 }
 
+export interface FlowLintDirectoryResult {
+  sourceDirectory: string;
+  flows: FlowLintResult[];
+  findings: FlowLintFinding[];
+  newFindings: FlowLintFinding[];
+  baselineFindings: FlowLintFinding[];
+  errors: number;
+  warnings: number;
+  newErrors: number;
+  newWarnings: number;
+}
+
 export type FlowLintFailSeverity = 'error' | 'warning';
 
 export type FlowLintResultFormat = 'human' | 'sarif';

@@ -12,6 +12,7 @@ import { resolve } from 'node:path';
 import { expect } from 'chai';
 
 import FlowCheck from '../../../src/commands/flow/check.js';
+import FlowCompare from '../../../src/commands/flow/compare.js';
 import FlowDescribe from '../../../src/commands/flow/describe.js';
 import FlowGraph from '../../../src/commands/flow/graph.js';
 import FlowLint from '../../../src/commands/flow/lint.js';
@@ -25,6 +26,7 @@ import { commandTestContext as $$ } from '../../helpers/command-test-context.js'
 import { expectErrorName } from '../../helpers/fake-flow-gateway.js';
 
 const fixture = resolve('test/nuts/fixtures/project/v3/main/default/flows/Plugin_Test_Flow.flow-meta.xml');
+const fixtureDirectory = resolve('test/nuts/fixtures/project/v3/main/default/flows');
 
 describe('local Flow source commands', (): void => {
   it('runs lint without calling an org-backed service', async (): Promise<void> => {
@@ -76,6 +78,53 @@ describe('local Flow source commands', (): void => {
   });
 });
 
+describe('local Flow source comparison', (): void => {
+  it('compares two local Flow files without resolving an org', async (): Promise<void> => {
+    const result = await FlowCompare.run(['--from-file', fixture, '--to-file', fixture, '--json']);
+    expect(result).to.include({
+      apiName: 'Plugin_Test_Flow',
+      fromDefinitionId: null,
+      toDefinitionId: null,
+      fromVersion: null,
+      toVersion: null,
+      targetOrg: null,
+      different: false,
+    });
+    expect(result.fromSourceFile).to.equal(fixture);
+    expect(result.toSourceFile).to.equal(fixture);
+  });
+});
+
+describe('local Flow source comparison validation', (): void => {
+  it('requires explicit API names to match every local Flow file', async (): Promise<void> => {
+    await expectErrorName(
+      FlowCompare.run(['--from-file', fixture, '--to-file', fixture, '--api-name', 'Other_Flow', '--json']),
+      'FlowComparisonFailed'
+    );
+  });
+
+  it('requires explicit namespaces to match every local Flow file', async (): Promise<void> => {
+    await expectErrorName(
+      FlowCompare.run(['--from-file', fixture, '--to-file', fixture, '--namespace', 'managed', '--json']),
+      'FlowComparisonFailed'
+    );
+  });
+
+  it('rejects org flags when both operands are local files', async (): Promise<void> => {
+    await expectErrorName(
+      FlowCompare.run(['--from-file', fixture, '--to-file', fixture, '--target-org', 'example', '--json']),
+      'FlowComparisonFailed'
+    );
+  });
+
+  it('rejects API versions when both operands are local files', async (): Promise<void> => {
+    await expectErrorName(
+      FlowCompare.run(['--from-file', fixture, '--to-file', fixture, '--api-version', '65.0', '--json']),
+      'FlowComparisonFailed'
+    );
+  });
+});
+
 describe('local Flow source inspection commands', (): void => {
   it('runs describe without calling an org-backed service', async (): Promise<void> => {
     const orgDescribe = $$.SANDBOX.stub(FlowDescribeService.prototype, 'describe');
@@ -110,5 +159,23 @@ describe('local Flow source inspection commands', (): void => {
     })
       .to.throw()
       .with.property('name', 'FlowSourceInvalid');
+  });
+});
+
+describe('local Flow source directory commands', (): void => {
+  it('lints every Flow in a source directory with one Analyzer run', async (): Promise<void> => {
+    $$.SANDBOX.stub(SalesforceCodeAnalyzerFlowService.prototype, 'isInstalled').resolves(true);
+    const analyse = $$.SANDBOX.stub(SalesforceCodeAnalyzerFlowService.prototype, 'analyse').resolves([]);
+    const result = await FlowLint.run(['--source-dir', fixtureDirectory, '--json']);
+    expect('flows' in result && result.flows).to.have.length(1);
+    expect(analyse.calledOnce).to.equal(true);
+    expect(analyse.firstCall.args[0].sourceFile).to.equal(fixtureDirectory);
+  });
+
+  it('checks structural metrics for every Flow without requiring an org or Analyzer', async (): Promise<void> => {
+    const result = await FlowCheck.run(['--source-dir', fixtureDirectory, '--only', 'metrics', '--json']);
+    expect(result.targetOrg).to.equal(null);
+    expect(result.sourceDirectory).to.equal(fixtureDirectory);
+    expect(result.flows).to.have.length(1);
   });
 });
