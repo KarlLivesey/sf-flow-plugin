@@ -165,7 +165,7 @@ describe('FlowBenchmarkService failed measurements', (): void => {
 
   it('continues after failures and includes failed timings only when requested', async (): Promise<void> => {
     const gateways = flowBenchmarkGateways();
-    gateways.benchmark.malformedAt = 2;
+    gateways.benchmark.runtimeErrorAt = 2;
     const artifact = await new FlowBenchmarkService(gateways).benchmark(
       flowBenchmarkRequest({ iterations: 3, warmup: 0, continueOnError: true, includeFailed: true })
     );
@@ -173,7 +173,7 @@ describe('FlowBenchmarkService failed measurements', (): void => {
     expect(gateways.benchmark.executed).to.have.length(3);
     expect(artifact.result).to.include({ successful: false, failedSamples: 1, includedSamples: 3 });
     expect(artifact.result.wallClock).to.deep.include({ count: 3, minimum: 5, maximum: 15, mean: 10 });
-    expect(artifact.result.cpuTime).to.deep.include({ count: 2, minimum: 10, maximum: 30, mean: 20 });
+    expect(artifact.result.cpuTime).to.deep.include({ count: 3, minimum: 10, maximum: 30, mean: 20 });
     expect(artifact.rawLogStage).to.equal(null);
   });
 });

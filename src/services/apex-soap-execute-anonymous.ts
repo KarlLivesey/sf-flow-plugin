@@ -177,6 +177,14 @@ export class ApexSoapExecuteAnonymous {
     const started = performance.now();
     const deadline =
       request.timeoutMilliseconds === undefined ? undefined : started + Math.max(0, request.timeoutMilliseconds);
+    const response = await this.executeWithSessionRetry(request, deadline);
+    return { ...response, durationMilliseconds: performance.now() - started };
+  }
+
+  private async executeWithSessionRetry(
+    request: ApexSoapExecuteRequest,
+    deadline: number | undefined
+  ): Promise<ApexSoapResponse> {
     let response: ApexSoapResponse;
     try {
       response = await this.send(request, remainingTimeout(deadline));
@@ -188,7 +196,7 @@ export class ApexSoapExecuteAnonymous {
       await this.connection.refreshAuth();
       response = await this.send(request, remainingTimeout(deadline));
     }
-    return { ...response, durationMilliseconds: performance.now() - started };
+    return response;
   }
 
   private auth(): { accessToken: string; orgId: string } {

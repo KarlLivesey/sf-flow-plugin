@@ -135,8 +135,8 @@ export class FlowBenchmarkPhaseRunner {
             ? error.safeMessage
             : 'The benchmark sample failed before Salesforce returned a validated result.',
         rawLog: error instanceof FlowBenchmarkExecutionError ? error.rawLog : null,
-        rollbackConfirmed: error instanceof FlowBenchmarkExecutionError ? error.rollbackConfirmed : false,
-        stopScheduling: error instanceof FlowBenchmarkExecutionError ? error.stopScheduling : false,
+        rollbackConfirmed: error instanceof FlowBenchmarkExecutionError ? error.rollbackConfirmed : null,
+        stopScheduling: error instanceof FlowBenchmarkExecutionError ? error.stopScheduling : true,
       });
     }
   }
@@ -178,11 +178,11 @@ export class FlowBenchmarkPhaseRunner {
   private start(planned: PlannedBenchmarkSample): void {
     const active = this.execute(planned)
       .then(async (completed) => {
-        const retained = await this.retainRawLog(completed);
-        this.completed.push(retained);
-        if (retained.stopScheduling || (!retained.sample.successful && !this.context.request.continueOnError)) {
+        if (completed.stopScheduling || (!completed.sample.successful && !this.context.request.continueOnError)) {
           this.stopped = true;
         }
+        const retained = await this.retainRawLog(completed);
+        this.completed.push(retained);
       })
       .catch((error: unknown) => {
         this.failure ??= error;

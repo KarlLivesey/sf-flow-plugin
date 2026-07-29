@@ -85,6 +85,8 @@ function benchmarkFailure(error: unknown, started: number): never {
   throw new FlowBenchmarkExecutionError({
     errorCode: safeErrorCode(error),
     executionDurationMilliseconds: performance.now() - started,
+    stopScheduling: true,
+    rollbackConfirmed: null,
   });
 }
 

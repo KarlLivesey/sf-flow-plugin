@@ -4,13 +4,16 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import type { Connection } from '@salesforce/core';
 import { expect } from 'chai';
 
 import FlowBenchmark, { type BenchmarkFlagValues } from '../../../src/commands/flow/benchmark.js';
 import { FlowBenchmarkService } from '../../../src/services/flow-benchmark-service.js';
 import type { FlowBenchmarkResult } from '../../../src/types/flow-benchmark.js';
-import { commandTestContext as $$ } from '../../helpers/command-test-context.js';
+import { commandTestContext as $$, commandUx } from '../../helpers/command-test-context.js';
 import { createCommandOrg } from '../../helpers/command-org.js';
 
 const result: FlowBenchmarkResult = {
@@ -69,7 +72,7 @@ describe('flow benchmark command', (): void => {
     expect(FlowBenchmark.flags.iterations.default).to.equal(100);
     expect(FlowBenchmark.flags.warmup.default).to.equal(10);
     expect(FlowBenchmark.flags.concurrency.default).to.equal(1);
-    expect(FlowBenchmark.flags.concurrency.summary).not.to.include('maximum 100');
+    expect(FlowBenchmark.flags.concurrency.summary).to.include('1 to 100');
     expect(FlowBenchmark.flags.percentile.default).to.deep.equal([50, 90, 95, 99]);
     expect(FlowBenchmark.flags['log-level'].options).to.deep.equal(['detailed', 'finest']);
     expect(FlowBenchmark.flags.wait.default).to.equal(2);
@@ -102,5 +105,28 @@ describe('flow benchmark command', (): void => {
       expectedActiveVersion: 7,
     });
     expect(actual).to.equal(result);
+  });
+});
+
+describe('flow benchmark command warnings', (): void => {
+  it('warns once per requested rollback sample before human execution', async (): Promise<void> => {
+    $$.SANDBOX.stub(FlowBenchmark.prototype, 'parseFlags').resolves(flags());
+    $$.SANDBOX.stub(FlowBenchmarkService.prototype, 'benchmark').resolves({ result, rawLogStage: null });
+
+    await FlowBenchmark.run([]);
+
+    expect(commandUx.warn.firstCall.args[0]).to.include('request 5 rollback-isolated samples');
+  });
+
+  it('also warns that retained raw logs are unredacted', async (): Promise<void> => {
+    $$.SANDBOX.stub(FlowBenchmark.prototype, 'parseFlags').resolves({
+      ...flags(),
+      'raw-log-dir': join(tmpdir(), 'sf-flow-benchmark-warning-logs'),
+    });
+    $$.SANDBOX.stub(FlowBenchmarkService.prototype, 'benchmark').resolves({ result, rawLogStage: null });
+
+    await FlowBenchmark.run([]);
+
+    expect(commandUx.warn.lastCall.args[0]).to.include('unredacted');
   });
 });

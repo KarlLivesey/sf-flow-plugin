@@ -825,9 +825,10 @@ sf flow benchmark \
 `sf flow benchmark` executes the active version of a directly invocable autolaunched Flow through rollback-isolated
 Execute Anonymous transactions. It performs 10 warm-up samples and 100 measured samples serially by default.
 `--input-file` accepts one JSON object or an array of varied input objects; arrays are assigned deterministically in
-round-robin order. The command imposes no arbitrary maximum workload, concurrency, input-file-size or input-count.
-Local memory and output grow with the requested workload. Effective measured concurrency is the smaller of the
-requested concurrency and iteration count, and completed request slots are replenished immediately.
+round-robin order. Plugin safety limits permit 10,000 measured samples, 1,000 warm-up samples, 11,000 combined
+samples, concurrency 100, a 10 MiB input file and 10,000 input objects. These are product safety policies rather than
+Salesforce limits; out-of-range values are rejected rather than clamped. Effective measured concurrency is the
+smaller of the requested concurrency and iteration count, and completed request slots are replenished immediately.
 
 Each Apex SOAP sample has a timeout controlled by `--wait` from 1 to 10 minutes, defaulting to `2`. A timeout makes
 transaction completion and rollback unknown, is never retried and always stops new sample scheduling even when
@@ -842,10 +843,11 @@ percentile set. Warm-up samples are excluded from statistics. The structured res
 log level when comparing benchmarks because response size and latency vary with logging detail.
 
 The command stops scheduling new samples after the first failure by default; samples already in progress may finish.
-Use `--continue-on-error` to schedule the remaining samples. Failed or rollback-unconfirmed samples are excluded from
-statistics unless `--include-failed` is supplied and the relevant timing exists. Any failure gives the command a
-non-zero exit status. Transport failures retain the client-observed elapsed time when it is available. Failed samples
-include a stable error code and a bounded, sanitised message; runtime exception values and stack traces are not exposed.
+Use `--continue-on-error` to continue after failures whose rollback was confirmed. A timeout, malformed response or
+other unconfirmed rollback always stops new scheduling. Failed samples are excluded from statistics unless
+`--include-failed` is supplied and the relevant timing exists. Any failure gives the command a non-zero exit status.
+Transport failures retain the client-observed elapsed time when it is available. Failed samples include a stable
+error code and a bounded, sanitised message; runtime exception values and stack traces are not exposed.
 
 `--raw-log-dir` streams each complete raw log returned by Apex SOAP to a private staging directory. The directory is
 published only after the command has successfully produced a complete benchmark result and output transaction,

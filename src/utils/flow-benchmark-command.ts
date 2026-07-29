@@ -10,6 +10,7 @@ import type { FlowBenchmarkRequest } from '../types/flow-benchmark.js';
 import type { FlowDebugLogLevel } from '../types/flow-debug.js';
 import { createNamedFlowRequest, type createFlowCommandContext } from './flow-command.js';
 import type { FlowBenchmarkDestinations } from './flow-benchmark-files.js';
+import { assertBenchmarkWorkload } from './flow-benchmark-flags.js';
 import { readFlowBenchmarkInputs } from './flow-benchmark-input.js';
 
 export interface BenchmarkFlagValues {
@@ -40,9 +41,16 @@ export async function createFlowBenchmarkRequest(
   context: ReturnType<typeof createFlowCommandContext>,
   destinations: FlowBenchmarkDestinations
 ): Promise<FlowBenchmarkRequest> {
+  const inputs = await readFlowBenchmarkInputs(flags['input-file'], flags.input);
+  assertBenchmarkWorkload({
+    iterations: flags.iterations,
+    warmup: flags.warmup,
+    concurrency: flags.concurrency,
+    inputCount: inputs.length,
+  });
   return {
     ...createNamedFlowRequest(flags, context),
-    inputs: await readFlowBenchmarkInputs(flags['input-file'], flags.input),
+    inputs,
     iterations: flags.iterations,
     warmup: flags.warmup,
     concurrency: flags.concurrency,

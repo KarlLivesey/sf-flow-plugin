@@ -16,6 +16,7 @@ export class FakeBenchmarkGateway implements FlowBenchmarkGateway {
   public readonly executed: FlowBenchmarkExecutionRequest[] = [];
   public failAt: number | undefined;
   public malformedAt: number | undefined;
+  public runtimeErrorAt: number | undefined;
   public onExecute: ((sample: number) => Promise<void>) | undefined;
 
   public async execute(request: FlowBenchmarkExecutionRequest): Promise<FlowBenchmarkTransportSample> {
@@ -29,7 +30,10 @@ export class FakeBenchmarkGateway implements FlowBenchmarkGateway {
     const rawLog =
       sample === this.malformedAt
         ? 'malformed complete Salesforce log'
-        : `${debugLog().replaceAll(correlationId, sampleCorrelation)}\nMaximum CPU time: ${sample * 10} out of 10000`;
+        : `${debugLog({ error: sample === this.runtimeErrorAt }).replaceAll(
+            correlationId,
+            sampleCorrelation
+          )}\nMaximum CPU time: ${sample * 10} out of 10000`;
     return {
       wallClockMilliseconds: sample * 5,
       transport: {

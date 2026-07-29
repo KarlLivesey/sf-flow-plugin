@@ -112,7 +112,7 @@ function runtimeSample(
             : 'Salesforce terminated the benchmark transaction; runtime details were redacted.'),
       },
       rawLog: transport.rawLog,
-      stopScheduling: false,
+      stopScheduling: !rollbackConfirmed,
     };
   } catch {
     const failed = failedBenchmarkSample(planned, {
@@ -120,6 +120,8 @@ function runtimeSample(
       errorCode: 'FlowDebugFailed',
       errorMessage: 'The returned Apex SOAP debug log was malformed or incomplete.',
       rawLog: transport.rawLog,
+      rollbackConfirmed: null,
+      stopScheduling: true,
     });
     return failed;
   }

@@ -22,7 +22,7 @@ All notable user-visible changes to this project will be documented in this file
 - Added optional raw debug-log retention, production confirmation, active-version concurrency guards, failure policy
   controls and a non-executing dry-run preflight.
 - Added a one-to-ten-minute per-sample SOAP timeout. Timed-out transactions have unknown rollback status, are never
-  retried and stop new benchmark scheduling.
+  retried and stop new benchmark scheduling. Any other sample whose rollback cannot be verified also stops scheduling.
 
 ### Safety and compatibility
 
@@ -31,8 +31,10 @@ All notable user-visible changes to this project will be documented in this file
   owner-only permissions on POSIX systems.
 - Rollback affects database changes in the current transaction only. It cannot reverse callouts, email, asynchronous
   work or separately committed transactions; production execution therefore requires `--confirm`.
-- Benchmark workloads accept any positive iteration and concurrency values and non-negative warm-up values. Returned
-  logs are streamed to private staging only when requested and published after successful completion.
+- Benchmark product safety limits allow 10,000 measured samples, 1,000 warm-up samples, 11,000 combined samples,
+  concurrency 100, a 10 MiB input file and 10,000 varied inputs. Out-of-range workloads are rejected before org
+  execution. Returned logs are streamed to private staging only when requested and published after successful
+  completion.
 
 ### Changed
 

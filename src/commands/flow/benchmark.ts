@@ -157,6 +157,7 @@ export default class FlowBenchmark extends SfCommand<FlowBenchmarkResult> {
     destinations: FlowBenchmarkDestinations
   ): Promise<FlowBenchmarkResult> {
     const request = await createFlowBenchmarkRequest(flags, context, destinations);
+    this.warnExecution(request);
     const definition = new ToolingFlowDefinitionGateway(context.connection);
     const artifact = await withFlowProgress(this.spinner, 'benchmark', async (progress) =>
       new FlowBenchmarkService({
@@ -168,6 +169,16 @@ export default class FlowBenchmark extends SfCommand<FlowBenchmarkResult> {
     await persistFlowBenchmark(destinations, artifact);
     this.writeHumanOutput(artifact.result);
     return artifact.result;
+  }
+
+  private warnExecution(request: Parameters<FlowBenchmarkService['benchmark']>[0]): void {
+    if (this.jsonEnabled() || request.dryRun) {
+      return;
+    }
+    this.warn(messages.getMessage('warnings.rollback', [request.iterations + request.warmup]));
+    if (request.rawLogDirectory !== undefined) {
+      this.warn(messages.getMessage('warnings.raw-log'));
+    }
   }
 
   private writeHumanOutput(result: FlowBenchmarkResult): void {
