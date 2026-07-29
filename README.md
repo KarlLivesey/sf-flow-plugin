@@ -101,8 +101,7 @@ sf flow lint --source-dir force-app/main/default/flows --fail-on warning
 sf flow check --source-dir force-app/main/default/flows --recursive --only lint --only subflows --only metrics
 ```
 
-Directory discovery is recursive, ignores symlinks, is limited to 2,000 Flow files and 256 MiB of source in total,
-rejects files that change during loading and rejects duplicate qualified
+Directory discovery is recursive, ignores symlinks, rejects files that change during loading and rejects duplicate qualified
 Flow names. `flow check --recursive` resolves subflow references from the discovered local files up to `--max-depth`;
 missing references and depth limits are findings. Directory mode supports lint, subflow and structural-metrics checks.
 Org-state checks remain unavailable, and lint baselines remain scoped to single-Flow lint results.
