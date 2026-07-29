@@ -8,7 +8,10 @@ import type { Connection } from '@salesforce/core';
 import { expect } from 'chai';
 import sinon from 'sinon';
 
-import { ApexSoapExecuteAnonymous } from '../../src/services/apex-soap-execute-anonymous.js';
+import {
+  ApexSoapExecuteAnonymous,
+  ApexSoapResponseValidationError,
+} from '../../src/services/apex-soap-execute-anonymous.js';
 import { ApexSoapFlowBenchmarkGateway } from '../../src/services/apex-soap-flow-benchmark-gateway.js';
 import { FlowBenchmarkExecutionError } from '../../src/utils/flow-benchmark-error.js';
 
@@ -89,6 +92,30 @@ describe('ApexSoapFlowBenchmarkGateway failures', (): void => {
       rollbackConfirmed: null,
     });
     expect(execute.calledOnce).to.equal(true);
+  });
+});
+
+describe('ApexSoapFlowBenchmarkGateway response validation', (): void => {
+  afterEach((): void => {
+    sinon.restore();
+  });
+
+  it('retains the returned log when the execution result is malformed', async (): Promise<void> => {
+    sinon
+      .stub(ApexSoapExecuteAnonymous.prototype, 'execute')
+      .rejects(new ApexSoapResponseValidationError(new Error('schema failure'), 'malformed response log'));
+
+    const error = await new ApexSoapFlowBenchmarkGateway({} as Connection)
+      .execute(request)
+      .catch((caught: unknown) => caught);
+
+    expect(error).to.be.instanceOf(FlowBenchmarkExecutionError);
+    expect(error).to.include({
+      errorCode: 'FlowBenchmarkFailed',
+      rawLog: 'malformed response log',
+      stopScheduling: true,
+      rollbackConfirmed: null,
+    });
   });
 });
 

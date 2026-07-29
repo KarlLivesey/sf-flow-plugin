@@ -16,7 +16,11 @@ import type {
 } from '../types/flow-benchmark.js';
 import { createFlowDebugApex } from '../utils/flow-debug-apex.js';
 import { FlowBenchmarkExecutionError } from '../utils/flow-benchmark-error.js';
-import { ApexSoapExecuteAnonymous, type ApexSoapExecuteResult } from './apex-soap-execute-anonymous.js';
+import {
+  ApexSoapExecuteAnonymous,
+  ApexSoapResponseValidationError,
+  type ApexSoapExecuteResult,
+} from './apex-soap-execute-anonymous.js';
 import { isPermissionFailure, transportCodes } from './flow-debug-transport-support.js';
 
 const TIMEOUT_CODES = new Set([
@@ -71,6 +75,15 @@ function transportSample(
 function benchmarkFailure(error: unknown, started: number): never {
   if (error instanceof FlowBenchmarkExecutionError) {
     throw error;
+  }
+  if (error instanceof ApexSoapResponseValidationError) {
+    throw new FlowBenchmarkExecutionError({
+      errorCode: 'FlowBenchmarkFailed',
+      executionDurationMilliseconds: performance.now() - started,
+      rawLog: error.rawLog,
+      stopScheduling: true,
+      rollbackConfirmed: null,
+    });
   }
   if (isTimeoutFailure(error)) {
     throw new FlowBenchmarkExecutionError({
