@@ -75,7 +75,9 @@ describe('local Flow source commands', (): void => {
     expect(result.checks).to.deep.equal(['metrics']);
     expect(result.targetOrg).to.equal(null);
   });
+});
 
+describe('local Flow source comparison', (): void => {
   it('compares two local Flow files without resolving an org', async (): Promise<void> => {
     const result = await FlowCompare.run(['--from-file', fixture, '--to-file', fixture, '--json']);
     expect(result).to.include({
