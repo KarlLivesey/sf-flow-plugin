@@ -15,7 +15,7 @@ import type {
   JsonObject,
 } from '../types/flow-analysis.js';
 import type { FlowDefinitionGateway, FlowVersion } from '../types/flow.js';
-import { canonicalFlowComparisonMetadata } from '../utils/flow-comparison-canonical.js';
+import { canonicalFlowComparisonPair } from '../utils/flow-comparison-canonical.js';
 import { compareFlowMetadata } from '../utils/flow-metadata-diff.js';
 import type { FlowProgressReporter } from '../utils/flow-progress.js';
 import { qualifiedFlowName, selectFlowDefinition } from '../utils/flow-state.js';
@@ -204,11 +204,8 @@ export async function compareFlowSources(context: SourceComparisonContext): Prom
       : sourceOperand(sources.to);
   assertMatchingIdentity(request, from, to);
   progress('comparing-metadata', `${operandName(from)} → ${operandName(to)}`);
-  const [fromMetadata, toMetadata] = await Promise.all([
-    canonicalFlowComparisonMetadata(from.metadata),
-    canonicalFlowComparisonMetadata(to.metadata),
-  ]);
-  const changes = compareFlowMetadata(fromMetadata, toMetadata, {
+  const metadata = await canonicalFlowComparisonPair(from.metadata, to.metadata);
+  const changes = compareFlowMetadata(metadata.from, metadata.to, {
     scopes: request.scopes,
     ignoreOrder: request.ignoreOrder,
   }).filter((change) => !ignoredPath(change.path, request.ignorePaths));

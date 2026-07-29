@@ -32,11 +32,38 @@ function canonicalValue(value: unknown): JsonValue {
   throw flowComparisonFailed('Flow metadata could not be converted to a canonical comparison form.');
 }
 
-export async function canonicalFlowComparisonMetadata(metadata: JsonObject): Promise<JsonObject> {
+function childHint(hint: unknown, name: string): unknown {
+  return typeof hint === 'object' && hint !== null && !Array.isArray(hint)
+    ? (hint as Record<string, unknown>)[name]
+    : undefined;
+}
+
+function arrayItem(hint: unknown, index: number): unknown {
+  return Array.isArray(hint) ? hint[index] ?? hint[0] : hint;
+}
+
+function alignCardinality(value: JsonValue, ownHint: unknown, otherHint: unknown): JsonValue {
+  const arrayExpected = Array.isArray(value) || Array.isArray(ownHint) || Array.isArray(otherHint);
+  if (arrayExpected) {
+    const values = Array.isArray(value) ? value : [value];
+    return values.map((item, index) => alignCardinality(item, arrayItem(ownHint, index), arrayItem(otherHint, index)));
+  }
+  if (typeof value === 'object' && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value).map(([name, child]) => [
+        name,
+        alignCardinality(child, childHint(ownHint, name), childHint(otherHint, name)),
+      ])
+    );
+  }
+  return value;
+}
+
+async function parseComparisonMetadata(metadata: JsonObject): Promise<JsonObject> {
   try {
     const status = metadata.status === 'Active' ? 'active' : 'draft';
     const parsed: unknown = await parseStringPromise(renderFlowMetadataXml(metadata, status), {
-      explicitArray: true,
+      explicitArray: false,
       explicitRoot: true,
       strict: true,
       trim: false,
@@ -49,4 +76,15 @@ export async function canonicalFlowComparisonMetadata(metadata: JsonObject): Pro
     }
     throw flowComparisonFailed('Flow metadata could not be converted to a canonical comparison form.', error);
   }
+}
+
+export async function canonicalFlowComparisonPair(
+  from: JsonObject,
+  to: JsonObject
+): Promise<{ from: JsonObject; to: JsonObject }> {
+  const [parsedFrom, parsedTo] = await Promise.all([parseComparisonMetadata(from), parseComparisonMetadata(to)]);
+  return {
+    from: alignCardinality(parsedFrom, from, to) as JsonObject,
+    to: alignCardinality(parsedTo, to, from) as JsonObject,
+  };
 }

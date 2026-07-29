@@ -7,7 +7,8 @@
 import { expect } from 'chai';
 
 import type { JsonObject } from '../../src/types/flow-analysis.js';
-import { canonicalFlowComparisonMetadata } from '../../src/utils/flow-comparison-canonical.js';
+import { canonicalFlowComparisonPair } from '../../src/utils/flow-comparison-canonical.js';
+import { compareFlowMetadata } from '../../src/utils/flow-metadata-diff.js';
 
 const toolingMetadata: JsonObject = {
   actionCalls: [
@@ -95,10 +96,19 @@ const sourceMetadata: JsonObject = {
   status: 'Draft',
 };
 
-describe('canonicalFlowComparisonMetadata', (): void => {
+describe('canonicalFlowComparisonPair', (): void => {
   it('normalises Tooling metadata and source XML cardinality through one generic XML representation', async (): Promise<void> => {
-    expect(await canonicalFlowComparisonMetadata(sourceMetadata)).to.deep.equal(
-      await canonicalFlowComparisonMetadata(toolingMetadata)
+    const pair = await canonicalFlowComparisonPair(sourceMetadata, toolingMetadata);
+    expect(pair.from).to.deep.equal(pair.to);
+  });
+
+  it('preserves singleton comparison paths and scalar values', async (): Promise<void> => {
+    const pair = await canonicalFlowComparisonPair(
+      { label: 'Example', processType: 'AutoLaunchedFlow', start: { connector: { targetReference: 'One' } } },
+      { label: 'Example', processType: 'AutoLaunchedFlow', start: { connector: { targetReference: 'Two' } } }
     );
+    expect(compareFlowMetadata(pair.from, pair.to, { scopes: [], ignoreOrder: false })).to.deep.equal([
+      { kind: 'changed', path: '$.start.connector.targetReference', before: 'One', after: 'Two' },
+    ]);
   });
 });

@@ -278,8 +278,8 @@ export default class FlowCompare extends SfCommand<FlowCompareResult> {
   }
 
   public async parseFlags(): Promise<CompareFlagValues> {
-    validateLocalFileComparisonFlags(this.argv);
     const { flags } = await this.parse(FlowCompare);
+    validateLocalFileComparisonFlags(this.argv);
     return flags;
   }
 
