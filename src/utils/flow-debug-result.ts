@@ -33,6 +33,11 @@ interface ResultContext {
   executed: ExecutedFlowDebug;
 }
 
+function logIdContext(context: ResultContext): string {
+  const id = context.executed.transport.log.id;
+  return id === null ? '' : ` ApexLog ID: ${id}.`;
+}
+
 function visibleValues(value: Readonly<Record<string, JsonValue>>, showValues: boolean): Record<string, JsonValue> {
   return showValues ? { ...value } : Object.fromEntries(Object.keys(value).map((key) => [key, '[REDACTED]']));
 }
@@ -44,17 +49,17 @@ function assertCompleted(context: ResultContext): void {
   }
   if (!executed.parsed.beginMarker || !executed.parsed.endMarker) {
     throw flowDebugFailed(
-      `The correlated log for Flow "${prepared.flow.apiName}" did not contain its complete execution markers. ` +
-        `ApexLog ID: ${executed.transport.log.id}.`
+      `The Apex SOAP debug log for Flow "${prepared.flow.apiName}" did not contain its complete execution markers.` +
+        logIdContext(context)
     );
   }
   if (!executed.parsed.rollbackMarker) {
-    throw flowDebugRollbackFailed(prepared.flow.apiName, executed.transport.log.id);
+    throw flowDebugRollbackFailed(prepared.flow.apiName, executed.transport.log.id ?? undefined);
   }
   if (executed.parsed.error === null && !executed.parsed.outputMarker) {
     throw flowDebugFailed(
-      `The correlated log for Flow "${prepared.flow.apiName}" did not contain its output marker. ` +
-        `ApexLog ID: ${executed.transport.log.id}.`
+      `The Apex SOAP debug log for Flow "${prepared.flow.apiName}" did not contain its output marker.` +
+        logIdContext(context)
     );
   }
 }

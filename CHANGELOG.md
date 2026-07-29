@@ -14,6 +14,12 @@ All notable user-visible changes to this project will be documented in this file
 - Added recursive project-wide Flow linting, checks, metrics and local subflow resolution through `--source-dir`.
 - Added `sf flow run --if-active-version` to guard invocation and rollback debugging against an unexpected activation.
 
+### Changed
+
+- Rollback Flow execution now uses one Apex SOAP request with a request-scoped `DebuggingHeader`. The raw log is
+  returned inline, so the plugin no longer creates `DebugLevel` or `TraceFlag` records, polls `ApexLog`, downloads a
+  separate log body or applies the former REST URI-size limit. `--wait` now controls the SOAP request timeout.
+
 ## 1.4.1 - 2026-07-27
 
 ### Added

@@ -54,10 +54,8 @@ interface ValidatedDebugInput {
 
 const SIZE_CHECK_CORRELATION_ID = '00000000-0000-0000-0000-000000000000';
 const transportStages: Readonly<Record<FlowDebugTransportStage, FlowProgressStage>> = {
-  'configuring-trace': 'configuring-trace',
+  'configuring-debug': 'configuring-trace',
   'executing-apex': 'invoking-flow',
-  'retrieving-log': 'retrieving-debug-log',
-  'restoring-trace': 'restoring-trace',
 };
 
 function createLookup(request: FlowRollbackRequest): FlowDefinitionLookup {
@@ -123,9 +121,8 @@ function parseDebugLog(transport: FlowDebugTransportResult, showValues: boolean)
   try {
     return parseFlowDebugLog(transport.rawLog, transport.correlationId, showValues);
   } catch {
-    throw flowDebugFailed(
-      `The correlated Salesforce debug log was malformed or incomplete. ApexLog ID: ${transport.log.id}.`
-    );
+    const logContext = transport.log.id === null ? '' : ` ApexLog ID: ${transport.log.id}.`;
+    throw flowDebugFailed(`The Salesforce Apex SOAP debug log was malformed or incomplete.${logContext}`);
   }
 }
 
@@ -207,7 +204,7 @@ export class FlowDebugService {
   ): Promise<boolean> {
     progress('checking-org', request.targetOrg);
     const production = await this.gateExecution(request, flow);
-    progress('checking-permissions', `${flow.apiName} (Apex tracing)`);
+    progress('checking-permissions', `${flow.apiName} (Apex SOAP execution)`);
     await this.gateways.debug.assertDebugAvailable(flow.apiName);
     if (!request.dryRun) {
       progress('checking-current-state', `${flow.apiName} v${flow.version.versionNumber} (active)`);

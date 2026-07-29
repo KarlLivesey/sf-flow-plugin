@@ -25,7 +25,7 @@ export interface FlowDebugApexResult {
 }
 
 export interface FlowDebugLogRecord {
-  id: string;
+  id: string | null;
   status: string;
   operation: string;
   startTime: string;
@@ -40,7 +40,7 @@ export interface FlowDebugTransportResult {
   rawLog: string;
 }
 
-export type FlowDebugTransportStage = 'configuring-trace' | 'executing-apex' | 'retrieving-log' | 'restoring-trace';
+export type FlowDebugTransportStage = 'configuring-debug' | 'executing-apex';
 
 export type FlowDebugTransportProgress = (stage: FlowDebugTransportStage, detail: string) => void;
 

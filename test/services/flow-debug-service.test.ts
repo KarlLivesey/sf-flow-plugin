@@ -96,14 +96,12 @@ describe('FlowDebugService safety', (): void => {
     });
   });
 
-  it('rejects an oversized Execute Anonymous request during dry-run preflight', async (): Promise<void> => {
+  it('does not apply the former REST URI limit during SOAP dry-run preflight', async (): Promise<void> => {
     const gateways = flowDebugGateways();
     const input = { percentage: '10', secretToken: 'x'.repeat(12_000) };
-    await expectErrorName(
-      new FlowDebugService(gateways).debug(flowDebugRequest({ dryRun: true, input })),
-      'FlowInputInvalid'
-    );
-    expect(gateways.debug.availabilityChecks).to.deep.equal([]);
+    const artifact = await new FlowDebugService(gateways).debug(flowDebugRequest({ dryRun: true, input }));
+    expect(artifact.result.dryRun).to.equal(true);
+    expect(gateways.debug.availabilityChecks).to.deep.equal(['Calculate_Discount']);
   });
 
   it('requires confirmation for production even when rollback is enabled', async (): Promise<void> => {
@@ -140,7 +138,7 @@ describe('FlowDebugService log integrity', (): void => {
     expect(error).to.have.property('name', 'FlowDebugFailed');
     expect(error).to.have.property(
       'message',
-      'The correlated Salesforce debug log was malformed or incomplete. ApexLog ID: 07L000000000001.'
+      'The Salesforce Apex SOAP debug log was malformed or incomplete. ApexLog ID: 07L000000000001.'
     );
   });
 });

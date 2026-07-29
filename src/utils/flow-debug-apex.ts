@@ -18,7 +18,18 @@ export interface FlowDebugApexOptions {
 }
 
 const OUTPUT_CHUNK_SIZE = 1000;
-const MAX_EXECUTE_ANONYMOUS_URI_BYTES = 12_000;
+const MAX_APEX_SOAP_MESSAGE_BYTES = 50 * 1024 * 1024;
+const SOAP_ENVELOPE_RESERVE_BYTES = 4096;
+
+function soapEncodedBytes(value: string): number {
+  const escaped = value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
+  return Buffer.byteLength(escaped, 'utf8');
+}
 
 function apexString(value: string): string {
   return `'${value.replaceAll('\\', '\\\\').replaceAll(/'/gu, "\\'")}'`;
@@ -76,11 +87,10 @@ try {
 
 export function createBoundedFlowDebugApex(options: FlowDebugApexOptions): string {
   const source = createFlowDebugApex(options);
-  const uri = `/executeAnonymous?anonymousBody=${encodeURIComponent(source)}`;
-  const bytes = Buffer.byteLength(uri, 'utf8');
-  if (bytes > MAX_EXECUTE_ANONYMOUS_URI_BYTES) {
+  const bytes = soapEncodedBytes(source);
+  if (bytes + SOAP_ENVELOPE_RESERVE_BYTES > MAX_APEX_SOAP_MESSAGE_BYTES) {
     throw flowInputInvalid(
-      `Flow rollback input produces a ${bytes}-byte Execute Anonymous URI; the safe maximum is ${MAX_EXECUTE_ANONYMOUS_URI_BYTES} bytes.`
+      `Flow rollback input produces ${bytes} bytes of generated Apex and exceeds the Salesforce 50 MiB SOAP message limit.`
     );
   }
   return source;

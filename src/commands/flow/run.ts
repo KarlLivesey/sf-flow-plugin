@@ -9,10 +9,10 @@ import type { Org } from '@salesforce/core';
 import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
 import { flowInputInvalid } from '../../errors/flow-errors.js';
+import { ApexSoapFlowDebugGateway } from '../../services/apex-soap-flow-debug-gateway.js';
 import { FlowDebugService } from '../../services/flow-debug-service.js';
 import { FlowRunService } from '../../services/flow-run-service.js';
 import { RestFlowInvocationGateway } from '../../services/rest-flow-invocation-gateway.js';
-import { ToolingFlowDebugGateway } from '../../services/tooling-flow-debug-gateway.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type { FlowDebugLogLevel } from '../../types/flow-debug.js';
 import type { FlowRollbackRequest, FlowRunRequest, FlowRunResult } from '../../types/flow-invocation.js';
@@ -187,7 +187,7 @@ export default class FlowRun extends SfCommand<FlowRunResult> {
       ? await withFlowProgress(this.spinner, 'run', async (progress) =>
           new FlowDebugService({
             definition: definitionGateway,
-            debug: new ToolingFlowDebugGateway(context.connection),
+            debug: new ApexSoapFlowDebugGateway(context.connection),
           }).debug(await createRollbackRequest(flags, context), progress)
         )
       : {
@@ -246,7 +246,7 @@ export default class FlowRun extends SfCommand<FlowRunResult> {
       this.log(messages.getMessage(result.debug === undefined ? 'info.dry-run' : 'info.rollback-dry-run'));
     } else if (result.debug?.debugLog !== undefined && result.debug.debugLog !== null) {
       this.table({
-        title: messages.getMessage('info.trace-title', [result.debug.debugLog.id]),
+        title: messages.getMessage('info.trace-title'),
         data: result.debug.events.map((event) => ({ ...event })),
         columns: [
           { key: 'sequence', name: '#' },
@@ -271,7 +271,7 @@ export default class FlowRun extends SfCommand<FlowRunResult> {
     if (result.debug.databaseChangesRolledBack === true) {
       this.log(messages.getMessage('info.rollback-confirmed'));
     } else {
-      this.warn(messages.getMessage('warnings.rollback-unconfirmed', [result.debug.debugLog.id]));
+      this.warn(messages.getMessage('warnings.rollback-unconfirmed'));
     }
   }
 }

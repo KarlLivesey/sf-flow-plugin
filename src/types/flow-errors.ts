@@ -44,6 +44,4 @@ export type FlowErrorCode =
   | 'FlowProductionConfirmationRequired'
   | 'FlowDebugFailed'
   | 'FlowDebugPermissionDenied'
-  | 'FlowDebugLogNotFound'
-  | 'FlowDebugCleanupFailed'
   | 'FlowDebugRollbackFailed';

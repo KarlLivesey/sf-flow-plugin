@@ -860,6 +860,7 @@ sf flow run \
   [--raw-log-file FILE] \
   [--output-file FILE] \
   [--wait MINUTES] \
+  [--if-active-version NUMBER] \
   [--dry-run] \
   [--confirm] \
   [--fail-on-flow-error] \
@@ -869,18 +870,28 @@ sf flow run \
   [--json]
 ```
 
-`sf flow run --rollback` runs one active, directly invocable autolaunched Flow through Execute Anonymous Apex,
-retrieves the related Salesforce ApexLog using an exact per-run correlation marker and displays its Flow events. It
-accepts one input object, validates declared inputs before execution and checks that the active Flow version has not
-changed during preflight. Because Salesforce's REST Execute Anonymous endpoint carries the generated Apex in its URI,
-the command also checks the encoded request size during preflight and keeps a conservative reserve below Salesforce's
-16 KB combined URI-and-header limit. Input JSON is Base64-encoded inside that generated Apex; Base64 is not
-redaction, so protect HTTP diagnostic output and infrastructure logs that could capture request URLs.
+`sf flow run --rollback` runs one active, directly invocable autolaunched Flow through the Apex SOAP
+`executeAnonymous` operation. A request-scoped `DebuggingHeader` returns that execution's raw log in the SOAP response;
+the command validates its correlation and completion markers and displays its Flow events without creating trace
+configuration, polling `ApexLog` or downloading a separate log body. It accepts one input object, validates declared
+inputs before execution and checks that the active Flow version has not changed during preflight. Use
+`--if-active-version NUMBER` to require the expected active version explicitly:
 
-Combine `--rollback --dry-run` to validate the Flow, the single input object, production-org context and tracing-object
-permissions, including ApexLog query and retrieval access, without executing Apex, creating trace records or running
-the Flow. This is a point-in-time preflight: Salesforce does not expose a read-only check that conclusively proves
-Execute Anonymous permission or runtime success.
+```bash
+sf flow run \
+  --api-name Calculate_Discount \
+  --input accountId=001000000000001 \
+  --rollback \
+  --if-active-version 7
+```
+
+The generated SOAP request is checked against Salesforce's SOAP message limit. Input JSON is Base64-encoded inside
+the generated Apex carried in the XML body; Base64 is not redaction, so protect HTTP diagnostic output and
+infrastructure logs.
+
+Combine `--rollback --dry-run` to validate the Flow, the single input object, production-org context, SOAP
+authentication and output destinations without executing Apex or running the Flow. This is a point-in-time preflight:
+Salesforce does not expose a read-only check that conclusively proves Execute Anonymous permission or runtime success.
 `--raw-log-file` may be supplied with this combination. Its destination path is validated, including an existing
 target or the nearest existing parent directory. The raw-log option itself creates neither the log file nor missing
 parent directories because the dry run produces no log; `--output-file` independently writes the structured dry-run
@@ -891,27 +902,18 @@ result and raw log must resolve to different files. Paths that differ only by ca
 rejected so the same command remains safe on case-insensitive filesystems.
 
 The generated Apex establishes a savepoint before starting the Flow and rolls back in a `finally` block, then emits
-markers that the command verifies in the correlated log. Rollback affects database work in the current transaction
+markers that the command verifies in the returned log. Rollback affects database work in the current transaction
 only: it cannot reverse external callouts or effects committed by another transaction, and Flow actions that require
 a separate transaction are not supported by rollback-mode execution. Establishing the savepoint can also prevent
 callouts from running. Production execution therefore requires `--confirm`.
 
-`debug.databaseChangesRolledBack` is `true` only when the correlated log contains the rollback marker. It is `null`
+`debug.databaseChangesRolledBack` is `true` only when the returned log contains the rollback marker. It is `null`
 when Salesforce terminates Execute Anonymous before that marker can be verified; this means the rollback outcome is
 unknown to the plugin, not that Salesforce committed the failed transaction. Human output states whether rollback was
-confirmed and emits a warning with the ApexLog ID when it remains unknown.
-If correlated-log integrity validation fails, the error includes the ApexLog ID so the log can still be retrieved
-with `sf apex get log --log-id ID`.
-The top-level `durationMilliseconds` covers temporary tracing, execution, log correlation and trace cleanup.
-`debug.debugLog.durationMilliseconds` is Salesforce's duration for the correlated ApexLog operation.
-
-The command temporarily creates a DebugLevel and creates or temporarily updates the authenticated user's active
-`USER_DEBUG` TraceFlag. Existing trace settings are snapshotted and restored, and temporary tracing records are
-removed after the operation. Before restoration, the command verifies that the temporary TraceFlag values have not
-been changed by another process. It refuses to overwrite a concurrent change. Incomplete cleanup fails explicitly
-and identifies the temporary record that may need manual removal. A forced process termination or host failure can
-prevent cleanup from running; the temporary TraceFlag expires, but temporary `SfFlowPlugin_*` DebugLevel records and
-the user's trace settings should be inspected afterwards.
+confirmed and directs the user to the returned or saved raw log when it remains unknown.
+The top-level `durationMilliseconds` covers request preparation and the Apex SOAP operation.
+`debug.debugLog.durationMilliseconds` is the client-observed Apex SOAP request latency, including transfer of the raw
+debug log response. `--wait` is the SOAP request timeout rather than a log-polling duration.
 
 Parsed variable, assignment, rule and error values are redacted by default. `--show-values` reveals those values in
 terminal and structured output. `--raw-log-file` writes the complete, unredacted Salesforce log and can therefore
@@ -1130,11 +1132,9 @@ These checks are point-in-time preflights, not an atomic guarantee. Permissions 
 | `FlowInvocationFailed`                | Salesforce could not execute or report the Flow invocation.                     |
 | `FlowInvocationPermissionDenied`      | The authenticated user cannot invoke the Flow action.                           |
 | `FlowProductionConfirmationRequired`  | Production Flow execution requires explicit confirmation.                       |
-| `FlowDebugFailed`                     | Rollback execution or correlated-log validation failed.                         |
-| `FlowDebugPermissionDenied`           | The user lacks rollback execution, tracing or log access.                       |
-| `FlowDebugLogNotFound`                | The correlated ApexLog was not available before the timeout.                    |
-| `FlowDebugCleanupFailed`              | Temporary tracing could not be removed or safely restored.                      |
-| `FlowDebugRollbackFailed`             | The correlated log did not confirm the expected database rollback.              |
+| `FlowDebugFailed`                     | Rollback execution or returned-log validation failed.                           |
+| `FlowDebugPermissionDenied`           | The user lacks anonymous Apex or Flow execution access.                         |
+| `FlowDebugRollbackFailed`             | The returned log did not confirm the expected database rollback.                |
 | `FlowMetricsFailed`                   | Flow complexity metrics could not be calculated.                                |
 | `FlowDataCloudMetricsUnavailable`     | Required DMOs were accessible, but the selected Flow/version record was absent. |
 | `FlowDataCloudMetricsFailed`          | Data Cloud DMO access, capability, query or response validation failed.         |

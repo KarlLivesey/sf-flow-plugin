@@ -40,16 +40,15 @@ describe('Flow debug Apex generation', (): void => {
     expect(source).to.include('Database.rollback');
   });
 
-  it('rejects source that cannot fit safely in the REST Execute Anonymous URI', (): void => {
-    expect(() =>
-      createBoundedFlowDebugApex({
-        correlationId,
-        apiName: 'Calculate_Discount',
-        namespace: null,
-        input: { value: 'x'.repeat(12_000) },
-        outputVariables: [],
-      })
-    ).to.throw('Execute Anonymous URI');
+  it('does not retain the REST Execute Anonymous URI limit for SOAP requests', (): void => {
+    const source = createBoundedFlowDebugApex({
+      correlationId,
+      apiName: 'Calculate_Discount',
+      namespace: null,
+      input: { value: 'x'.repeat(12_000) },
+      outputVariables: [],
+    });
+    expect(source).to.include('Database.rollback(sfFlowSavepoint)');
   });
 });
 

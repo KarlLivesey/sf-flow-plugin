@@ -107,7 +107,7 @@ describe('flow run rollback command', (): void => {
       waitMilliseconds: 120_000,
     });
     expect(actual).to.equal(debugResult);
-    expect(commandUx.log.firstCall.args[0]).to.equal('Database rollback confirmed by the correlated log.');
+    expect(commandUx.log.firstCall.args[0]).to.equal('Database rollback confirmed by the returned debug log.');
   });
 
   it('warns when the correlated log cannot confirm rollback', async (): Promise<void> => {
@@ -117,7 +117,7 @@ describe('flow run rollback command', (): void => {
       rawLog: 'correlated log',
     });
     await FlowRun.run([]);
-    expect(commandUx.warn.lastCall.args[0]).to.include('inspect ApexLog 07L000000000001');
+    expect(commandUx.warn.lastCall.args[0]).to.include('inspect the raw log');
   });
 });
 
