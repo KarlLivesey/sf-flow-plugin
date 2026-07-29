@@ -11,7 +11,7 @@ import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 import { flowLintFailed } from '../../errors/flow-errors.js';
 import { FlowLintService } from '../../services/flow-lint-service.js';
 import { lintFlowSource } from '../../services/flow-source-analysis-service.js';
-import { loadFlowSource } from '../../services/flow-source-service.js';
+import { loadFlowSource, verifyFlowSourceSnapshot } from '../../services/flow-source-service.js';
 import { SalesforceCodeAnalyzerFlowService } from '../../services/salesforce-code-analyzer-flow-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type { FlowComparisonVersionSelector } from '../../types/flow-analysis.js';
@@ -122,6 +122,7 @@ async function lintSource(
     rules: flags.rule ?? [],
     excludedRules: flags['exclude-rule'] ?? [],
   });
+  await verifyFlowSourceSnapshot(source.snapshot);
   return lintFlowSource(source, findings, progress);
 }
 

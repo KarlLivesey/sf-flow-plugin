@@ -4,6 +4,9 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { resolve } from 'node:path';
 
 import { expect } from 'chai';
@@ -46,6 +49,22 @@ describe('local Flow source commands', (): void => {
       FlowLint.run(['--source-file', fixture, '--no-prompt', '--json']),
       'FlowCodeAnalyzerUnavailable'
     );
+  });
+
+  it('rejects a source file changed while Code Analyzer is running', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'flow-source-analyzer-change-'));
+    const sourceFile = join(directory, 'Changed_Flow.flow-meta.xml');
+    try {
+      await writeFile(sourceFile, await readFile(fixture));
+      $$.SANDBOX.stub(SalesforceCodeAnalyzerFlowService.prototype, 'isInstalled').resolves(true);
+      $$.SANDBOX.stub(SalesforceCodeAnalyzerFlowService.prototype, 'analyse').callsFake(async () => {
+        await writeFile(sourceFile, (await readFile(sourceFile, 'utf8')).replace('Plugin Test Flow', 'Changed Flow'));
+        return [];
+      });
+      await expectErrorName(FlowLint.run(['--source-file', sourceFile, '--json']), 'FlowSourceInvalid');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   it('runs check without calling an org-backed service', async (): Promise<void> => {

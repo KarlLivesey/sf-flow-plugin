@@ -5,13 +5,14 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 export interface FieldSchema {
-  kind: 'boolean' | 'number' | 'object' | 'string';
+  kind: 'boolean' | 'integer' | 'number' | 'object' | 'string';
   many?: boolean;
   fields?: Readonly<Record<string, FieldSchema>>;
 }
 
 export const string = (many = false): FieldSchema => ({ kind: 'string', many });
 export const number = (many = false): FieldSchema => ({ kind: 'number', many });
+export const integer = (many = false): FieldSchema => ({ kind: 'integer', many });
 export const boolean = (many = false): FieldSchema => ({ kind: 'boolean', many });
 export const object = (fields: Readonly<Record<string, FieldSchema>>, many = false): FieldSchema => ({
   kind: 'object',
@@ -43,8 +44,8 @@ export const elementFields: Readonly<Record<string, FieldSchema>> = {
 export const nodeFields: Readonly<Record<string, FieldSchema>> = {
   ...elementFields,
   label: string(),
-  locationX: number(),
-  locationY: number(),
+  locationX: integer(),
+  locationY: integer(),
 };
 export const connector = object({ ...baseFields, targetReference: string() });
 export const conditionFields: Readonly<Record<string, FieldSchema>> = {
@@ -115,7 +116,7 @@ export const screenFieldFields: Readonly<Record<string, FieldSchema>> = {
   isRequired: boolean(),
   isVisible: boolean(),
   outputParameters: object(outputParameterFields, true),
-  scale: number(),
+  scale: integer(),
   storeOutputAutomatically: boolean(),
   validationRule,
   visibilityRule,

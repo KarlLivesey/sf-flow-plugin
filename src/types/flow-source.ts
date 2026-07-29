@@ -11,6 +11,16 @@ export interface FlowSource {
   apiName: string;
   namespace: string | null;
   sourceFile: string;
+  snapshot: FlowSourceSnapshot;
   metadata: JsonObject;
   description: FlowDescription;
+}
+
+export interface FlowSourceSnapshot {
+  sourceFile: string;
+  device: number;
+  inode: number;
+  size: number;
+  modifiedMilliseconds: number;
+  changedMilliseconds: number;
 }

@@ -17,6 +17,7 @@ import {
   metadataValueFields,
   node,
   nodeFields,
+  integer,
   number,
   object,
   outputFieldFields,
@@ -78,7 +79,7 @@ export const flowSourceRootFields: Readonly<Record<string, FieldSchema>> = {
   collectionProcessors: node({
     conditions,
     connector,
-    limit: number(),
+    limit: integer(),
     outputAssignments: object(outputFieldFields, true),
     sortOptions: object({ sortField: string(), sortOrder: string() }, true),
   }),
@@ -101,12 +102,12 @@ export const flowSourceRootFields: Readonly<Record<string, FieldSchema>> = {
       ...elementFields,
       dataType: string(),
       filters: object(filterFields, true),
-      limit: number(),
+      limit: integer(),
       outputAssignments: object(outputFieldFields, true),
     },
     true
   ),
-  formulas: object({ ...elementFields, dataType: string(), expression: string(), scale: number() }, true),
+  formulas: object({ ...elementFields, dataType: string(), expression: string(), scale: integer() }, true),
   isAdditionalPermissionRequiredToRun: boolean(),
   isTemplate: boolean(),
   loops: node({
@@ -156,7 +157,7 @@ export const flowSourceRootFields: Readonly<Record<string, FieldSchema>> = {
     showFooter: boolean(),
     showHeader: boolean(),
   }),
-  stages: object({ ...elementFields, isActive: boolean(), label: string(), stageOrder: number() }, true),
+  stages: object({ ...elementFields, isActive: boolean(), label: string(), stageOrder: integer() }, true),
   start: object({
     ...nodeFields,
     connector,
@@ -164,7 +165,7 @@ export const flowSourceRootFields: Readonly<Record<string, FieldSchema>> = {
     scheduledPaths: object(
       {
         connector,
-        offsetNumber: number(),
+        offsetNumber: integer(),
         offsetUnit: string(),
         pathType: string(),
         recordField: string(),
@@ -199,7 +200,7 @@ export const flowSourceRootFields: Readonly<Record<string, FieldSchema>> = {
       isCollection: boolean(),
       isInput: boolean(),
       isOutput: boolean(),
-      scale: number(),
+      scale: integer(),
       value,
     },
     true

@@ -4,13 +4,13 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { expect } from 'chai';
 
-import { loadFlowSource } from '../../src/services/flow-source-service.js';
+import { loadFlowSource, verifyFlowSourceSnapshot } from '../../src/services/flow-source-service.js';
 import { expectErrorName } from '../helpers/fake-flow-gateway.js';
 
 const fixture = resolve('test/nuts/fixtures/project/v3/main/default/flows/Plugin_Test_Flow.flow-meta.xml');
@@ -247,6 +247,50 @@ describe('loadFlowSource validation', (): void => {
       await expectErrorName(loadFlowSource(malformed), 'FlowSourceInvalid');
       await expectErrorName(loadFlowSource(wrongNamespace), 'FlowSourceInvalid');
       await expectErrorName(loadFlowSource(entity), 'FlowSourceInvalid');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('loadFlowSource stable numeric and file identity validation', (): void => {
+  it('rejects non-finite decimal metadata and unsafe integer metadata', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'flow-source-number-'));
+    const nonFinite = join(directory, 'Non_Finite.flow-meta.xml');
+    const unsafeInteger = join(directory, 'Unsafe_Integer.flow-meta.xml');
+    try {
+      await Promise.all([
+        writeFile(
+          nonFinite,
+          flowXml().replace('<status>', `<apiVersion>${'9'.repeat(400)}</apiVersion><status>`),
+          'utf8'
+        ),
+        writeFile(
+          unsafeInteger,
+          flowXml().replace(
+            '<label>Set Output</label>',
+            '<label>Set Output</label><locationX>9007199254740992</locationX>'
+          ),
+          'utf8'
+        ),
+      ]);
+      await expectErrorName(loadFlowSource(nonFinite), 'FlowSourceInvalid');
+      await expectErrorName(loadFlowSource(unsafeInteger), 'FlowSourceInvalid');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('detects an atomic replacement after loading the source snapshot', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'flow-source-replaced-'));
+    const file = join(directory, 'Replaced.flow-meta.xml');
+    const replacement = join(directory, 'Replacement.flow-meta.xml');
+    try {
+      await writeFile(file, flowXml(), 'utf8');
+      const source = await loadFlowSource(file);
+      await writeFile(replacement, flowXml().replace('Local Flow', 'Replacement Flow'), 'utf8');
+      await rename(replacement, file);
+      await expectErrorName(verifyFlowSourceSnapshot(source.snapshot), 'FlowSourceInvalid');
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

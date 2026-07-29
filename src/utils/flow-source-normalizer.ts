@@ -9,7 +9,7 @@ import type { JsonObject, JsonValue } from '../types/flow-analysis.js';
 import { flowSourceRootFields } from './flow-source-root-schema.js';
 import type { FieldSchema } from './flow-source-schema.js';
 
-type ScalarKind = 'boolean' | 'number' | 'string';
+type ScalarKind = 'boolean' | 'integer' | 'number' | 'string';
 
 function booleanScalar(value: string, field: string): boolean {
   if (value !== 'true' && value !== 'false') {
@@ -22,12 +22,39 @@ function numberScalar(value: string, field: string): number {
   if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/u.test(value)) {
     throw flowSourceInvalid(`Flow source field "${field}" must contain a decimal number.`);
   }
-  return Number(value);
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    throw flowSourceInvalid(`Flow source field "${field}" must contain a finite decimal number.`);
+  }
+  return parsed;
+}
+
+function integerScalar(value: string, field: string): number {
+  if (!/^-?(?:0|[1-9]\d*)$/u.test(value)) {
+    throw flowSourceInvalid(`Flow source field "${field}" must contain an integer.`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) {
+    throw flowSourceInvalid(`Flow source field "${field}" must contain a safe integer.`);
+  }
+  return parsed;
 }
 
 function scalar(value: unknown, kind: ScalarKind, field: string): JsonValue {
   if (typeof value === 'string') {
-    return kind === 'boolean' ? booleanScalar(value, field) : kind === 'number' ? numberScalar(value, field) : value;
+    return kind === 'boolean'
+      ? booleanScalar(value, field)
+      : kind === 'integer'
+      ? integerScalar(value, field)
+      : kind === 'number'
+      ? numberScalar(value, field)
+      : value;
+  }
+  if (kind === 'integer' && typeof value === 'number' && !Number.isSafeInteger(value)) {
+    throw flowSourceInvalid(`Flow source field "${field}" must contain a safe integer.`);
+  }
+  if (typeof value === 'number' && !Number.isFinite(value)) {
+    throw flowSourceInvalid(`Flow source field "${field}" must contain a finite decimal number.`);
   }
   if (typeof value === 'boolean' || typeof value === 'number' || value === null) {
     return value;
@@ -37,7 +64,11 @@ function scalar(value: unknown, kind: ScalarKind, field: string): JsonValue {
 
 function normaliseOne(value: unknown, schema: FieldSchema | undefined, field: string): JsonValue {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return scalar(value, schema?.kind === 'boolean' || schema?.kind === 'number' ? schema.kind : 'string', field);
+    return scalar(
+      value,
+      schema?.kind === 'boolean' || schema?.kind === 'integer' || schema?.kind === 'number' ? schema.kind : 'string',
+      field
+    );
   }
   const fields = schema?.kind === 'object' ? schema.fields : undefined;
   return Object.fromEntries(

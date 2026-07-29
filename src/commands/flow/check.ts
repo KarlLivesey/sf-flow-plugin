@@ -11,7 +11,7 @@ import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 import { flowCheckFailed } from '../../errors/flow-errors.js';
 import { FlowCheckService } from '../../services/flow-check-service.js';
 import { checkFlowSource, selectedSourceChecks } from '../../services/flow-source-analysis-service.js';
-import { loadFlowSource } from '../../services/flow-source-service.js';
+import { loadFlowSource, verifyFlowSourceSnapshot } from '../../services/flow-source-service.js';
 import { SalesforceCodeAnalyzerFlowService } from '../../services/salesforce-code-analyzer-flow-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type { FlowComparisonVersionSelector } from '../../types/flow-analysis.js';
@@ -112,6 +112,9 @@ async function checkSource(context: CheckSourceContext): Promise<FlowCheckResult
     ? (progress('running-code-analyzer', source.sourceFile),
       await analyzer.analyse({ sourceFile: source.sourceFile, rules: [], excludedRules: [] }))
     : [];
+  if (checks.includes('lint')) {
+    await verifyFlowSourceSnapshot(source.snapshot);
+  }
   return checkFlowSource(source, { checks, excluded: flags.exclude ?? [], lintFindings }, progress);
 }
 

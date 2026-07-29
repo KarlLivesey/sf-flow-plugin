@@ -4,8 +4,10 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { readFile, realpath, stat } from 'node:fs/promises';
+import { open, realpath, stat } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
+import type { Stats } from 'node:fs';
+import type { FileHandle } from 'node:fs/promises';
 
 import { parseStringPromise } from 'xml2js';
 import { z as zod } from 'zod';
@@ -14,7 +16,7 @@ import { flowSourceInvalid } from '../errors/flow-errors.js';
 import type { JsonObject } from '../types/flow-analysis.js';
 import type { FlowDefinition, FlowVersion } from '../types/flow.js';
 import type { FlowDescription } from '../types/flow-inspection.js';
-import type { FlowSource } from '../types/flow-source.js';
+import type { FlowSource, FlowSourceSnapshot } from '../types/flow-source.js';
 import { analyseFlowMetadata } from '../utils/flow-metadata-analysis.js';
 import { validateFlowApiName, validateNamespace } from '../utils/flow-name-validation.js';
 import { normaliseFlowSourceMetadata } from '../utils/flow-source-normalizer.js';
@@ -131,7 +133,7 @@ function descriptionFor(
   };
 }
 
-function validateSourceFileStat(sourceFile: string, fileStat: Awaited<ReturnType<typeof stat>>): void {
+function validateSourceFileStat(sourceFile: string, fileStat: Stats): void {
   if (!fileStat.isFile()) {
     throw flowSourceInvalid(`Flow source path "${sourceFile}" is not a regular file.`);
   }
@@ -140,13 +142,42 @@ function validateSourceFileStat(sourceFile: string, fileStat: Awaited<ReturnType
   }
 }
 
+function snapshotFor(sourceFile: string, fileStat: Stats): FlowSourceSnapshot {
+  return {
+    sourceFile,
+    device: fileStat.dev,
+    inode: fileStat.ino,
+    size: fileStat.size,
+    modifiedMilliseconds: fileStat.mtimeMs,
+    changedMilliseconds: fileStat.ctimeMs,
+  };
+}
+
+function snapshotsMatch(left: FlowSourceSnapshot, right: FlowSourceSnapshot): boolean {
+  return (
+    left.sourceFile === right.sourceFile &&
+    left.device === right.device &&
+    left.inode === right.inode &&
+    left.size === right.size &&
+    left.modifiedMilliseconds === right.modifiedMilliseconds &&
+    left.changedMilliseconds === right.changedMilliseconds
+  );
+}
+
+function sourceChanged(sourceFile: string): ReturnType<typeof flowSourceInvalid> {
+  return flowSourceInvalid(`Flow source file "${sourceFile}" changed while it was being analysed.`);
+}
+
+function validateReadSize(sourceFile: string, bytesRead: number): void {
+  if (bytesRead > MAX_FLOW_SOURCE_BYTES) {
+    throw flowSourceInvalid(`Flow source file "${sourceFile}" exceeds the 20 MiB safety limit.`);
+  }
+}
+
 async function resolveSourceFile(file: string): Promise<string> {
   const requested = resolve(file);
   try {
-    const sourceFile = await realpath(requested);
-    const fileStat = await stat(sourceFile);
-    validateSourceFileStat(sourceFile, fileStat);
-    return sourceFile;
+    return await realpath(requested);
   } catch (error: unknown) {
     if (error instanceof Error && error.name === 'FlowSourceInvalid') {
       throw error;
@@ -155,21 +186,64 @@ async function resolveSourceFile(file: string): Promise<string> {
   }
 }
 
-async function readSourceFile(sourceFile: string): Promise<string> {
+async function readOpenedSource(
+  sourceFile: string,
+  fileHandle: FileHandle
+): Promise<{ content: string; snapshot: FlowSourceSnapshot }> {
+  const before = await fileHandle.stat();
+  validateSourceFileStat(sourceFile, before);
+  const buffer = await fileHandle.readFile();
+  validateReadSize(sourceFile, buffer.byteLength);
+  const after = await fileHandle.stat();
+  const beforeSnapshot = snapshotFor(sourceFile, before);
+  const afterSnapshot = snapshotFor(sourceFile, after);
+  if (!snapshotsMatch(beforeSnapshot, afterSnapshot) || buffer.byteLength !== after.size) {
+    throw sourceChanged(sourceFile);
+  }
+  return { content: buffer.toString('utf8'), snapshot: afterSnapshot };
+}
+
+async function readSourceFile(sourceFile: string): Promise<{ content: string; snapshot: FlowSourceSnapshot }> {
+  let fileHandle: Awaited<ReturnType<typeof open>> | undefined;
   try {
-    return await readFile(sourceFile, 'utf8');
+    fileHandle = await open(sourceFile, 'r');
+    return await readOpenedSource(sourceFile, fileHandle);
   } catch (error: unknown) {
+    if (error instanceof Error && error.name === 'FlowSourceInvalid') {
+      throw error;
+    }
     throw flowSourceInvalid(`Flow source file "${sourceFile}" could not be read.`, error);
+  } finally {
+    await fileHandle?.close();
+  }
+}
+
+export async function verifyFlowSourceSnapshot(snapshot: FlowSourceSnapshot): Promise<void> {
+  try {
+    const currentSourceFile = await realpath(snapshot.sourceFile);
+    const currentStat = await stat(currentSourceFile);
+    validateSourceFileStat(currentSourceFile, currentStat);
+    if (!snapshotsMatch(snapshot, snapshotFor(currentSourceFile, currentStat))) {
+      throw sourceChanged(snapshot.sourceFile);
+    }
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === 'FlowSourceInvalid') {
+      throw error;
+    }
+    throw sourceChanged(snapshot.sourceFile);
   }
 }
 
 export async function loadFlowSource(file: string): Promise<FlowSource> {
   const sourceFile = await resolveSourceFile(file);
   const identity = sourceIdentity(sourceFile);
-  const metadata = await parseMetadata(await readSourceFile(sourceFile), sourceFile);
+  const { content, snapshot } = await readSourceFile(sourceFile);
+  await verifyFlowSourceSnapshot(snapshot);
+  const metadata = await parseMetadata(content, sourceFile);
   return {
     ...identity,
     sourceFile,
+    snapshot,
     metadata,
     description: descriptionFor(sourceFile, identity, metadata),
   };
