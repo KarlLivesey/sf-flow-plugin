@@ -73,7 +73,7 @@ export async function loadFlowSourceDirectory(directory: string): Promise<FlowSo
   return { directory: resolved, sources };
 }
 
-function sourceIndex(sources: ReadonlyArray<FlowSource>): Map<string, FlowSource> {
+function sourceIndex(sources: ReadonlyArray<FlowSource>): ReadonlyMap<string, FlowSource> {
   return new Map(sources.map((source) => [qualifiedFlowName(source.apiName, source.namespace), source]));
 }
 
@@ -82,11 +82,7 @@ function referencedSource(
   flowName: string,
   sources: ReadonlyMap<string, FlowSource>
 ): FlowSource | undefined {
-  const direct = sources.get(flowName);
-  if (direct !== undefined || flowName.includes('__')) {
-    return direct;
-  }
-  return sources.get(qualifiedFlowName(flowName, caller.namespace));
+  return flowName.includes('__') ? sources.get(flowName) : sources.get(qualifiedFlowName(flowName, caller.namespace));
 }
 
 export interface LocalSourceTraversal {
@@ -107,42 +103,79 @@ export function inspectDirectLocalSubflows(
   );
 }
 
-interface TraversalContext {
-  index: ReadonlyMap<string, FlowSource>;
-  visited: Set<string>;
-  resolved: FlowSource[];
-  warnings: FlowTraversalWarning[];
-  maxDepth: number;
-}
-
 interface TraversalPosition {
   source: FlowSource;
   depth: number;
   path: string[];
 }
 
-function visitSubflow(context: TraversalContext, position: TraversalPosition, subflow: FlowSubflowSummary): void {
+interface LocalTraversalState {
+  index: ReadonlyMap<string, FlowSource>;
+  queue: TraversalPosition[];
+  discoveredDepths: Map<string, number>;
+  visited: Set<string>;
+  resolved: FlowSource[];
+  warnings: FlowTraversalWarning[];
+  maxDepth: number;
+}
+
+interface ResolvedLocalSubflow {
+  target: FlowSource;
+  targetName: string;
+  nextPath: string[];
+  nextDepth: number;
+}
+
+function resolveLocalSubflow(
+  state: LocalTraversalState,
+  position: TraversalPosition,
+  subflow: FlowSubflowSummary
+): ResolvedLocalSubflow | undefined {
   const nextPath = [...position.path, subflow.flowName];
-  const target = referencedSource(position.source, subflow.flowName, context.index);
+  const target = referencedSource(position.source, subflow.flowName, state.index);
   if (target === undefined) {
-    context.warnings.push({ kind: 'missing-subflow', flowName: subflow.flowName, path: nextPath });
-  } else if (position.depth >= context.maxDepth) {
-    context.warnings.push({ kind: 'depth-limit', flowName: subflow.flowName, path: nextPath });
+    state.warnings.push({ kind: 'missing-subflow', flowName: subflow.flowName, path: nextPath });
+    return undefined;
+  }
+  return {
+    target,
+    targetName: qualifiedFlowName(target.apiName, target.namespace),
+    nextPath,
+    nextDepth: position.depth + 1,
+  };
+}
+
+function enqueueSubflow(state: LocalTraversalState, position: TraversalPosition, subflow: FlowSubflowSummary): void {
+  const resolved = resolveLocalSubflow(state, position, subflow);
+  if (
+    resolved === undefined ||
+    (state.discoveredDepths.get(resolved.targetName) ?? Number.POSITIVE_INFINITY) <= resolved.nextDepth
+  ) {
+    return;
+  }
+  if (position.depth >= state.maxDepth) {
+    state.warnings.push({ kind: 'depth-limit', flowName: subflow.flowName, path: resolved.nextPath });
   } else {
-    visitSource(context, { source: target, depth: position.depth + 1, path: nextPath });
+    state.discoveredDepths.set(resolved.targetName, resolved.nextDepth);
+    state.queue.push({ source: resolved.target, depth: resolved.nextDepth, path: resolved.nextPath });
   }
 }
 
-function visitSource(context: TraversalContext, position: TraversalPosition): void {
-  const { source, depth, path } = position;
-  const name = qualifiedFlowName(source.apiName, source.namespace);
-  if (context.visited.has(name)) {
-    return;
-  }
-  context.visited.add(name);
-  context.resolved.push(source);
-  for (const subflow of source.description.subflows) {
-    visitSubflow(context, { source, depth, path }, subflow);
+function drainTraversal(state: LocalTraversalState): void {
+  while (state.queue.length > 0) {
+    const position = state.queue.shift();
+    if (position === undefined) {
+      break;
+    }
+    const name = qualifiedFlowName(position.source.apiName, position.source.namespace);
+    if (state.visited.has(name)) {
+      continue;
+    }
+    state.visited.add(name);
+    state.resolved.push(position.source);
+    position.source.description.subflows.forEach((subflow) => {
+      enqueueSubflow(state, position, subflow);
+    });
   }
 }
 
@@ -151,13 +184,16 @@ export function traverseLocalSubflows(
   allSources: ReadonlyArray<FlowSource>,
   maxDepth: number
 ): LocalSourceTraversal {
-  const index = sourceIndex(allSources);
-  const visited = new Set<string>();
-  const resolved: FlowSource[] = [];
-  const warnings: FlowTraversalWarning[] = [];
-  visitSource(
-    { index, visited, resolved, warnings, maxDepth },
-    { source: root, depth: 0, path: [qualifiedFlowName(root.apiName, root.namespace)] }
-  );
-  return { sources: resolved, warnings };
+  const rootName = qualifiedFlowName(root.apiName, root.namespace);
+  const state: LocalTraversalState = {
+    index: sourceIndex(allSources),
+    queue: [{ source: root, depth: 0, path: [rootName] }],
+    discoveredDepths: new Map([[rootName, 0]]),
+    visited: new Set(),
+    resolved: [],
+    warnings: [],
+    maxDepth,
+  };
+  drainTraversal(state);
+  return { sources: state.resolved, warnings: state.warnings };
 }

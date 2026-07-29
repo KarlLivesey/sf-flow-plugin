@@ -5,9 +5,8 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import { flowDefinitionAmbiguous, flowInspectionFailed, flowVersionNotFound } from '../errors/flow-errors.js';
-import { flowApiNameSchema, namespaceSchema } from '../schemas/flow.js';
 import type { FlowComparisonVersionSelector, FlowMetadataGateway } from '../types/flow-analysis.js';
-import type { FlowDefinition, FlowDefinitionGateway, FlowDefinitionLookup, FlowVersion } from '../types/flow.js';
+import type { FlowDefinition, FlowDefinitionGateway, FlowVersion } from '../types/flow.js';
 import type {
   FlowDescribeRequest,
   FlowDescribeResult,
@@ -20,6 +19,7 @@ import { validateFlowDescribeRequest } from '../utils/flow-describe-validation.j
 import { noFlowProgress, type FlowProgressReporter, withFlowProgressStage } from '../utils/flow-progress.js';
 import { analyseFlowMetadata } from '../utils/flow-metadata-analysis.js';
 import { qualifiedFlowName, selectFlowDefinition } from '../utils/flow-state.js';
+import { flowDefinitionLookupForRequest, flowDefinitionLookupForSubflow } from '../utils/flow-subflow-lookup.js';
 
 interface TraversalResult {
   root: FlowDescription;
@@ -34,30 +34,9 @@ interface VisitContext {
   path: string[];
 }
 
-interface ExpansionContext {
-  definition: FlowDefinition;
-  parent: VisitContext;
-  name: string;
-  path: string[];
-}
-
-function lookupForRequest(request: FlowDescribeRequest): FlowDefinitionLookup {
-  return request.namespace === undefined
-    ? { apiName: request.apiName }
-    : { apiName: request.apiName, namespace: request.namespace };
-}
-
-function lookupForSubflow(flowName: string): FlowDefinitionLookup | null {
-  const separator = flowName.indexOf('__');
-  const apiName = separator < 0 ? flowName : flowName.slice(separator + 2);
-  const namespace = separator < 0 ? undefined : flowName.slice(0, separator);
-  if (
-    !flowApiNameSchema.safeParse(apiName).success ||
-    (namespace !== undefined && !namespaceSchema.safeParse(namespace).success)
-  ) {
-    return null;
-  }
-  return namespace === undefined ? { apiName } : { apiName, namespace };
+interface TraversalQueueEntry {
+  context: VisitContext;
+  description: FlowDescription;
 }
 
 interface VersionReference {
@@ -130,10 +109,19 @@ class FlowMetadataTraversal {
   ) {}
 
   public async traverse(): Promise<TraversalResult> {
+    const rootContext = await this.resolveRootContext();
+    const root = await this.visit(rootContext);
+    if (this.request.recursive) {
+      await this.expandBreadthFirst([{ context: rootContext, description: root }]);
+    }
+    return { root, flows: this.flows, warnings: [...this.warnings.values()] };
+  }
+
+  private async resolveRootContext(): Promise<VisitContext> {
     this.progress('resolving-flow', this.request.apiName);
     const definition = selectFlowDefinition(
       this.request.apiName,
-      await this.gateways.definitions.findDefinitions(lookupForRequest(this.request))
+      await this.gateways.definitions.findDefinitions(flowDefinitionLookupForRequest(this.request))
     );
     const name = qualifiedFlowName(definition.apiName, definition.namespace);
     const requestedVersion =
@@ -141,8 +129,7 @@ class FlowMetadataTraversal {
     this.progress('loading-versions', `${name} (${requestedVersion})`);
     const versions = await this.gateways.definitions.findVersions(definition.id);
     const version = selectVersion(definition, versions, this.request.version);
-    const root = await this.visit({ definition, version, depth: 0, path: [name] });
-    return { root, flows: this.flows, warnings: [...this.warnings.values()] };
+    return { definition, version, depth: 0, path: [name] };
   }
 
   private addWarning(warning: FlowTraversalWarning): void {
@@ -158,51 +145,34 @@ class FlowMetadataTraversal {
     const description = analyseFlowMetadata({ ...context, metadata });
     this.flows.push(description);
     this.visited.add(context.definition.id);
-    if (this.request.recursive) {
-      await this.expandSubflows(description, context);
-    }
     return description;
   }
 
-  private async expandSubflows(description: FlowDescription, context: VisitContext): Promise<void> {
-    await description.subflows.reduce(async (previous, subflow) => {
-      await previous;
-      await this.expandSubflow(subflow.flowName, context);
-    }, Promise.resolve());
-  }
-
-  private async expandSubflow(flowName: string, parent: VisitContext): Promise<void> {
-    const definition = await this.findSubflowDefinition(flowName, parent.path);
-    if (definition === undefined) {
+  private async expandBreadthFirst(queue: TraversalQueueEntry[]): Promise<void> {
+    const current = queue.shift();
+    if (current === undefined) {
       return;
     }
-    const name = qualifiedFlowName(definition.apiName, definition.namespace);
-    const path = [...parent.path, name];
-    if (this.shouldStopExpansion({ definition, parent, name, path })) {
-      return;
-    }
-    await this.visitSubflow(definition, parent, path);
+    const expanded = await current.description.subflows.reduce(async (previous, subflow) => {
+      const entries = await previous;
+      const next = await this.resolveSubflow(subflow.flowName, current.context);
+      return next === undefined ? entries : [...entries, { context: next, description: await this.visit(next) }];
+    }, Promise.resolve([] as TraversalQueueEntry[]));
+    await this.expandBreadthFirst([...queue, ...expanded]);
   }
 
-  private shouldStopExpansion({ definition, parent, name, path }: ExpansionContext): boolean {
-    if (this.visited.has(definition.id)) {
-      return true;
-    }
-    if (parent.depth >= this.request.maxDepth) {
-      this.addWarning({ kind: 'depth-limit', flowName: name, path });
-      return true;
-    }
-    return false;
-  }
-
-  private async findSubflowDefinition(flowName: string, path: string[]): Promise<FlowDefinition | undefined> {
-    const lookup = lookupForSubflow(flowName);
+  private async findSubflowDefinition(flowName: string, parent: VisitContext): Promise<FlowDefinition | undefined> {
+    const lookup = flowDefinitionLookupForSubflow(flowName);
     if (lookup === null) {
-      return this.missingSubflow(flowName, path);
+      return this.missingSubflow(flowName, parent.path);
     }
-    const definitions = await this.gateways.definitions.findDefinitions(lookup);
+    const found = await this.gateways.definitions.findDefinitions(lookup);
+    const definitions =
+      lookup.namespace === undefined
+        ? found.filter((definition) => definition.namespace === parent.definition.namespace)
+        : found;
     if (definitions.length === 0) {
-      return this.missingSubflow(flowName, path);
+      return this.missingSubflow(flowName, parent.path);
     }
     if (definitions.length > 1) {
       throw flowDefinitionAmbiguous(flowName);
@@ -215,8 +185,36 @@ class FlowMetadataTraversal {
     return undefined;
   }
 
-  private async visitSubflow(definition: FlowDefinition, parent: VisitContext, path: string[]): Promise<void> {
+  private async resolveSubflow(flowName: string, parent: VisitContext): Promise<VisitContext | undefined> {
+    const definition = await this.findSubflowDefinition(flowName, parent);
+    if (definition === undefined) {
+      return undefined;
+    }
     const name = qualifiedFlowName(definition.apiName, definition.namespace);
+    const path = [...parent.path, name];
+    if (this.shouldStopExpansion(definition, parent, path)) {
+      return undefined;
+    }
+    const version = await this.resolveSubflowVersion(definition, name, path);
+    return version === undefined ? undefined : { definition, version, depth: parent.depth + 1, path };
+  }
+
+  private shouldStopExpansion(definition: FlowDefinition, parent: VisitContext, path: string[]): boolean {
+    if (this.visited.has(definition.id)) {
+      return true;
+    }
+    if (parent.depth < this.request.maxDepth) {
+      return false;
+    }
+    this.addWarning({ kind: 'depth-limit', flowName: path.at(-1) ?? definition.apiName, path });
+    return true;
+  }
+
+  private async resolveSubflowVersion(
+    definition: FlowDefinition,
+    name: string,
+    path: string[]
+  ): Promise<FlowVersion | undefined> {
     const versions = await withFlowProgressStage(this.progress, {
       stage: 'loading-versions',
       detail: `${name} (${this.request.subflowVersion}, subflow)`,
@@ -225,18 +223,12 @@ class FlowMetadataTraversal {
     const reference = subflowVersionReference(definition, this.request.subflowVersion);
     if (reference.id === null) {
       this.addWarning({ kind: 'missing-subflow-version', flowName: path.at(-1) ?? definition.apiName, path });
-      return;
+      return undefined;
     }
     if (reference.fallback) {
       this.addWarning({ kind: 'subflow-version-fallback', flowName: path.at(-1) ?? definition.apiName, path });
     }
-    const version = versionForId(definition, versions, reference);
-    await this.visit({
-      definition,
-      version,
-      depth: parent.depth + 1,
-      path,
-    });
+    return versionForId(definition, versions, reference);
   }
 }
 

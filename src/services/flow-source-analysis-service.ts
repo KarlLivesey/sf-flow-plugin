@@ -13,15 +13,14 @@ import type {
   FlowGraphResult,
 } from '../types/flow-inspection.js';
 import type { FlowLintDirectoryResult, FlowLintFinding, FlowLintResult } from '../types/flow-lint.js';
-import type { FlowSourceMetricsResult } from '../types/flow-metrics.js';
 import type { FlowSource } from '../types/flow-source.js';
 import { filterFlowDescriptionSections } from '../utils/flow-description-sections.js';
 import { flowContracts, lintCheckFindings } from '../utils/flow-check-analysis.js';
-import { analyseFlowMetrics, totalFlowMetrics } from '../utils/flow-metrics-analysis.js';
 import { type FlowProgressReporter, noFlowProgress } from '../utils/flow-progress.js';
 import { renderDescribedFlowGraph } from './flow-graph-service.js';
 import type { FlowSourceDirectory } from './flow-source-directory-service.js';
 import { inspectDirectLocalSubflows, traverseLocalSubflows } from './flow-source-directory-service.js';
+import { calculateFlowSourceMetrics } from './flow-source-metrics.js';
 
 export const FLOW_SOURCE_CHECK_KINDS: FlowCheckKind[] = ['lint', 'metrics'];
 export const FLOW_SOURCE_DIRECTORY_CHECK_KINDS: FlowCheckKind[] = ['lint', 'subflows', 'metrics'];
@@ -144,26 +143,6 @@ export function selectedSourceDirectoryChecks(requested: FlowCheckKind[], exclud
   return checks;
 }
 
-function sourceMetrics(source: FlowSource): FlowSourceMetricsResult {
-  const analysed = analyseFlowMetrics(source.metadata, source.description);
-  const entry = { ...analysed, version: null };
-  return {
-    apiName: source.apiName,
-    namespace: source.namespace,
-    requestedVersion: null,
-    resolvedVersion: null,
-    subflowVersion: 'active',
-    recursive: false,
-    maxDepth: 0,
-    totals: totalFlowMetrics([entry]),
-    referencedObjects: entry.referencedObjects,
-    flows: [entry],
-    warnings: [],
-    targetOrg: null,
-    sourceFile: source.sourceFile,
-  };
-}
-
 export function checkFlowSource(
   source: FlowSource,
   selection: { checks: FlowCheckKind[]; excluded: FlowCheckKind[]; lintFindings: FlowLintFinding[] },
@@ -172,7 +151,7 @@ export function checkFlowSource(
   const checks = selection.checks;
   const lint = checks.includes('lint') ? lintFlowSource(source, selection.lintFindings, progress) : null;
   const findings = lint === null ? [] : lintCheckFindings(lint, 'lint');
-  const metrics = checks.includes('metrics') ? sourceMetrics(source) : null;
+  const metrics = checks.includes('metrics') ? calculateFlowSourceMetrics(source) : null;
   const flow = {
     apiName: source.apiName,
     namespace: source.namespace,
@@ -256,12 +235,19 @@ function directoryCheckEntry(
     throw flowCheckFailed(`Local Flow check did not produce an entry for "${source.apiName}".`);
   }
   const traversal = selection.recursive
-    ? traverseLocalSubflows(source, directory.sources, selection.maxDepth).sources
-    : [source];
+    ? traverseLocalSubflows(source, directory.sources, selection.maxDepth)
+    : { sources: [source], warnings: inspectDirectLocalSubflows(source, directory.sources) };
   const findings = [...result.findings, ...subflowFindings];
   return {
     ...flow,
-    contracts: flowContracts(traversal.map((item) => item.description)),
+    contracts: flowContracts(traversal.sources.map((item) => item.description)),
+    metrics: selection.checks.includes('metrics')
+      ? calculateFlowSourceMetrics(source, {
+          ...traversal,
+          recursive: selection.recursive,
+          maxDepth: selection.maxDepth,
+        })
+      : null,
     findings,
     errors: findings.filter((finding) => finding.severity === 'error').length,
     warnings: findings.filter((finding) => finding.severity === 'warning').length,

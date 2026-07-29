@@ -4,8 +4,9 @@ Lint a Salesforce Flow.
 
 # description
 
-Inspect an org-backed Flow version using this plugin's lint rules. Use `--source-file` to analyse local Flow metadata
-without an org through Salesforce Code Analyzer's official Flow Scanner rules.
+Inspect an org-backed Flow version using this plugin's lint rules. Use `--source-file` to analyse one local Flow or
+`--source-dir` to recursively discover every `.flow-meta.xml` file under a directory without an org. Local lint runs
+Salesforce Code Analyzer's official Flow Scanner once for the selected file or directory.
 
 # flags.api-name.summary
 
@@ -82,6 +83,10 @@ Do not offer to install Salesforce Code Analyzer when local Flow linting require
 - Run one Salesforce Code Analyzer Flow Scanner rule:
 
   <%= config.bin %> <%= command.id %> --source-file force-app/main/default/flows/Order_Processing.flow-meta.xml --rule MissingDescription
+
+- Recursively lint every Flow source file under a project directory:
+
+  <%= config.bin %> <%= command.id %> --source-dir force-app/main/default/flows --fail-on warning
 
 - Fail CI for new warnings while retaining known findings in a baseline:
 

@@ -106,6 +106,12 @@ Flow names. `flow check --recursive` resolves subflow references from the discov
 missing references and depth limits are findings. Directory mode supports lint, subflow and structural-metrics checks.
 Org-state checks remain unavailable, and lint baselines remain scoped to single-Flow lint results.
 
+Subflow traversal is breadth-first, so a Flow reachable through multiple branches is analysed at its shortest depth.
+A qualified subflow reference resolves that exact namespace. An unqualified reference resolves only in the caller's
+namespace (including the unmanaged namespace); it never silently selects a same-named Flow from another namespace.
+Recursive metrics include every traversed local subflow and report the selected recursion setting, depth limit and
+traversal warnings.
+
 The filename supplies the Flow identity. For example, `managed__Order_Processing.flow-meta.xml` is reported as the
 qualified Flow `managed__Order_Processing`. Source metadata is parsed as strict XML, must use the Salesforce Metadata
 API namespace.
@@ -770,6 +776,19 @@ sf flow check \
   --only lint \
   --only metrics \
   --fail-on warning
+```
+
+For a directory, the defaults are lint and direct subflow validation. Add `--recursive` to follow references
+breadth-first and include the traversed subflows in contracts and structural metrics up to `--max-depth`:
+
+```bash
+sf flow check \
+  --source-dir force-app/main/default/flows \
+  --recursive \
+  --max-depth 10 \
+  --only lint \
+  --only subflows \
+  --only metrics
 ```
 
 The command fails on errors by default. Use `--fail-on warning` for a stricter CI gate, repeatable `--only` or

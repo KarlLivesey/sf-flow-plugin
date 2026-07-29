@@ -7,13 +7,57 @@
 import { expect } from 'chai';
 
 import { FlowDescribeService } from '../../src/services/flow-describe-service.js';
+import type { JsonObject } from '../../src/types/flow-analysis.js';
 import type { FlowProgressStage } from '../../src/utils/flow-progress.js';
+import { FakeFlowGateway, flowDefinition, flowVersion } from '../helpers/fake-flow-gateway.js';
 import {
   inspectionRequest,
   nestedFlowGateway,
   subflowMetadata,
   versionedSubflowGateway,
 } from '../helpers/flow-inspection-fixtures.js';
+
+function subflowsMetadata(...flowNames: string[]): JsonObject {
+  return {
+    subflows: flowNames.map((flowName) => ({
+      name: `Call_${flowName.replaceAll('__', '_')}`,
+      flowName,
+    })),
+  };
+}
+
+function branchingFlowGateway(): FakeFlowGateway {
+  const names = ['Root', 'Long', 'Short', 'Middle', 'Target'];
+  const unresolved = names.map((apiName, index) =>
+    flowDefinition({
+      id: `30000000000${String((index + 1) * 100).padStart(4, '0')}`,
+      apiName,
+      activeVersionId: null,
+      latestVersionId: null,
+    })
+  );
+  const versions = unresolved.map((definition) => flowVersion(definition.id, 1, 'Active'));
+  const definitions = unresolved.map((definition, index) => ({
+    ...definition,
+    activeVersionId: versions[index]?.id ?? null,
+    latestVersionId: versions[index]?.id ?? null,
+  }));
+  const gateway = new FakeFlowGateway(definitions, versions);
+  const metadata: Record<string, JsonObject> = {
+    Root: subflowsMetadata('Long', 'Short'),
+    Long: subflowsMetadata('Middle'),
+    Short: subflowsMetadata('Target'),
+    Middle: subflowsMetadata('Target'),
+    Target: {},
+  };
+  definitions.forEach((definition, index) => {
+    const version = versions[index];
+    if (version !== undefined) {
+      gateway.metadata.set(version.id, metadata[definition.apiName] ?? {});
+    }
+  });
+  return gateway;
+}
 
 describe('FlowDescribeService', (): void => {
   it('describes only the requested Flow when recursion is disabled', async (): Promise<void> => {
@@ -63,6 +107,64 @@ describe('FlowDescribeService', (): void => {
         path: ['Flow_A', 'not a valid Flow name'],
       },
     ]);
+  });
+});
+
+describe('FlowDescribeService breadth-first namespace traversal', (): void => {
+  it('uses the shortest recursive path when a Flow is reached through two branches', async (): Promise<void> => {
+    const result = await new FlowDescribeService(branchingFlowGateway()).describe(
+      inspectionRequest({ apiName: 'Root', maxDepth: 2 })
+    );
+    expect(result.flows.map((flow) => [flow.qualifiedName, flow.depth])).to.deep.equal([
+      ['Root', 0],
+      ['Long', 1],
+      ['Short', 1],
+      ['Middle', 2],
+      ['Target', 2],
+    ]);
+    expect(result.warnings).to.deep.equal([]);
+  });
+});
+
+describe('FlowDescribeService namespace traversal', (): void => {
+  it('resolves unqualified subflows within the caller namespace', async (): Promise<void> => {
+    const root = {
+      ...flowDefinition({
+        id: '300000000000301',
+        apiName: 'Root',
+        activeVersionId: '301000000000301',
+        latestVersionId: '301000000000301',
+      }),
+      namespace: 'managed',
+    };
+    const managedChild = {
+      ...flowDefinition({
+        id: '300000000000302',
+        apiName: 'Child',
+        activeVersionId: '301000000000302',
+        latestVersionId: '301000000000302',
+      }),
+      namespace: 'managed',
+    };
+    const unmanagedChild = flowDefinition({
+      id: '300000000000303',
+      apiName: 'Child',
+      activeVersionId: '301000000000303',
+      latestVersionId: '301000000000303',
+    });
+    const versions = [
+      { ...flowVersion(root.id, 1, 'Active'), id: '301000000000301' },
+      { ...flowVersion(managedChild.id, 1, 'Active'), id: '301000000000302' },
+      { ...flowVersion(unmanagedChild.id, 1, 'Active'), id: '301000000000303' },
+    ];
+    const gateway = new FakeFlowGateway([root, managedChild, unmanagedChild], versions);
+    gateway.metadata.set(versions[0]?.id ?? '', subflowMetadata('Child'));
+    gateway.metadata.set(versions[1]?.id ?? '', {});
+    gateway.metadata.set(versions[2]?.id ?? '', {});
+    const result = await new FlowDescribeService(gateway).describe(
+      inspectionRequest({ apiName: 'Root', namespace: 'managed' })
+    );
+    expect(result.flows.map((flow) => flow.qualifiedName)).to.deep.equal(['managed__Root', 'managed__Child']);
   });
 });
 
