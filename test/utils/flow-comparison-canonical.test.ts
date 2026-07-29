@@ -111,4 +111,17 @@ describe('canonicalFlowComparisonPair', (): void => {
       { kind: 'changed', path: '$.start.connector.targetReference', before: 'One', after: 'Two' },
     ]);
   });
+
+  for (const [before, after] of [
+    ['Active', 'Draft'],
+    ['Draft', 'Obsolete'],
+    ['Draft', 'InvalidDraft'],
+  ] as const) {
+    it(`preserves ${before} and ${after} as distinct comparison statuses`, async (): Promise<void> => {
+      const pair = await canonicalFlowComparisonPair({ status: before }, { status: after });
+      expect(
+        compareFlowMetadata(pair.from, pair.to, { scopes: [], ignoreOrder: false, includeStatus: true })
+      ).to.deep.equal([{ kind: 'changed', path: '$.status', before, after }]);
+    });
+  }
 });

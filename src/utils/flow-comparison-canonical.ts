@@ -9,7 +9,7 @@ import { z } from 'zod';
 
 import { flowComparisonFailed } from '../errors/flow-errors.js';
 import type { JsonObject, JsonValue } from '../types/flow-analysis.js';
-import { renderFlowMetadataXml } from './flow-metadata-xml.js';
+import { renderFlowMetadataXmlForComparison } from './flow-metadata-xml.js';
 
 const parsedFlowSchema = z.object({
   Flow: z.record(z.string(), z.unknown()),
@@ -61,8 +61,7 @@ function alignCardinality(value: JsonValue, ownHint: unknown, otherHint: unknown
 
 async function parseComparisonMetadata(metadata: JsonObject): Promise<JsonObject> {
   try {
-    const status = metadata.status === 'Active' ? 'active' : 'draft';
-    const parsed: unknown = await parseStringPromise(renderFlowMetadataXml(metadata, status), {
+    const parsed: unknown = await parseStringPromise(renderFlowMetadataXmlForComparison(metadata), {
       explicitArray: false,
       explicitRoot: true,
       strict: true,

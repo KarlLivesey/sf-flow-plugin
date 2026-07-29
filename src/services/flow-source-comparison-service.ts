@@ -208,6 +208,7 @@ export async function compareFlowSources(context: SourceComparisonContext): Prom
   const changes = compareFlowMetadata(metadata.from, metadata.to, {
     scopes: request.scopes,
     ignoreOrder: request.ignoreOrder,
+    includeStatus: true,
   }).filter((change) => !ignoredPath(change.path, request.ignorePaths));
   return createResult(request, { from, to }, changes);
 }
