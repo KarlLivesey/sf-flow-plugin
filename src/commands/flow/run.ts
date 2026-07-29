@@ -19,11 +19,7 @@ import type { FlowRollbackRequest, FlowRunRequest, FlowRunResult } from '../../t
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
 import { readFlowInputs } from '../../utils/flow-input-file.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
-import {
-  persistFailedFlowDebugLog,
-  persistFlowRunFiles,
-  prepareFlowRunFiles,
-} from '../../utils/flow-run-files.js';
+import { persistFailedFlowDebugLog, persistFlowRunFiles, prepareFlowRunFiles } from '../../utils/flow-run-files.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -178,10 +174,8 @@ export async function executeFlowRunCommand(
         new FlowDebugService({
           definition: definitionGateway,
           debug: new ApexSoapFlowDebugGateway(context.connection),
-        }).debug(
-          await createRollbackRequest(flags, context),
-          progress,
-          async (rawLog) => persistFailedFlowDebugLog(destinations, rawLog)
+        }).debug(await createRollbackRequest(flags, context), progress, async (rawLog) =>
+          persistFailedFlowDebugLog(destinations, rawLog)
         )
       )
     : {

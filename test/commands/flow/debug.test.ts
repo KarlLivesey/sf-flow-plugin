@@ -45,6 +45,21 @@ describe('flow debug command', (): void => {
     expect(debug.calledOnce).to.equal(true);
     expect(actual).to.equal(result);
   });
+});
+
+describe('flow debug command result contract', (): void => {
+  it('returns the dedicated single-invocation debug contract', async (): Promise<void> => {
+    $$.SANDBOX.stub(FlowDebug.prototype, 'parseFlags').resolves(debugFlags());
+    $$.SANDBOX.stub(FlowDebugService.prototype, 'debug').resolves({
+      result: rollbackRunResult(true),
+      rawLog: 'correlated log',
+    });
+
+    const actual = await FlowDebug.run(['--json']);
+
+    expect(actual.debug).not.to.equal(undefined);
+    expect(actual.invocations).to.have.length(1);
+  });
 
   it('uses multiple input values expanded by flags-dir exactly once', async (): Promise<void> => {
     const flags = { ...debugFlags(), input: ['percentage=10', 'region=EMEA'] };

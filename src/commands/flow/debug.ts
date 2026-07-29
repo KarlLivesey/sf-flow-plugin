@@ -8,7 +8,8 @@ import type { Interfaces } from '@oclif/core';
 import { Messages } from '@salesforce/core';
 import { SfCommand } from '@salesforce/sf-plugins-core';
 
-import type { FlowRunResult } from '../../types/flow-invocation.js';
+import { flowDebugFailed } from '../../errors/flow-errors.js';
+import type { FlowDebugResult, FlowRunResult } from '../../types/flow-invocation.js';
 import { createFlowCommandContext, validateNamedFlowFlags } from '../../utils/flow-command.js';
 import FlowRun, { executeFlowRunCommand, type RunFlagValues } from './run.js';
 
@@ -16,7 +17,14 @@ Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('sf-flow-plugin', 'flow.debug');
 type DebugFlagValues = Omit<RunFlagValues, 'rollback'>;
 
-export default class FlowDebug extends SfCommand<FlowRunResult> {
+function requireFlowDebugResult(result: FlowRunResult): FlowDebugResult {
+  if (result.debug === undefined || result.invocations.length !== 1) {
+    throw flowDebugFailed('The dedicated Flow debug command received an invalid rollback result.');
+  }
+  return result as FlowDebugResult;
+}
+
+export default class FlowDebug extends SfCommand<FlowDebugResult> {
   public static override readonly summary = messages.getMessage('summary');
   public static override readonly description = messages.getMessage('description');
   public static override readonly examples = messages.getMessages('examples');
@@ -62,10 +70,15 @@ export default class FlowDebug extends SfCommand<FlowRunResult> {
     return flags as unknown as DebugFlagValues;
   }
 
-  public override async run(): Promise<FlowRunResult> {
+  public override async run(): Promise<FlowDebugResult> {
     const flags = await this.parseFlags();
     validateNamedFlowFlags(flags);
     const context = createFlowCommandContext(flags);
-    return executeFlowRunCommand(this, { ...flags, rollback: true }, context);
+    const result = await executeFlowRunCommand(
+      this as unknown as SfCommand<FlowRunResult>,
+      { ...flags, rollback: true },
+      context
+    );
+    return requireFlowDebugResult(result);
   }
 }

@@ -64,6 +64,11 @@ export interface FlowRunDebug {
   events: FlowDebugEvent[];
 }
 
+export interface FlowDebugResult extends Omit<FlowRunResult, 'debug' | 'invocations'> {
+  invocations: [FlowInvocation];
+  debug: FlowRunDebug;
+}
+
 export interface FlowActionError {
   message?: string | undefined;
   statusCode?: string | undefined;
