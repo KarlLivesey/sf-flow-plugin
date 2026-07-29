@@ -4,7 +4,7 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -12,7 +12,11 @@ import { pathToFileURL } from 'node:url';
 import { expect } from 'chai';
 
 import { checkFlowSourceDirectory, lintFlowSourceDirectory } from '../../src/services/flow-source-analysis-service.js';
-import { inspectDirectLocalSubflows, traverseLocalSubflows } from '../../src/services/flow-source-directory-service.js';
+import {
+  inspectDirectLocalSubflows,
+  traverseLocalSubflows,
+  verifyFlowSourceDirectory,
+} from '../../src/services/flow-source-directory-service.js';
 import { verifyFlowSourceSnapshot } from '../../src/services/flow-source-service.js';
 import type { FlowSource } from '../../src/types/flow-source.js';
 import { formatFlowCheckSarif } from '../../src/utils/flow-check-analysis.js';
@@ -61,13 +65,35 @@ async function expectSourceInvalid(promise: Promise<unknown>, messagePart: strin
   expect(error).to.have.property('message').that.includes(messagePart);
 }
 
+async function loadedSource(directory: string, name: string): Promise<FlowSource> {
+  const file = join(directory, `${name}.flow-meta.xml`);
+  await writeFile(file, 'unchanged', 'utf8');
+  const snapshot = await stat(file);
+  return {
+    ...source(name),
+    sourceFile: file,
+    snapshot: {
+      sourceFile: file,
+      device: snapshot.dev,
+      inode: snapshot.ino,
+      size: snapshot.size,
+      modifiedMilliseconds: snapshot.mtimeMs,
+      changedMilliseconds: snapshot.ctimeMs,
+    },
+  };
+}
+
 describe('local Flow source directory traversal', (): void => {
   it('resolves recursive local subflows once', (): void => {
     const root = source('Root', ['Child']);
     const child = source('Child', ['Leaf']);
     const leaf = source('Leaf');
     const result = traverseLocalSubflows(root, [root, child, leaf], 5);
-    expect(result.sources.map((item) => item.apiName)).to.deep.equal(['Root', 'Child', 'Leaf']);
+    expect(result.sources.map((item) => [item.source.apiName, item.depth])).to.deep.equal([
+      ['Root', 0],
+      ['Child', 1],
+      ['Leaf', 2],
+    ]);
     expect(result.warnings).to.deep.equal([]);
   });
 
@@ -100,7 +126,13 @@ describe('local Flow source directory breadth-first traversal', (): void => {
     const middle = source('Middle', ['Target']);
     const target = source('Target');
     const result = traverseLocalSubflows(root, [root, long, short, middle, target], 2);
-    expect(result.sources.map((item) => item.apiName)).to.deep.equal(['Root', 'Long', 'Short', 'Middle', 'Target']);
+    expect(result.sources.map((item) => [item.source.apiName, item.depth])).to.deep.equal([
+      ['Root', 0],
+      ['Long', 1],
+      ['Short', 1],
+      ['Middle', 2],
+      ['Target', 2],
+    ]);
     expect(result.warnings).to.deep.equal([]);
   });
 
@@ -110,19 +142,24 @@ describe('local Flow source directory breadth-first traversal', (): void => {
     const unmanagedChild = source('Child');
     const otherChild = source('Child', [], 'other');
     const result = traverseLocalSubflows(managedRoot, [managedRoot, managedChild, unmanagedChild, otherChild], 1);
-    expect(result.sources.map((item) => item.description.qualifiedName)).to.deep.equal([
+    expect(result.sources.map((item) => item.source.description.qualifiedName)).to.deep.equal([
       'managed__Root',
       'managed__Child',
       'other__Child',
     ]);
     expect(result.warnings).to.deep.equal([]);
   });
+});
 
-  it('uses the recursive traversal for directory metrics', (): void => {
-    const root = source('Root', ['Child']);
-    const child = source('Child');
+describe('local Flow source directory metric traversal', (): void => {
+  it('uses each recursive source at its shortest traversal depth', (): void => {
+    const root = source('Root', ['Long', 'Short']);
+    const long = source('Long', ['Middle']);
+    const short = source('Short', ['Target']);
+    const middle = source('Middle', ['Target']);
+    const target = source('Target');
     const result = checkFlowSourceDirectory(
-      { directory: '/flows', sources: [root, child] },
+      { directory: '/flows', sources: [root, long, short, middle, target] },
       {
         checks: ['metrics'],
         excluded: [],
@@ -132,7 +169,13 @@ describe('local Flow source directory breadth-first traversal', (): void => {
       }
     );
     expect(result.flows[0]?.metrics).to.include({ recursive: true, maxDepth: 4 });
-    expect(result.flows[0]?.metrics?.flows.map((flow) => flow.apiName)).to.deep.equal(['Root', 'Child']);
+    expect(result.flows[0]?.metrics?.flows.map((flow) => [flow.apiName, flow.depth])).to.deep.equal([
+      ['Root', 0],
+      ['Long', 1],
+      ['Short', 1],
+      ['Middle', 2],
+      ['Target', 2],
+    ]);
     expect(result.flows[0]?.metrics?.warnings).to.deep.equal([]);
   });
 });
@@ -225,4 +268,25 @@ describe('local Flow source directory snapshot safety', (): void => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+});
+
+describe('local Flow source directory membership safety', (): void => {
+  for (const location of ['root', 'nested'] as const) {
+    it(`rejects a Flow source added to the ${location} directory after discovery`, async (): Promise<void> => {
+      const directory = await mkdtemp(join(tmpdir(), 'sf-flow-directory-addition-'));
+      try {
+        const original = await loadedSource(directory, 'Original');
+        const addedDirectory = location === 'root' ? directory : join(directory, 'nested');
+        await mkdir(addedDirectory, { recursive: true });
+        await writeFile(join(addedDirectory, 'Added.flow-meta.xml'), 'added', 'utf8');
+
+        await expectSourceInvalid(
+          verifyFlowSourceDirectory({ directory, sources: [original] }),
+          'changed while it was being analysed'
+        );
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    });
+  }
 });

@@ -108,6 +108,14 @@ export async function loadFlowSourceDirectory(directory: string): Promise<FlowSo
 }
 
 export async function verifyFlowSourceDirectory(directory: FlowSourceDirectory): Promise<void> {
+  const expectedFiles = directory.sources.map((source) => source.sourceFile).sort();
+  const currentFiles = await sourceFiles(directory.directory);
+  if (
+    currentFiles.length !== expectedFiles.length ||
+    currentFiles.some((file, index) => file !== expectedFiles[index])
+  ) {
+    throw flowSourceInvalid(`Flow source directory "${directory.directory}" changed while it was being analysed.`);
+  }
   await boundedMap(directory.sources, SOURCE_CONCURRENCY, async (source) => verifyFlowSourceSnapshot(source.snapshot));
 }
 
@@ -124,8 +132,13 @@ function referencedSource(
 }
 
 export interface LocalSourceTraversal {
-  sources: FlowSource[];
+  sources: TraversedFlowSource[];
   warnings: FlowTraversalWarning[];
+}
+
+export interface TraversedFlowSource {
+  source: FlowSource;
+  depth: number;
 }
 
 export function inspectDirectLocalSubflows(
@@ -152,7 +165,7 @@ interface LocalTraversalState {
   queue: TraversalPosition[];
   discoveredDepths: Map<string, number>;
   visited: Set<string>;
-  resolved: FlowSource[];
+  resolved: TraversedFlowSource[];
   warnings: FlowTraversalWarning[];
   maxDepth: number;
 }
@@ -210,7 +223,7 @@ function drainTraversal(state: LocalTraversalState): void {
       continue;
     }
     state.visited.add(name);
-    state.resolved.push(position.source);
+    state.resolved.push({ source: position.source, depth: position.depth });
     position.source.description.subflows.forEach((subflow) => {
       enqueueSubflow(state, position, subflow);
     });

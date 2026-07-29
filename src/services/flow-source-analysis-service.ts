@@ -226,7 +226,7 @@ function directoryCheckEntry(
   );
   const traversal = selection.recursive
     ? traverseLocalSubflows(source, directory.sources, selection.maxDepth)
-    : { sources: [source], warnings: inspectDirectLocalSubflows(source, directory.sources) };
+    : { sources: [{ source, depth: 0 }], warnings: inspectDirectLocalSubflows(source, directory.sources) };
   const subflowFindings = selection.checks.includes('subflows')
     ? directorySubflowFindings(source, traversal.warnings)
     : [];
@@ -237,7 +237,7 @@ function directoryCheckEntry(
   const findings = [...result.findings, ...subflowFindings];
   return {
     ...flow,
-    contracts: flowContracts(traversal.sources.map((item) => item.description)),
+    contracts: flowContracts(traversal.sources.map((item) => item.source.description)),
     metrics: selection.checks.includes('metrics')
       ? calculateFlowSourceMetrics(source, {
           ...traversal,

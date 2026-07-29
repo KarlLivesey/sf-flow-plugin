@@ -7,9 +7,10 @@
 import type { FlowSourceMetricsResult } from '../types/flow-metrics.js';
 import type { FlowSource } from '../types/flow-source.js';
 import { analyseFlowMetrics, totalFlowMetrics } from '../utils/flow-metrics-analysis.js';
+import type { TraversedFlowSource } from './flow-source-directory-service.js';
 
 export interface FlowSourceMetricsTraversal {
-  sources: ReadonlyArray<FlowSource>;
+  sources: ReadonlyArray<TraversedFlowSource>;
   warnings: FlowSourceMetricsResult['warnings'];
   recursive: boolean;
   maxDepth: number;
@@ -18,14 +19,14 @@ export interface FlowSourceMetricsTraversal {
 export function calculateFlowSourceMetrics(
   source: FlowSource,
   traversal: FlowSourceMetricsTraversal = {
-    sources: [source],
+    sources: [{ source, depth: 0 }],
     warnings: [],
     recursive: false,
     maxDepth: 0,
   }
 ): FlowSourceMetricsResult {
-  const flows = traversal.sources.map((item) => ({
-    ...analyseFlowMetrics(item.metadata, item.description),
+  const flows = traversal.sources.map(({ source: item, depth }) => ({
+    ...analyseFlowMetrics(item.metadata, { ...item.description, depth }),
     version: null,
   }));
   return {
