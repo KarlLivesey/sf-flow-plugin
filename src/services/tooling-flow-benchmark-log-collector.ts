@@ -33,13 +33,15 @@ interface PendingLog {
   apiName: string;
   correlationId: string;
   startedAt: Date;
-  deadline: number;
+  deadline: number | null;
+  waitMilliseconds: number;
   resolve: (log: CorrelatedBenchmarkLog) => void;
   reject: (error: Error) => void;
 }
 
 export interface BenchmarkLogRegistration {
   result: Promise<CorrelatedBenchmarkLog>;
+  armDeadline(): void;
   cancel(): void;
 }
 
@@ -86,7 +88,7 @@ export class ToolingFlowBenchmarkLogCollector {
     const result = new Promise<CorrelatedBenchmarkLog>((resolve, reject) => {
       const pending = {
         ...options,
-        deadline: Date.now() + options.waitMilliseconds,
+        deadline: null,
         resolve,
         reject,
       };
@@ -95,6 +97,12 @@ export class ToolingFlowBenchmarkLogCollector {
     });
     return {
       result,
+      armDeadline: (): void => {
+        const pending = this.pending.get(options.correlationId);
+        if (pending !== undefined && pending.deadline === null) {
+          pending.deadline = Date.now() + pending.waitMilliseconds;
+        }
+      },
       cancel: (): void => {
         this.pending.delete(options.correlationId);
       },
@@ -156,7 +164,7 @@ export class ToolingFlowBenchmarkLogCollector {
   private rejectExpired(): void {
     const now = Date.now();
     for (const [correlationId, pending] of this.pending) {
-      if (now > pending.deadline) {
+      if (pending.deadline !== null && now > pending.deadline) {
         this.pending.delete(correlationId);
         pending.reject(flowDebugLogNotFound(pending.apiName));
       }

@@ -16,15 +16,9 @@ import type { FlowDebugLogLevel } from '../../types/flow-debug.js';
 import type { BenchmarkFlagValues } from '../../utils/flow-benchmark-command.js';
 import { createFlowBenchmarkRequest } from '../../utils/flow-benchmark-command.js';
 import { createFlowCommandContext, validateNamedFlowFlags } from '../../utils/flow-command.js';
+import { prepareFlowBenchmarkDestinations, type FlowBenchmarkDestinations } from '../../utils/flow-benchmark-files.js';
+import { persistFlowBenchmark } from '../../utils/flow-benchmark-output-transaction.js';
 import {
-  persistFlowBenchmark,
-  prepareFlowBenchmarkDestinations,
-  type FlowBenchmarkDestinations,
-} from '../../utils/flow-benchmark-files.js';
-import {
-  MAX_BENCHMARK_CONCURRENCY,
-  MAX_BENCHMARK_ITERATIONS,
-  MAX_BENCHMARK_WARMUP,
   parseBenchmarkPercentile,
   parseNonnegativeBenchmarkInteger,
   parsePositiveBenchmarkInteger,
@@ -66,20 +60,17 @@ export default class FlowBenchmark extends SfCommand<FlowBenchmarkResult> {
     }),
     iterations: Flags.custom<number>({
       default: 100,
-      parse: (input: string): Promise<number> =>
-        Promise.resolve(parsePositiveBenchmarkInteger(input, MAX_BENCHMARK_ITERATIONS)),
+      parse: (input: string): Promise<number> => Promise.resolve(parsePositiveBenchmarkInteger(input)),
       summary: messages.getMessage('flags.iterations.summary'),
     })(),
     warmup: Flags.custom<number>({
       default: 10,
-      parse: (input: string): Promise<number> =>
-        Promise.resolve(parseNonnegativeBenchmarkInteger(input, MAX_BENCHMARK_WARMUP)),
+      parse: (input: string): Promise<number> => Promise.resolve(parseNonnegativeBenchmarkInteger(input)),
       summary: messages.getMessage('flags.warmup.summary'),
     })(),
     concurrency: Flags.custom<number>({
       default: 1,
-      parse: (input: string): Promise<number> =>
-        Promise.resolve(parsePositiveBenchmarkInteger(input, MAX_BENCHMARK_CONCURRENCY)),
+      parse: (input: string): Promise<number> => Promise.resolve(parsePositiveBenchmarkInteger(input)),
       summary: messages.getMessage('flags.concurrency.summary'),
     })(),
     percentile: Flags.custom<number>({

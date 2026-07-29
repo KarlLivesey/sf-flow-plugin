@@ -5,6 +5,7 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { setTimeout as wait } from 'node:timers/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -40,8 +41,11 @@ describe('FlowBenchmarkService successful measurements', (): void => {
       flowBenchmarkRequest({ concurrency: 2, iterations: 4, warmup: 1 })
     );
 
-    expect(gateways.benchmark.opened[0]?.traceDurationMilliseconds).to.equal(600_000);
-    expect(gateways.benchmark.session).to.include({ closed: true, preparedBatches: 2 });
+    expect(gateways.benchmark.opened[0]).to.include({
+      executionCoverageMilliseconds: 600_000,
+      traceDurationMilliseconds: 780_000,
+    });
+    expect(gateways.benchmark.session).to.include({ closed: true, preparedBatches: 3 });
     expect(gateways.benchmark.session.executed.map((request) => request.input)).to.deep.equal([
       { percentage: 10 },
       { percentage: 10 },
@@ -69,6 +73,33 @@ describe('FlowBenchmarkService raw log staging', (): void => {
         () => false
       );
       expect(published).to.equal(false);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('drains every claimed execution before a raw-log write failure closes the session', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'sf-flow-service-drain-'));
+    const gateways = flowBenchmarkGateways();
+    let secondExecutionFinished = false;
+    gateways.benchmark.session.onExecute = async (sample): Promise<void> => {
+      if (sample === 1) {
+        const stage = (await readdir(directory)).find((entry) => entry.startsWith('.sf-flow-benchmark-'));
+        await rm(join(directory, stage ?? 'missing-stage'), { recursive: true, force: true });
+      } else {
+        await wait(20);
+        secondExecutionFinished = true;
+      }
+    };
+    try {
+      const error = await new FlowBenchmarkService(gateways)
+        .benchmark(
+          flowBenchmarkRequest({ iterations: 2, warmup: 0, concurrency: 2, rawLogDirectory: join(directory, 'logs') })
+        )
+        .catch((caught: unknown) => caught);
+      expect(error).to.have.property('name', 'FlowBenchmarkFailed');
+      expect(secondExecutionFinished).to.equal(true);
+      expect(gateways.benchmark.session.closed).to.equal(true);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -111,6 +142,22 @@ describe('FlowBenchmarkService failed measurements', (): void => {
     expect(artifact.result.wallClock).to.deep.include({ count: 3, minimum: 5, maximum: 15, mean: 10 });
     expect(artifact.result.cpuTime).to.deep.include({ count: 2, minimum: 10, maximum: 30, mean: 20 });
     expect(artifact.rawLogStage).to.equal(null);
+  });
+});
+
+describe('FlowBenchmarkService concurrent ordering', (): void => {
+  it('returns warm-up samples in planned order after a concurrent wave stops on failure', async (): Promise<void> => {
+    const gateways = flowBenchmarkGateways();
+    gateways.benchmark.session.failAt = 1;
+    gateways.benchmark.session.onExecute = async (sample): Promise<void> => {
+      await wait(sample === 1 ? 20 : 0);
+    };
+    const artifact = await new FlowBenchmarkService(gateways).benchmark(
+      flowBenchmarkRequest({ iterations: 1, warmup: 4, concurrency: 2 })
+    );
+    expect(artifact.result.samples.map((sample) => sample.sample)).to.deep.equal([1, 2]);
+    expect(artifact.result.samples.map((sample) => sample.phase)).to.deep.equal(['warmup', 'warmup']);
+    expect(gateways.benchmark.session.executed).to.have.length(2);
   });
 });
 

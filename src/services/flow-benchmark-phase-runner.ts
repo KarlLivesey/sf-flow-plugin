@@ -7,7 +7,7 @@
 import type { JsonObject } from '../types/flow-analysis.js';
 import type { FlowBenchmarkPhase, FlowBenchmarkRequest, FlowBenchmarkSession } from '../types/flow-benchmark.js';
 import { FlowBenchmarkExecutionError } from '../utils/flow-benchmark-error.js';
-import { writeFlowBenchmarkRawLog } from '../utils/flow-benchmark-files.js';
+import { writeFlowBenchmarkRawLogs, type FlowBenchmarkRawLog } from '../utils/flow-benchmark-files.js';
 import {
   completedBenchmarkSample,
   type CompletedBenchmarkSample,
@@ -17,8 +17,6 @@ import {
 } from '../utils/flow-benchmark-sample.js';
 import type { FlowProgressReporter } from '../utils/flow-progress.js';
 import type { PreparedDebug } from './flow-debug-service.js';
-
-export const FLOW_BENCHMARK_BATCH_SIZE = 100;
 
 export interface FlowBenchmarkPhaseResult {
   completed: CompletedBenchmarkSample[];
@@ -63,7 +61,7 @@ export class FlowBenchmarkPhaseRunner {
   public constructor(private readonly context: FlowBenchmarkPhaseRunnerContext) {}
 
   public async run(): Promise<FlowBenchmarkPhaseResult> {
-    return this.runNextBatch(0);
+    return this.runNextWave(0);
   }
 
   private claim(batchEnd: number): PlannedBenchmarkSample | null {
@@ -81,8 +79,6 @@ export class FlowBenchmarkPhaseRunner {
       `${this.context.prepared.flow.apiName} ${planned.phase} ${planned.sample}/${this.context.count}`
     );
     const completed = await this.measure(planned);
-    await this.retainRawLog(planned, completed);
-    completed.rawLog = null;
     return completed;
   }
 
@@ -106,38 +102,54 @@ export class FlowBenchmarkPhaseRunner {
     }
   }
 
-  private async retainRawLog(planned: PlannedBenchmarkSample, completed: CompletedBenchmarkSample): Promise<void> {
-    if (
-      completed.rawLog !== null &&
-      this.context.rawLogStage !== null &&
-      (planned.phase === 'measured' || this.context.request.retainWarmupLogs)
-    ) {
-      await writeFlowBenchmarkRawLog(this.context.rawLogStage, {
-        phase: planned.phase,
-        sample: planned.sample,
-        rawLog: completed.rawLog,
-      });
+  private orderedCompleted(): CompletedBenchmarkSample[] {
+    return [...this.completed].sort((left, right) => left.sample.sample - right.sample.sample);
+  }
+
+  private async retainRawLogs(completed: ReadonlyArray<CompletedBenchmarkSample>): Promise<void> {
+    const logs = completed.flatMap((entry): FlowBenchmarkRawLog[] => {
+      const rawLog = entry.rawLog;
+      const retain =
+        rawLog !== null &&
+        this.context.rawLogStage !== null &&
+        (entry.sample.phase === 'measured' || this.context.request.retainWarmupLogs);
+      return retain ? [{ phase: entry.sample.phase, sample: entry.sample.sample, rawLog }] : [];
+    });
+    for (const completedEntry of completed) {
+      completedEntry.rawLog = null;
+    }
+    if (this.context.rawLogStage !== null) {
+      await writeFlowBenchmarkRawLogs(this.context.rawLogStage, logs);
     }
   }
 
-  private async runBatch(batchEnd: number): Promise<void> {
-    const workerCount = Math.min(this.context.request.concurrency, batchEnd - this.nextIndex);
-    await Promise.all(Array.from({ length: workerCount }, async () => this.worker(batchEnd)));
-  }
-
-  private async runNextBatch(elapsedMilliseconds: number): Promise<FlowBenchmarkPhaseResult> {
+  private async runNextWave(elapsedMilliseconds: number): Promise<FlowBenchmarkPhaseResult> {
     if (this.stopped || this.nextIndex >= this.context.count) {
-      return { completed: this.completed, stopped: this.stopped, elapsedMilliseconds };
+      return { completed: this.orderedCompleted(), stopped: this.stopped, elapsedMilliseconds };
     }
     await this.context.session.prepareBatch();
-    const batchEnd = Math.min(this.context.count, this.nextIndex + FLOW_BENCHMARK_BATCH_SIZE);
+    const waveEnd = Math.min(this.context.count, this.nextIndex + this.context.request.concurrency);
     const started = performance.now();
-    await this.runBatch(batchEnd);
-    return this.runNextBatch(elapsedMilliseconds + performance.now() - started);
+    const completed = await this.runWave(waveEnd);
+    const measuredMilliseconds = performance.now() - started;
+    await this.retainRawLogs(completed);
+    return this.runNextWave(elapsedMilliseconds + measuredMilliseconds);
   }
 
-  private async worker(batchEnd: number): Promise<void> {
-    const planned = this.claim(batchEnd);
+  private async runWave(waveEnd: number): Promise<CompletedBenchmarkSample[]> {
+    const firstCompletedIndex = this.completed.length;
+    const workerCount = Math.min(this.context.request.concurrency, waveEnd - this.nextIndex);
+    const settled = await Promise.allSettled(Array.from({ length: workerCount }, async () => this.worker(waveEnd)));
+    const failure = settled.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+    if (failure !== undefined) {
+      this.stopped = true;
+      throw failure.reason;
+    }
+    return this.completed.slice(firstCompletedIndex);
+  }
+
+  private async worker(waveEnd: number): Promise<void> {
+    const planned = this.claim(waveEnd);
     if (planned === null) {
       return;
     }
@@ -145,8 +157,6 @@ export class FlowBenchmarkPhaseRunner {
     this.completed.push(completed);
     if (!completed.sample.successful && !this.context.request.continueOnError) {
       this.stopped = true;
-      return;
     }
-    await this.worker(batchEnd);
   }
 }

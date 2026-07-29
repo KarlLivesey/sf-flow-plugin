@@ -4,18 +4,26 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { lstat, mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 import { flowBenchmarkFailed } from '../errors/flow-errors.js';
-import type { FlowBenchmarkArtifact, FlowBenchmarkPhase } from '../types/flow-benchmark.js';
-import { validateFlowReportDestination, writeFlowReport } from './flow-report-file.js';
+import type { FlowBenchmarkPhase } from '../types/flow-benchmark.js';
+import { validateFlowReportDestination } from './flow-report-file.js';
 
 export interface FlowBenchmarkDestinations {
   outputFile: string | undefined;
   rawLogDir: string | undefined;
   excludeWarmupLogs: boolean;
 }
+
+export interface FlowBenchmarkRawLog {
+  phase: FlowBenchmarkPhase;
+  sample: number;
+  rawLog: string;
+}
+
+const RAW_LOG_WRITE_CONCURRENCY = 4;
 
 function errorCode(error: unknown): string | undefined {
   return typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string'
@@ -86,10 +94,7 @@ export async function createFlowBenchmarkLogStage(rawLogDir: string | undefined)
   return mkdtemp(join(dirname(rawLogDir), '.sf-flow-benchmark-'));
 }
 
-export async function writeFlowBenchmarkRawLog(
-  stage: string,
-  log: { phase: FlowBenchmarkPhase; sample: number; rawLog: string }
-): Promise<void> {
+export async function writeFlowBenchmarkRawLog(stage: string, log: FlowBenchmarkRawLog): Promise<void> {
   await writeFile(join(stage, rawLogFilename(log.phase, log.sample)), `${log.rawLog}\n`, {
     encoding: 'utf8',
     flag: 'wx',
@@ -97,40 +102,41 @@ export async function writeFlowBenchmarkRawLog(
   });
 }
 
+export async function writeFlowBenchmarkRawLogs(
+  stage: string,
+  logs: ReadonlyArray<FlowBenchmarkRawLog>
+): Promise<void> {
+  let nextIndex = 0;
+  let firstError: unknown;
+  const worker = async (): Promise<void> => {
+    if (firstError !== undefined || nextIndex >= logs.length) {
+      return;
+    }
+    const log = logs[nextIndex];
+    nextIndex += 1;
+    if (log === undefined) {
+      return;
+    }
+    try {
+      await writeFlowBenchmarkRawLog(stage, log);
+    } catch (error: unknown) {
+      firstError ??= error;
+    }
+    await worker();
+  };
+  const workerCount = Math.min(RAW_LOG_WRITE_CONCURRENCY, logs.length);
+  await Promise.allSettled(Array.from({ length: workerCount }, worker));
+  const failure = firstError;
+  if (failure instanceof Error) {
+    throw failure;
+  }
+  if (failure !== undefined) {
+    throw flowBenchmarkFailed('Could not stage a raw Flow benchmark log.', failure);
+  }
+}
+
 export async function discardFlowBenchmarkLogStage(stage: string | null): Promise<void> {
   if (stage !== null) {
     await rm(stage, { recursive: true, force: true });
-  }
-}
-
-async function publishFlowBenchmarkLogStage(stage: string, rawLogDir: string): Promise<void> {
-  try {
-    await lstat(rawLogDir);
-    throw flowBenchmarkFailed(`Raw benchmark log directory "${rawLogDir}" already exists.`);
-  } catch (error: unknown) {
-    if (errorCode(error) !== 'ENOENT') {
-      throw error;
-    }
-  }
-  await rename(stage, rawLogDir);
-}
-
-export async function persistFlowBenchmark(
-  destination: FlowBenchmarkDestinations,
-  artifact: FlowBenchmarkArtifact
-): Promise<void> {
-  try {
-    if (destination.outputFile !== undefined) {
-      await writeFlowReport(destination.outputFile, JSON.stringify(artifact.result, null, 2));
-    }
-    if (artifact.rawLogStage !== null) {
-      if (destination.rawLogDir === undefined) {
-        throw flowBenchmarkFailed('A staged benchmark log directory does not have a destination.');
-      }
-      await publishFlowBenchmarkLogStage(artifact.rawLogStage, destination.rawLogDir);
-    }
-  } catch (error: unknown) {
-    await discardFlowBenchmarkLogStage(artifact.rawLogStage);
-    throw flowBenchmarkFailed('Could not write the Flow benchmark output.', error);
   }
 }

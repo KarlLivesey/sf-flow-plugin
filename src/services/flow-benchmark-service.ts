@@ -25,10 +25,12 @@ import { validateFlowInputs } from '../utils/flow-input-schema.js';
 import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
 import { qualifiedFlowName, selectFlowDefinition } from '../utils/flow-state.js';
 import { FlowDebugService, type PreparedDebug } from './flow-debug-service.js';
-import { FLOW_BENCHMARK_BATCH_SIZE, FlowBenchmarkPhaseRunner } from './flow-benchmark-phase-runner.js';
+import { FlowBenchmarkPhaseRunner } from './flow-benchmark-phase-runner.js';
 
 const MINIMUM_TRACE_DURATION_MILLISECONDS = 10 * 60_000;
 const MAXIMUM_TRACE_DURATION_MILLISECONDS = 60 * 60_000;
+const EXECUTION_TRACE_COVERAGE_MILLISECONDS = 10 * 60_000;
+const TRACE_RENEWAL_MARGIN_MILLISECONDS = 60_000;
 
 interface FlowBenchmarkGateways {
   definition: FlowDefinitionGateway & FlowMetadataGateway;
@@ -115,9 +117,17 @@ function dryRunArtifact(context: BenchmarkExecutionContext): FlowBenchmarkArtifa
 }
 
 function traceDuration(request: FlowBenchmarkRequest): number {
-  const batches = Math.ceil((request.iterations + request.warmup) / FLOW_BENCHMARK_BATCH_SIZE);
-  const plannedDuration = Math.max(request.waitMilliseconds + 60_000, batches * 60_000);
+  const plannedDuration =
+    EXECUTION_TRACE_COVERAGE_MILLISECONDS + request.waitMilliseconds + TRACE_RENEWAL_MARGIN_MILLISECONDS;
   return Math.min(MAXIMUM_TRACE_DURATION_MILLISECONDS, Math.max(MINIMUM_TRACE_DURATION_MILLISECONDS, plannedDuration));
+}
+
+function orderedSamples(samples: ReadonlyArray<CompletedBenchmarkSample>): CompletedBenchmarkSample[] {
+  return [...samples].sort(
+    (left, right) =>
+      Number(left.sample.phase === 'measured') - Number(right.sample.phase === 'measured') ||
+      left.sample.sample - right.sample.sample
+  );
 }
 
 async function assertActiveVersionUnchanged(
@@ -160,7 +170,7 @@ async function runPhases(
     count: context.request.warmup,
   }).run();
   if (warmup.stopped && !context.request.continueOnError) {
-    return { completed: warmup.completed, measuredWallClockMilliseconds: 0 };
+    return { completed: orderedSamples(warmup.completed), measuredWallClockMilliseconds: 0 };
   }
   await assertActiveVersionUnchanged(definition, context.prepared, 'before');
   const measured = await new FlowBenchmarkPhaseRunner({
@@ -170,11 +180,7 @@ async function runPhases(
   }).run();
   await assertActiveVersionUnchanged(definition, context.prepared, 'after');
   return {
-    completed: [...warmup.completed, ...measured.completed].sort(
-      (left, right) =>
-        Number(left.sample.phase === 'measured') - Number(right.sample.phase === 'measured') ||
-        left.sample.sample - right.sample.sample
-    ),
+    completed: orderedSamples([...warmup.completed, ...measured.completed]),
     measuredWallClockMilliseconds: measured.elapsedMilliseconds,
   };
 }
@@ -224,6 +230,7 @@ export class FlowBenchmarkService {
       outputVariables: prepared.outputVariables,
       logLevel: request.logLevel,
       waitMilliseconds: request.waitMilliseconds,
+      executionCoverageMilliseconds: EXECUTION_TRACE_COVERAGE_MILLISECONDS,
       traceDurationMilliseconds: traceDuration(request),
     });
     const started = performance.now();

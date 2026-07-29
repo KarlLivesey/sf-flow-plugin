@@ -4,7 +4,7 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { access, mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -13,10 +13,10 @@ import { expect } from 'chai';
 import type { FlowBenchmarkArtifact } from '../../src/types/flow-benchmark.js';
 import {
   createFlowBenchmarkLogStage,
-  persistFlowBenchmark,
   prepareFlowBenchmarkDestinations,
   writeFlowBenchmarkRawLog,
 } from '../../src/utils/flow-benchmark-files.js';
+import { persistFlowBenchmark } from '../../src/utils/flow-benchmark-output-transaction.js';
 
 const result: FlowBenchmarkArtifact['result'] = {
   apiName: 'Calculate_Discount',
@@ -69,6 +69,22 @@ async function writeMeasuredLog(
   return destinations.rawLogDir ?? '';
 }
 
+async function createRollbackFixture(): Promise<{
+  directory: string;
+  destinations: Awaited<ReturnType<typeof prepareFlowBenchmarkDestinations>>;
+  outputFile: string;
+  stage: string | null;
+}> {
+  const directory = await mkdtemp(join(tmpdir(), 'sf-flow-benchmark-rollback-'));
+  const outputFile = join(directory, 'result.json');
+  const rawLogDir = join(directory, 'logs');
+  await writeFile(outputFile, 'previous result\n', 'utf8');
+  const destinations = await prepareFlowBenchmarkDestinations(outputFile, rawLogDir, false);
+  const stage = await createFlowBenchmarkLogStage(rawLogDir);
+  await mkdir(rawLogDir);
+  return { directory, destinations, outputFile, stage };
+}
+
 describe('Flow benchmark files', (): void => {
   it('writes owner-only Apex logs and can exclude warm-up logs', async (): Promise<void> => {
     const directory = await mkdtemp(join(tmpdir(), 'sf-flow-benchmark-'));
@@ -115,6 +131,22 @@ describe('Flow benchmark destination safety', (): void => {
       expect(error).to.have.property('message', '--output-file and --raw-log-dir must not contain one another.');
     } finally {
       await rm(directory, { recursive: true });
+    }
+  });
+});
+
+describe('Flow benchmark output transaction', (): void => {
+  it('restores an existing structured result when raw-log publication fails', async (): Promise<void> => {
+    const fixture = await createRollbackFixture();
+    try {
+      const error = await persistFlowBenchmark(fixture.destinations, { result, rawLogStage: fixture.stage }).catch(
+        (caught: unknown) => caught
+      );
+      expect(error).to.have.property('name', 'FlowBenchmarkFailed');
+      expect(error).to.have.property('message').that.includes('No output artifacts were committed');
+      expect(await readFile(fixture.outputFile, 'utf8')).to.equal('previous result\n');
+    } finally {
+      await rm(fixture.directory, { recursive: true, force: true });
     }
   });
 });

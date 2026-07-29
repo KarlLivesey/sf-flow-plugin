@@ -28,6 +28,7 @@ export interface FlowBenchmarkRequest extends NamedFlowRequest {
 }
 
 export interface FlowBenchmarkSessionRequest extends FlowDebugExecutionRequest {
+  executionCoverageMilliseconds: number;
   traceDurationMilliseconds: number;
 }
 

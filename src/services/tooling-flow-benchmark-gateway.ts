@@ -126,6 +126,7 @@ class ToolingFlowBenchmarkSession implements FlowBenchmarkSession {
     const context = createContext(request);
     const registration = this.registerLog(context, request.waitMilliseconds);
     const measured = await this.measureExecution(context, registration.cancel);
+    registration.armDeadline();
     return resolveLog(context, measured, registration.result);
   }
 
@@ -136,12 +137,14 @@ class ToolingFlowBenchmarkSession implements FlowBenchmarkSession {
       throw flowDebugFailed('The Flow benchmark tracing session is already closed.');
     }
     const remaining = Date.parse(trace.temporary.expirationDate) - Date.now();
-    if (remaining > this.dependencies.request.waitMilliseconds + TRACE_RENEWAL_MARGIN_MILLISECONDS) {
+    const requiredCoverage =
+      this.dependencies.request.executionCoverageMilliseconds +
+      this.dependencies.request.waitMilliseconds +
+      TRACE_RENEWAL_MARGIN_MILLISECONDS;
+    if (remaining > requiredCoverage) {
       return;
     }
-    this.trace = null;
-    await this.dependencies.traces.close(trace);
-    this.trace = await this.dependencies.traces.open(this.dependencies.userId, traceRequest(this.dependencies.request));
+    this.trace = await this.dependencies.traces.renew(trace, traceRequest(this.dependencies.request));
   }
 
   private assertOpen(): void {
@@ -185,7 +188,7 @@ class ToolingFlowBenchmarkSession implements FlowBenchmarkSession {
   private registerLog(
     context: BenchmarkContext,
     waitMilliseconds: number
-  ): { cancel: () => void; result: Promise<SafeLogResult> } {
+  ): { armDeadline: () => void; cancel: () => void; result: Promise<SafeLogResult> } {
     const registration = this.dependencies.collector.register({
       apiName: context.apiName,
       correlationId: context.correlationId,
@@ -193,6 +196,9 @@ class ToolingFlowBenchmarkSession implements FlowBenchmarkSession {
       waitMilliseconds,
     });
     return {
+      armDeadline: (): void => {
+        registration.armDeadline();
+      },
       cancel: (): void => {
         registration.cancel();
       },

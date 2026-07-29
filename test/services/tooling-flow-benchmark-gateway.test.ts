@@ -32,6 +32,7 @@ function request(): FlowBenchmarkSessionRequest {
     outputVariables: ['discount'],
     logLevel: 'detailed',
     waitMilliseconds: 120_000,
+    executionCoverageMilliseconds: 600_000,
     traceDurationMilliseconds: 600_000,
   };
 }
@@ -51,11 +52,20 @@ function connection(): { connection: Connection; executeAnonymous: sinon.SinonSt
   };
 }
 
-function stubLifecycle(): { open: sinon.SinonStub; close: sinon.SinonStub; register: sinon.SinonStub } {
+function stubLifecycle(): {
+  armDeadline: sinon.SinonStub;
+  open: sinon.SinonStub;
+  close: sinon.SinonStub;
+  register: sinon.SinonStub;
+  renew: sinon.SinonStub;
+} {
+  const armDeadline = sinon.stub();
   return {
+    armDeadline,
     open: sinon.stub(ToolingFlowDebugTrace.prototype, 'open').resolves(trace),
     close: sinon.stub(ToolingFlowDebugTrace.prototype, 'close').resolves(),
     register: sinon.stub(ToolingFlowBenchmarkLogCollector.prototype, 'register').callsFake(() => ({
+      armDeadline,
       cancel: sinon.stub(),
       result: Promise.resolve({
         log: {
@@ -69,6 +79,7 @@ function stubLifecycle(): { open: sinon.SinonStub; close: sinon.SinonStub; regis
         rawLog: 'complete correlated log',
       }),
     })),
+    renew: sinon.stub(ToolingFlowDebugTrace.prototype, 'renew').resolves(trace),
   };
 }
 
@@ -85,6 +96,8 @@ function expectSessionReuse(lifecycle: ReturnType<typeof stubLifecycle>, fake: R
   expect(lifecycle.close.calledOnceWithExactly(trace)).to.equal(true);
   expect(fake.executeAnonymous.callCount).to.equal(2);
   expect(lifecycle.register.callCount).to.equal(2);
+  expect(lifecycle.armDeadline.callCount).to.equal(2);
+  sinon.assert.callOrder(lifecycle.register, fake.executeAnonymous, lifecycle.armDeadline);
   expect(fake.executeAnonymous.firstCall.args[0]).to.include('Database.rollback(sfFlowSavepoint)');
 }
 
@@ -96,7 +109,6 @@ function renewalTraces(): { expiring: TraceState; renewed: TraceState } {
     },
     renewed: {
       ...trace,
-      traceFlagId: '7tf-renewed',
       temporary: { ...trace.temporary, expirationDate: new Date(Date.now() + 60 * 60_000).toISOString() },
     },
   };
@@ -159,9 +171,9 @@ async function expectTraceRenewal(context: {
   const session = await new ToolingFlowBenchmarkGateway(context.fake.connection).open(request());
   await session.prepareBatch();
   await session.close();
-  expect(context.lifecycle.open.callCount).to.equal(2);
-  expect(context.lifecycle.close.firstCall.calledWithExactly(context.expiring)).to.equal(true);
-  expect(context.lifecycle.close.secondCall.calledWithExactly(context.renewed)).to.equal(true);
+  expect(context.lifecycle.open.calledOnce).to.equal(true);
+  expect(context.lifecycle.renew.calledOnceWithExactly(context.expiring, sinon.match.object)).to.equal(true);
+  expect(context.lifecycle.close.calledOnceWithExactly(context.renewed)).to.equal(true);
 }
 
 async function expectKnownLogFailureDuration(
@@ -175,6 +187,27 @@ async function expectKnownLogFailureDuration(
   expect(error).to.have.property('executionDurationMilliseconds').that.is.a('number');
   await session.close();
   expect(lifecycle.close.calledOnce).to.equal(true);
+}
+
+async function expectDeferredDeadline(
+  fake: ReturnType<typeof connection>,
+  lifecycle: ReturnType<typeof stubLifecycle>
+): Promise<void> {
+  let completeExecution: ((result: unknown) => void) | undefined;
+  fake.executeAnonymous.callsFake(
+    () =>
+      new Promise((resolve) => {
+        completeExecution = resolve;
+      })
+  );
+  const session = await new ToolingFlowBenchmarkGateway(fake.connection).open(request());
+  const execution = session.execute(request());
+  await Promise.resolve();
+  expect(lifecycle.armDeadline.called).to.equal(false);
+  completeExecution?.({ compiled: true, success: true, line: -1, column: -1, compileProblem: null });
+  await execution;
+  expect(lifecycle.armDeadline.calledOnce).to.equal(true);
+  await session.close();
 }
 
 describe('ToolingFlowBenchmarkGateway tracing session', (): void => {
@@ -193,7 +226,8 @@ describe('ToolingFlowBenchmarkGateway tracing session', (): void => {
     const fake = connection();
     const { expiring, renewed } = renewalTraces();
     const lifecycle = stubLifecycle();
-    lifecycle.open.onFirstCall().resolves(expiring).onSecondCall().resolves(renewed);
+    lifecycle.open.resolves(expiring);
+    lifecycle.renew.resolves(renewed);
     try {
       await expectTraceRenewal({ fake, lifecycle, expiring, renewed });
     } finally {
@@ -205,9 +239,23 @@ describe('ToolingFlowBenchmarkGateway tracing session', (): void => {
     const fake = connection();
     const lifecycle = stubLifecycle();
     const logError = Object.assign(new Error('sensitive polling failure'), { name: 'FlowDebugLogNotFound' });
-    lifecycle.register.onFirstCall().returns({ cancel: sinon.stub(), result: Promise.reject(logError) });
+    lifecycle.register
+      .onFirstCall()
+      .returns({ armDeadline: sinon.stub(), cancel: sinon.stub(), result: Promise.reject(logError) });
     try {
       await expectKnownLogFailureDuration(fake, lifecycle);
+    } finally {
+      sinon.restore();
+    }
+  });
+});
+
+describe('ToolingFlowBenchmarkGateway log deadline', (): void => {
+  it('does not arm the ApexLog deadline until Execute Anonymous completes', async (): Promise<void> => {
+    const fake = connection();
+    const lifecycle = stubLifecycle();
+    try {
+      await expectDeferredDeadline(fake, lifecycle);
     } finally {
       sinon.restore();
     }
@@ -223,6 +271,9 @@ describe('ToolingFlowBenchmarkLogCollector shared polling', (): void => {
     );
     expect(fixture.query.callCount).to.equal(1);
     expect(fixture.requestBody.callCount).to.equal(2);
+    registrations.forEach((registration) => {
+      registration.armDeadline();
+    });
     fixture.collector.close();
   });
 });

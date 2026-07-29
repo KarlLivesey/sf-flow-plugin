@@ -825,9 +825,8 @@ sf flow benchmark \
 `sf flow benchmark` executes the active version of a directly invocable autolaunched Flow through rollback-isolated
 Execute Anonymous transactions. It performs 10 warm-up samples and 100 measured samples serially by default.
 `--input-file` accepts one JSON object or an array of varied input objects; arrays are assigned deterministically in
-round-robin order. Measured samples are limited to 10,000, warm-up samples to 1,000, combined samples to 11,000,
-concurrency to 100, and input files to 10 MiB or 10,000 objects. Effective measured concurrency is the smaller of the
-requested concurrency and iteration count.
+round-robin order. The command imposes no maximum workload, concurrency, input-file-size, input-count or combined
+sample limit. Effective measured concurrency is the smaller of the requested concurrency and iteration count.
 
 Every completed sample reports wall-clock time, Salesforce CPU time, rollback confirmation and its ApexLog ID. The
 summary reports minimum, maximum, mean and nearest-rank p50, p90, p95 and p99 values for measured wall-clock and CPU
