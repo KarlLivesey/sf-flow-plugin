@@ -54,7 +54,7 @@ Samples to run concurrently. Defaults to 1.
 
 # flags.wait.summary
 
-Per-sample Apex SOAP timeout in minutes. Defaults to 2. A timeout stops new samples because transaction completion and rollback are unknown.
+Per-sample Apex SOAP timeout from 1 to 10 minutes. Defaults to 2. A timeout stops new samples because transaction completion and rollback are unknown.
 
 # flags.percentile.summary
 

@@ -4,11 +4,13 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+import { setImmediate as yieldToEventLoop } from 'node:timers/promises';
+
 import type { JsonObject } from '../types/flow-analysis.js';
 import { flowBenchmarkFailed } from '../errors/flow-errors.js';
 import type { FlowBenchmarkGateway, FlowBenchmarkPhase, FlowBenchmarkRequest } from '../types/flow-benchmark.js';
 import { FlowBenchmarkExecutionError } from '../utils/flow-benchmark-error.js';
-import { writeFlowBenchmarkRawLogs, type FlowBenchmarkRawLog } from '../utils/flow-benchmark-files.js';
+import type { FlowBenchmarkRawLogWriter } from '../utils/flow-benchmark-files.js';
 import {
   completedBenchmarkSample,
   type CompletedBenchmarkSample,
@@ -18,6 +20,8 @@ import {
 } from '../utils/flow-benchmark-sample.js';
 import type { FlowProgressReporter } from '../utils/flow-progress.js';
 import type { PreparedDebug } from './flow-debug-service.js';
+
+const SCHEDULING_BATCH_SIZE = 100;
 
 export interface FlowBenchmarkPhaseResult {
   completed: CompletedBenchmarkSample[];
@@ -32,7 +36,7 @@ export interface FlowBenchmarkPhaseRunnerContext {
   inputs: JsonObject[];
   phase: FlowBenchmarkPhase;
   count: number;
-  rawLogStage: string | null;
+  rawLogWriter: FlowBenchmarkRawLogWriter;
   progress: FlowProgressReporter;
 }
 
@@ -65,11 +69,11 @@ export class FlowBenchmarkPhaseRunner {
 
   public async run(): Promise<FlowBenchmarkPhaseResult> {
     const started = performance.now();
-    this.fillAvailableSlots();
+    await this.fillAvailableSlots();
     await this.drainActive();
+    await this.context.rawLogWriter.drain();
     const elapsedMilliseconds = performance.now() - started;
     this.throwWorkerFailure();
-    await this.retainRawLogs(this.completed);
     return { completed: this.orderedCompleted(), stopped: this.stopped, elapsedMilliseconds };
   }
 
@@ -78,7 +82,8 @@ export class FlowBenchmarkPhaseRunner {
       // Each settlement frees a slot which is replenished immediately.
       // eslint-disable-next-line no-await-in-loop
       await Promise.race(this.active);
-      this.fillAvailableSlots();
+      // eslint-disable-next-line no-await-in-loop
+      await this.fillAvailableSlots();
     }
   }
 
@@ -117,6 +122,7 @@ export class FlowBenchmarkPhaseRunner {
         input: planned.input,
         outputVariables: this.context.prepared.outputVariables,
         logLevel: this.context.request.logLevel,
+        waitMilliseconds: this.context.request.sampleTimeoutMilliseconds,
       });
       return completedBenchmarkSample(planned, transport);
     } catch (error: unknown) {
@@ -139,38 +145,42 @@ export class FlowBenchmarkPhaseRunner {
     return [...this.completed].sort((left, right) => left.sample.sample - right.sample.sample);
   }
 
-  private async retainRawLogs(completed: ReadonlyArray<CompletedBenchmarkSample>): Promise<void> {
-    const logs = completed.flatMap((entry): FlowBenchmarkRawLog[] => {
-      const rawLog = entry.rawLog;
-      const retain =
-        rawLog !== null &&
-        this.context.rawLogStage !== null &&
-        (entry.sample.phase === 'measured' || this.context.request.retainWarmupLogs);
-      return retain ? [{ phase: entry.sample.phase, sample: entry.sample.sample, rawLog }] : [];
-    });
-    for (const completedEntry of completed) {
-      completedEntry.rawLog = null;
+  private async retainRawLog(completed: CompletedBenchmarkSample): Promise<CompletedBenchmarkSample> {
+    const rawLog = completed.rawLog;
+    if (rawLog !== null && (completed.sample.phase === 'measured' || this.context.request.retainWarmupLogs)) {
+      await this.context.rawLogWriter.enqueue({
+        phase: completed.sample.phase,
+        sample: completed.sample.sample,
+        rawLog,
+      });
     }
-    if (this.context.rawLogStage !== null) {
-      await writeFlowBenchmarkRawLogs(this.context.rawLogStage, logs);
-    }
+    return { ...completed, rawLog: null };
   }
 
-  private fillAvailableSlots(): void {
+  private async fillAvailableSlots(): Promise<void> {
     const concurrency = Math.min(this.context.request.concurrency, this.context.count);
+    let startedInBatch = 0;
     while (!this.stopped && this.nextIndex < this.context.count && this.active.size < concurrency) {
       const planned = this.claim();
       if (planned !== null) {
         this.start(planned);
+        startedInBatch += 1;
+      }
+      if (startedInBatch === SCHEDULING_BATCH_SIZE) {
+        startedInBatch = 0;
+        // Very large user-selected concurrency is ramped without monopolising the JavaScript event loop.
+        // eslint-disable-next-line no-await-in-loop
+        await yieldToEventLoop();
       }
     }
   }
 
   private start(planned: PlannedBenchmarkSample): void {
     const active = this.execute(planned)
-      .then((completed) => {
-        this.completed.push(completed);
-        if (completed.stopScheduling || (!completed.sample.successful && !this.context.request.continueOnError)) {
+      .then(async (completed) => {
+        const retained = await this.retainRawLog(completed);
+        this.completed.push(retained);
+        if (retained.stopScheduling || (!retained.sample.successful && !this.context.request.continueOnError)) {
           this.stopped = true;
         }
       })

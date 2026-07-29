@@ -9,8 +9,11 @@ import { randomUUID } from 'node:crypto';
 
 import type { Connection } from '@salesforce/core';
 
-import type { FlowBenchmarkGateway, FlowBenchmarkTransportSample } from '../types/flow-benchmark.js';
-import type { FlowDebugExecutionRequest } from '../types/flow-debug.js';
+import type {
+  FlowBenchmarkExecutionRequest,
+  FlowBenchmarkGateway,
+  FlowBenchmarkTransportSample,
+} from '../types/flow-benchmark.js';
 import { createBoundedFlowDebugApex } from '../utils/flow-debug-apex.js';
 import { FlowBenchmarkExecutionError } from '../utils/flow-benchmark-error.js';
 import { ApexSoapExecuteAnonymous, type ApexSoapExecuteResult } from './apex-soap-execute-anonymous.js';
@@ -87,7 +90,7 @@ function benchmarkFailure(error: unknown, started: number): never {
 
 async function executeSample(
   soap: ApexSoapExecuteAnonymous,
-  context: { request: FlowDebugExecutionRequest; correlationId: string; apexSource: string }
+  context: { request: FlowBenchmarkExecutionRequest; correlationId: string; apexSource: string }
 ): Promise<FlowBenchmarkTransportSample> {
   const startedAt = new Date().toISOString();
   const started = performance.now();
@@ -96,9 +99,7 @@ async function executeSample(
       await soap.execute({
         apexSource: context.apexSource,
         logLevel: context.request.logLevel,
-        ...(context.request.waitMilliseconds === undefined
-          ? {}
-          : { timeoutMilliseconds: context.request.waitMilliseconds }),
+        timeoutMilliseconds: context.request.waitMilliseconds,
       }),
       context.correlationId,
       startedAt
@@ -115,7 +116,7 @@ export class ApexSoapFlowBenchmarkGateway implements FlowBenchmarkGateway {
     this.soap = new ApexSoapExecuteAnonymous(connection);
   }
 
-  public async execute(request: FlowDebugExecutionRequest): Promise<FlowBenchmarkTransportSample> {
+  public async execute(request: FlowBenchmarkExecutionRequest): Promise<FlowBenchmarkTransportSample> {
     const correlationId = randomUUID();
     const apexSource = createBoundedFlowDebugApex({ correlationId, ...request });
     return executeSample(this.soap, { request, correlationId, apexSource });

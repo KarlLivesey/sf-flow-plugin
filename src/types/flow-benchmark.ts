@@ -28,7 +28,11 @@ export interface FlowBenchmarkRequest extends NamedFlowRequest {
 }
 
 export interface FlowBenchmarkGateway {
-  execute(request: FlowDebugExecutionRequest): Promise<FlowBenchmarkTransportSample>;
+  execute(request: FlowBenchmarkExecutionRequest): Promise<FlowBenchmarkTransportSample>;
+}
+
+export interface FlowBenchmarkExecutionRequest extends Omit<FlowDebugExecutionRequest, 'waitMilliseconds'> {
+  waitMilliseconds: number;
 }
 
 export interface FlowBenchmarkTransportSample {

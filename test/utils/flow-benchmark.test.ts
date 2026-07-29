@@ -9,6 +9,7 @@ import { expect } from 'chai';
 import { parseApexCpuTime } from '../../src/utils/flow-benchmark-log.js';
 import {
   assertBenchmarkWorkload,
+  parseBenchmarkWaitMinutes,
   parseNonnegativeBenchmarkInteger,
   parsePositiveBenchmarkInteger,
 } from '../../src/utils/flow-benchmark-flags.js';
@@ -61,6 +62,14 @@ describe('Flow benchmark integer flags', (): void => {
         inputCount: 100_000,
       });
     }).not.to.throw();
+  });
+
+  it('accepts only whole-minute SOAP timeouts from 1 to 10 minutes', (): void => {
+    expect(parseBenchmarkWaitMinutes('1')).to.equal(1);
+    expect(parseBenchmarkWaitMinutes('10')).to.equal(10);
+    for (const invalid of ['0', '11', '1.5', '9007199254740991']) {
+      expect(() => parseBenchmarkWaitMinutes(invalid)).to.throw('1 to 10 minutes');
+    }
   });
 
   it('rejects only a combined sample count that cannot be represented safely', (): void => {

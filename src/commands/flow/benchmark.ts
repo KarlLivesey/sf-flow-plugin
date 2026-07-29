@@ -19,6 +19,7 @@ import { createFlowCommandContext, validateNamedFlowFlags } from '../../utils/fl
 import { prepareFlowBenchmarkDestinations, type FlowBenchmarkDestinations } from '../../utils/flow-benchmark-files.js';
 import { persistFlowBenchmark } from '../../utils/flow-benchmark-output-transaction.js';
 import {
+  parseBenchmarkWaitMinutes,
   parseBenchmarkPercentile,
   parseNonnegativeBenchmarkInteger,
   parsePositiveBenchmarkInteger,
@@ -75,7 +76,7 @@ export default class FlowBenchmark extends SfCommand<FlowBenchmarkResult> {
     })(),
     wait: Flags.custom<number>({
       default: 2,
-      parse: (input: string): Promise<number> => Promise.resolve(parsePositiveBenchmarkInteger(input)),
+      parse: (input: string): Promise<number> => Promise.resolve(parseBenchmarkWaitMinutes(input)),
       summary: messages.getMessage('flags.wait.summary'),
     })(),
     percentile: Flags.custom<number>({

@@ -829,8 +829,8 @@ round-robin order. The command imposes no arbitrary maximum workload, concurrenc
 Local memory and output grow with the requested workload. Effective measured concurrency is the smaller of the
 requested concurrency and iteration count, and completed request slots are replenished immediately.
 
-Each Apex SOAP sample has a timeout controlled by `--wait` in minutes, defaulting to `2`. A timeout makes transaction
-completion and rollback unknown, is never retried and always stops new sample scheduling even when
+Each Apex SOAP sample has a timeout controlled by `--wait` from 1 to 10 minutes, defaulting to `2`. A timeout makes
+transaction completion and rollback unknown, is never retried and always stops new sample scheduling even when
 `--continue-on-error` is supplied. Concurrent samples already in progress are allowed to finish.
 
 Every completed sample reports client-observed Apex SOAP wall-clock time, Salesforce CPU time and rollback
@@ -850,9 +850,11 @@ include a stable error code and a bounded, sanitised message; runtime exception 
 `--raw-log-dir` streams each complete raw log returned by Apex SOAP to a private staging directory. The directory is
 published only after the command has successfully produced a complete benchmark result and output transaction,
 including a valid result that contains failed samples and then exits non-zero. Warm-up logs are included unless
-`--exclude-warmup-logs` is supplied. Without this flag, raw log text is discarded immediately after parsing. Retained
-logs can be processed by Apex log analysers and flame-graph tooling. They are unredacted and can contain sensitive
-Flow data; new files use owner-only permissions on POSIX systems.
+`--exclude-warmup-logs` is supplied. Without `--raw-log-dir`, raw SOAP logs are discarded immediately after each
+sample is parsed. Retained logs pass through a bounded writer queue; disk backpressure can delay replacement sample
+scheduling and therefore reduce measured throughput, but file writes are excluded from each sample's reported SOAP
+wall-clock time. Logs can be processed by Apex log analysers and flame-graph tooling. They are unredacted and can
+contain sensitive Flow data; new files use owner-only permissions on POSIX systems.
 
 `--dry-run` validates the Flow, every varied input, generated SOAP request size, production context, SOAP
 authentication, active-version guard and output destinations without executing samples or creating a raw-log

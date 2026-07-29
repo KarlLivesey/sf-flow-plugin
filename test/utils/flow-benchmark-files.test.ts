@@ -14,6 +14,7 @@ import { expect } from 'chai';
 import type { FlowBenchmarkArtifact } from '../../src/types/flow-benchmark.js';
 import {
   createFlowBenchmarkLogStage,
+  createFlowBenchmarkRawLogWriter,
   prepareFlowBenchmarkDestinations,
   writeFlowBenchmarkRawLog,
 } from '../../src/utils/flow-benchmark-files.js';
@@ -129,6 +130,22 @@ describe('Flow benchmark files', (): void => {
       await expectOwnerOnly(measured);
     } finally {
       await rm(directory, { recursive: true });
+    }
+  });
+
+  it('drains a backpressured raw-log queue without dropping samples', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'sf-flow-benchmark-queue-'));
+    try {
+      const writer = createFlowBenchmarkRawLogWriter(directory);
+      await Promise.all(
+        Array.from({ length: 40 }, (_, index) =>
+          writer.enqueue({ phase: 'measured', sample: index + 1, rawLog: `log ${index + 1}` })
+        )
+      );
+      await writer.drain();
+      expect(await readdir(directory)).to.have.length(40);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
     }
   });
 });

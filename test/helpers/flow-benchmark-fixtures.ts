@@ -5,20 +5,20 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import type {
+  FlowBenchmarkExecutionRequest,
   FlowBenchmarkGateway,
   FlowBenchmarkRequest,
   FlowBenchmarkTransportSample,
 } from '../../src/types/flow-benchmark.js';
-import type { FlowDebugExecutionRequest } from '../../src/types/flow-debug.js';
 import { correlationId, debugLog, flowDebugGateways } from './flow-debug-fixtures.js';
 
 export class FakeBenchmarkGateway implements FlowBenchmarkGateway {
-  public readonly executed: FlowDebugExecutionRequest[] = [];
+  public readonly executed: FlowBenchmarkExecutionRequest[] = [];
   public failAt: number | undefined;
   public malformedAt: number | undefined;
   public onExecute: ((sample: number) => Promise<void>) | undefined;
 
-  public async execute(request: FlowDebugExecutionRequest): Promise<FlowBenchmarkTransportSample> {
+  public async execute(request: FlowBenchmarkExecutionRequest): Promise<FlowBenchmarkTransportSample> {
     this.executed.push(request);
     const sample = this.executed.length;
     await this.onExecute?.(sample);

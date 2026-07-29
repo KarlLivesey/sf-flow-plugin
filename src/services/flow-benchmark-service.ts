@@ -13,8 +13,13 @@ import type { FlowDebugGateway } from '../types/flow-debug.js';
 import type { FlowRollbackRequest } from '../types/flow-invocation.js';
 import type { FlowDefinitionGateway } from '../types/flow.js';
 import { createBoundedFlowDebugApex } from '../utils/flow-debug-apex.js';
-import { createFlowBenchmarkLogStage, discardFlowBenchmarkLogStage } from '../utils/flow-benchmark-files.js';
-import { assertBenchmarkWorkload } from '../utils/flow-benchmark-flags.js';
+import {
+  createFlowBenchmarkLogStage,
+  createFlowBenchmarkRawLogWriter,
+  discardFlowBenchmarkLogStage,
+  type FlowBenchmarkRawLogWriter,
+} from '../utils/flow-benchmark-files.js';
+import { assertBenchmarkSampleTimeout, assertBenchmarkWorkload } from '../utils/flow-benchmark-flags.js';
 import { createFlowBenchmarkResult } from '../utils/flow-benchmark-result.js';
 import type { CompletedBenchmarkSample } from '../utils/flow-benchmark-sample.js';
 import { analyseFlowMetadata } from '../utils/flow-metadata-analysis.js';
@@ -45,6 +50,7 @@ interface BenchmarkExecutionContext {
   prepared: PreparedDebug;
   inputs: JsonObject[];
   rawLogStage: string | null;
+  rawLogWriter: FlowBenchmarkRawLogWriter;
   progress: FlowProgressReporter;
 }
 
@@ -90,6 +96,7 @@ function firstBenchmarkInput(request: FlowBenchmarkRequest): JsonObject {
     concurrency: request.concurrency,
     inputCount: request.inputs.length,
   });
+  assertBenchmarkSampleTimeout(request.sampleTimeoutMilliseconds);
   const firstInput = request.inputs[0];
   if (firstInput === undefined) {
     throw flowInputInvalid('Flow benchmark requires at least one input object.');
@@ -149,7 +156,7 @@ async function runPhases(
     prepared: context.prepared,
     request: context.request,
     inputs: context.inputs,
-    rawLogStage: context.rawLogStage,
+    rawLogWriter: context.rawLogWriter,
     progress: context.progress,
   };
   const warmup = await new FlowBenchmarkPhaseRunner({
@@ -218,7 +225,14 @@ export class FlowBenchmarkService {
     const debug = new FlowDebugService({ definition: this.gateways.definition, debug: this.gateways.debug });
     const prepared = await debug.prepare(rollbackRequest(request, firstInput), progress);
     const inputs = validateInputs(prepared, request);
-    return { request, prepared, inputs, rawLogStage: null, progress };
+    return {
+      request,
+      prepared,
+      inputs,
+      rawLogStage: null,
+      rawLogWriter: createFlowBenchmarkRawLogWriter(null),
+      progress,
+    };
   }
 
   private async withRawLogStage(context: BenchmarkExecutionContext): Promise<FlowBenchmarkArtifact> {
@@ -226,7 +240,11 @@ export class FlowBenchmarkService {
     let rawLogStage: string | null = null;
     try {
       rawLogStage = await this.logStage.create(request.rawLogDirectory);
-      return await this.execute({ ...context, rawLogStage });
+      return await this.execute({
+        ...context,
+        rawLogStage,
+        rawLogWriter: createFlowBenchmarkRawLogWriter(rawLogStage),
+      });
     } catch (error: unknown) {
       return handleBenchmarkFailure({
         logStage: this.logStage,

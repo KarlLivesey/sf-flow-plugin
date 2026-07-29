@@ -49,6 +49,7 @@ describe('FlowBenchmarkService successful measurements', (): void => {
       { percentage: 10 },
       { percentage: 20 },
     ]);
+    expect(gateways.benchmark.executed.every((request) => request.waitMilliseconds === 120_000)).to.equal(true);
     expectSuccessfulMeasurements(artifact);
     expect(artifact.result).to.include({ logLevel: 'detailed' });
     expect(artifact.result.samples[0]).not.to.have.property('apexLogId');
@@ -214,6 +215,17 @@ describe('FlowBenchmarkService concurrent ordering', (): void => {
 });
 
 describe('FlowBenchmarkService timeout scheduling', (): void => {
+  it('rejects unsafe sample timeouts at the service boundary', async (): Promise<void> => {
+    for (const sampleTimeoutMilliseconds of [59_999, 600_001, Number.MAX_SAFE_INTEGER]) {
+      // eslint-disable-next-line no-await-in-loop
+      const error = await new FlowBenchmarkService(flowBenchmarkGateways())
+        .benchmark(flowBenchmarkRequest({ sampleTimeoutMilliseconds }))
+        .catch((caught: unknown) => caught);
+      expect(error).to.have.property('name', 'FlowInputInvalid');
+      expect(error).to.have.property('message').that.includes('60,000 to 600,000 milliseconds');
+    }
+  });
+
   it('stops after a timeout even when continue-on-error is enabled', async (): Promise<void> => {
     const gateways = flowBenchmarkGateways();
     gateways.benchmark.onExecute = (): Promise<void> =>

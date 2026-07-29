@@ -24,6 +24,13 @@ export interface FlowBenchmarkRawLog {
 }
 
 const RAW_LOG_WRITE_CONCURRENCY = 4;
+const RAW_LOG_QUEUE_HIGH_WATER = 8;
+
+interface QueuedRawLog {
+  log: FlowBenchmarkRawLog;
+  resolve: () => void;
+  reject: (error: unknown) => void;
+}
 
 function errorCode(error: unknown): string | undefined {
   return typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string'
@@ -102,37 +109,119 @@ export async function writeFlowBenchmarkRawLog(stage: string, log: FlowBenchmark
   });
 }
 
-export async function writeFlowBenchmarkRawLogs(
-  stage: string,
-  logs: ReadonlyArray<FlowBenchmarkRawLog>
-): Promise<void> {
-  let nextIndex = 0;
-  let firstError: unknown;
-  const worker = async (): Promise<void> => {
-    if (firstError !== undefined || nextIndex >= logs.length) {
+export interface FlowBenchmarkRawLogWriter {
+  enqueue(log: FlowBenchmarkRawLog): Promise<void>;
+  drain(): Promise<void>;
+}
+
+class BoundedFlowBenchmarkRawLogWriter implements FlowBenchmarkRawLogWriter {
+  private readonly queue: QueuedRawLog[] = [];
+  private readonly capacityWaiters: Array<(reserved: boolean) => void> = [];
+  private readonly idleWaiters: Array<() => void> = [];
+  private active = 0;
+  private reservedCapacity = 0;
+  private failure: unknown;
+
+  public constructor(private readonly stage: string | null) {}
+
+  public async enqueue(log: FlowBenchmarkRawLog): Promise<void> {
+    if (this.stage === null) {
       return;
     }
-    const log = logs[nextIndex];
-    nextIndex += 1;
-    if (log === undefined) {
+    let holdsReservation = false;
+    if (this.failure === undefined && this.queue.length + this.reservedCapacity >= RAW_LOG_QUEUE_HIGH_WATER) {
+      // Backpressure keeps the accepted queue bounded. The caller retains its active benchmark slot while waiting.
+      holdsReservation = await new Promise<boolean>((resolveCapacity) => {
+        this.capacityWaiters.push(resolveCapacity);
+      });
+    }
+    if (holdsReservation) {
+      this.reservedCapacity -= 1;
+    }
+    this.throwFailure();
+    await new Promise<void>((resolveWrite, rejectWrite) => {
+      this.queue.push({ log, resolve: resolveWrite, reject: rejectWrite });
+      this.pump();
+    });
+  }
+
+  public async drain(): Promise<void> {
+    if (this.active > 0 || this.queue.length > 0) {
+      await new Promise<void>((resolveIdle) => {
+        this.idleWaiters.push(resolveIdle);
+      });
+    }
+    this.throwFailure();
+  }
+
+  private fail(error: unknown): void {
+    this.failure ??= error;
+    const failure = this.failure;
+    for (const queued of this.queue.splice(0)) {
+      queued.reject(failure);
+    }
+    this.notifyCapacity();
+  }
+
+  private finishOne(): void {
+    this.active -= 1;
+    this.notifyCapacity();
+    this.pump();
+    if (this.active === 0 && this.queue.length === 0) {
+      for (const resolveIdle of this.idleWaiters.splice(0)) {
+        resolveIdle();
+      }
+    }
+  }
+
+  private notifyCapacity(): void {
+    if (this.failure !== undefined) {
+      for (const resolveCapacity of this.capacityWaiters.splice(0)) {
+        resolveCapacity(false);
+      }
       return;
     }
-    try {
-      await writeFlowBenchmarkRawLog(stage, log);
-    } catch (error: unknown) {
-      firstError ??= error;
+    while (this.capacityWaiters.length > 0 && this.queue.length + this.reservedCapacity < RAW_LOG_QUEUE_HIGH_WATER) {
+      this.reservedCapacity += 1;
+      this.capacityWaiters.shift()?.(true);
     }
-    await worker();
-  };
-  const workerCount = Math.min(RAW_LOG_WRITE_CONCURRENCY, logs.length);
-  await Promise.allSettled(Array.from({ length: workerCount }, worker));
-  const failure = firstError;
-  if (failure instanceof Error) {
-    throw failure;
   }
-  if (failure !== undefined) {
-    throw flowBenchmarkFailed('Could not stage a raw Flow benchmark log.', failure);
+
+  private pump(): void {
+    if (this.failure !== undefined || this.stage === null) {
+      return;
+    }
+    while (this.active < RAW_LOG_WRITE_CONCURRENCY) {
+      const queued = this.queue.shift();
+      if (queued === undefined) {
+        return;
+      }
+      this.active += 1;
+      this.notifyCapacity();
+      void writeFlowBenchmarkRawLog(this.stage, queued.log)
+        .then(queued.resolve)
+        .catch((error: unknown) => {
+          queued.reject(error);
+          this.fail(error);
+        })
+        .finally(() => {
+          this.finishOne();
+        });
+    }
   }
+
+  private throwFailure(): void {
+    if (this.failure instanceof Error) {
+      throw this.failure;
+    }
+    if (this.failure !== undefined) {
+      throw flowBenchmarkFailed('Could not stage a raw Flow benchmark log.', this.failure);
+    }
+  }
+}
+
+export function createFlowBenchmarkRawLogWriter(stage: string | null): FlowBenchmarkRawLogWriter {
+  return new BoundedFlowBenchmarkRawLogWriter(stage);
 }
 
 export async function discardFlowBenchmarkLogStage(stage: string | null): Promise<void> {
