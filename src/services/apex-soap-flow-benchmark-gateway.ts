@@ -46,22 +46,14 @@ function transportSample(
   };
 }
 
-function completedSample(
-  response: ApexSoapExecuteResult,
-  correlationId: string,
-  startedAt: string
-): FlowBenchmarkTransportSample {
-  if (!response.execution.compiled) {
-    throw new FlowBenchmarkExecutionError('FlowDebugFailed', response.durationMilliseconds);
-  }
-  return transportSample(response, correlationId, startedAt);
-}
-
 function benchmarkFailure(error: unknown, started: number): never {
   if (error instanceof FlowBenchmarkExecutionError) {
     throw error;
   }
-  throw new FlowBenchmarkExecutionError(safeErrorCode(error), performance.now() - started);
+  throw new FlowBenchmarkExecutionError({
+    errorCode: safeErrorCode(error),
+    executionDurationMilliseconds: performance.now() - started,
+  });
 }
 
 async function executeSample(
@@ -71,7 +63,7 @@ async function executeSample(
   const startedAt = new Date().toISOString();
   const started = performance.now();
   try {
-    return completedSample(
+    return transportSample(
       await soap.execute({ apexSource: context.apexSource, logLevel: context.request.logLevel }),
       context.correlationId,
       startedAt

@@ -186,6 +186,9 @@
         },
         "errorCode": {
           "type": ["string", "null"]
+        },
+        "errorMessage": {
+          "type": ["string", "null"]
         }
       },
       "required": [
@@ -196,7 +199,8 @@
         "rollbackConfirmed",
         "wallClockMilliseconds",
         "cpuTimeMilliseconds",
-        "errorCode"
+        "errorCode",
+        "errorMessage"
       ],
       "additionalProperties": false
     },

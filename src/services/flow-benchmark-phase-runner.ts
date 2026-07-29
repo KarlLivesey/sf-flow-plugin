@@ -97,6 +97,11 @@ export class FlowBenchmarkPhaseRunner {
         wallClockMilliseconds:
           error instanceof FlowBenchmarkExecutionError ? error.executionDurationMilliseconds : null,
         errorCode: safeBenchmarkErrorCode(error),
+        errorMessage:
+          error instanceof FlowBenchmarkExecutionError
+            ? error.safeMessage
+            : 'The benchmark sample failed before Salesforce returned a validated result.',
+        rawLog: error instanceof FlowBenchmarkExecutionError ? error.rawLog : null,
       });
     }
   }

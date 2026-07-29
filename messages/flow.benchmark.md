@@ -65,7 +65,7 @@ Include available failed-sample timings in measured statistics.
 
 # flags.raw-log-dir.summary
 
-Stream complete raw logs returned by Apex SOAP into a private staging directory and publish it only after success.
+Stream complete raw logs returned by Apex SOAP into a private staging directory and publish it after a complete benchmark result is produced.
 
 # flags.exclude-warmup-logs.summary
 

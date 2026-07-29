@@ -57,6 +57,7 @@ export interface FlowBenchmarkSample {
   wallClockMilliseconds: number | null;
   cpuTimeMilliseconds: number | null;
   errorCode: string | null;
+  errorMessage: string | null;
 }
 
 export interface FlowBenchmarkResult {

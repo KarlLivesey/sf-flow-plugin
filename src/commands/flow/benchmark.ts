@@ -208,6 +208,7 @@ export default class FlowBenchmark extends SfCommand<FlowBenchmarkResult> {
         { key: 'wallClockMilliseconds', name: 'Wall-clock (ms)' },
         { key: 'cpuTimeMilliseconds', name: 'CPU (ms)' },
         { key: 'errorCode', name: 'Error' },
+        { key: 'errorMessage', name: 'Error detail' },
       ],
     });
   }

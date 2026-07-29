@@ -838,13 +838,15 @@ log level when comparing benchmarks because response size and latency vary with 
 The command stops scheduling new samples after the first failure by default; samples already in progress may finish.
 Use `--continue-on-error` to schedule the remaining samples. Failed or rollback-unconfirmed samples are excluded from
 statistics unless `--include-failed` is supplied and the relevant timing exists. Any failure gives the command a
-non-zero exit status. Transport failures retain the client-observed elapsed time when it is available.
+non-zero exit status. Transport failures retain the client-observed elapsed time when it is available. Failed samples
+include a stable error code and a bounded, sanitised message; runtime exception values and stack traces are not exposed.
 
-`--raw-log-dir` streams each complete raw log returned by Apex SOAP to a private staging directory and publishes the
-directory only after successful benchmark completion. Warm-up logs are included unless `--exclude-warmup-logs` is
-supplied. Without this flag, raw log text is discarded immediately after parsing. Retained logs can be processed by
-Apex log analysers and flame-graph tooling. They are unredacted and can contain sensitive Flow data; new files use
-owner-only permissions on POSIX systems.
+`--raw-log-dir` streams each complete raw log returned by Apex SOAP to a private staging directory. The directory is
+published only after the command has successfully produced a complete benchmark result and output transaction,
+including a valid result that contains failed samples and then exits non-zero. Warm-up logs are included unless
+`--exclude-warmup-logs` is supplied. Without this flag, raw log text is discarded immediately after parsing. Retained
+logs can be processed by Apex log analysers and flame-graph tooling. They are unredacted and can contain sensitive
+Flow data; new files use owner-only permissions on POSIX systems.
 
 `--dry-run` validates the Flow, every varied input, generated SOAP request size, production context, SOAP
 authentication, active-version guard and output destinations without executing samples or creating a raw-log

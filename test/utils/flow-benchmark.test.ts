@@ -13,6 +13,7 @@ import {
   parsePositiveBenchmarkInteger,
 } from '../../src/utils/flow-benchmark-flags.js';
 import { calculateBenchmarkStatistics } from '../../src/utils/flow-benchmark-statistics.js';
+import { completedBenchmarkSample } from '../../src/utils/flow-benchmark-sample.js';
 
 describe('Flow benchmark log analysis', (): void => {
   it('uses the final maximum CPU line from a Salesforce debug log', (): void => {
@@ -60,5 +61,81 @@ describe('Flow benchmark integer flags', (): void => {
         inputCount: 100_000,
       });
     }).not.to.throw();
+  });
+});
+
+describe('Flow benchmark SOAP failure samples', (): void => {
+  it('retains compile logs and publishes only a bounded, normalised diagnostic', (): void => {
+    const completed = completedBenchmarkSample(
+      { sample: 1, phase: 'measured', inputIndex: 0, input: {} },
+      {
+        wallClockMilliseconds: 12,
+        transport: {
+          correlationId: 'correlation',
+          execution: {
+            compiled: false,
+            success: false,
+            line: 2,
+            column: 3,
+            compileProblem: `Unexpected\n${'x'.repeat(600)}`,
+            exceptionMessage: null,
+            exceptionStackTrace: null,
+          },
+          rawLog: 'compile failure log',
+          log: {
+            id: null,
+            status: 'Failed',
+            operation: 'executeAnonymous',
+            startTime: '2026-07-29T12:00:00.000Z',
+            durationMilliseconds: 12,
+            logLength: 19,
+          },
+        },
+      }
+    );
+
+    expect(completed.sample).to.deep.include({
+      successful: false,
+      errorCode: 'APEX_COMPILE_ERROR',
+      wallClockMilliseconds: 12,
+    });
+    expect(completed.sample.errorMessage).to.match(/^Generated Apex could not be compiled: Unexpected x+…$/u);
+    expect(completed.sample.errorMessage).not.to.include('\n');
+    expect(completed.rawLog).to.equal('compile failure log');
+  });
+});
+
+describe('Flow benchmark runtime failure samples', (): void => {
+  it('does not expose runtime exception values in the public sample', (): void => {
+    const completed = completedBenchmarkSample(
+      { sample: 1, phase: 'measured', inputIndex: 0, input: {} },
+      {
+        wallClockMilliseconds: 8,
+        transport: {
+          correlationId: 'correlation',
+          execution: {
+            compiled: true,
+            success: false,
+            line: -1,
+            column: -1,
+            compileProblem: null,
+            exceptionMessage: 'Secret customer value',
+            exceptionStackTrace: 'Secret stack',
+          },
+          rawLog: '',
+          log: {
+            id: null,
+            status: 'Failed',
+            operation: 'executeAnonymous',
+            startTime: '2026-07-29T12:00:00.000Z',
+            durationMilliseconds: 8,
+            logLength: 0,
+          },
+        },
+      }
+    );
+
+    expect(completed.sample.errorMessage).not.to.include('Secret customer value');
+    expect(completed.sample.errorMessage).not.to.include('Secret stack');
   });
 });

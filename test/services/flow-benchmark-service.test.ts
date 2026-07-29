@@ -102,6 +102,42 @@ describe('FlowBenchmarkService raw log staging', (): void => {
   });
 });
 
+describe('FlowBenchmarkService staging failures', (): void => {
+  it('wraps a staging-creation failure in the stable benchmark error', async (): Promise<void> => {
+    const service = new FlowBenchmarkService(flowBenchmarkGateways(), {
+      create: async (): Promise<string | null> => {
+        throw new Error('sensitive creation failure');
+      },
+      discard: async (): Promise<void> => undefined,
+    });
+
+    const error = await service
+      .benchmark(flowBenchmarkRequest({ rawLogDirectory: '/benchmark/logs' }))
+      .catch((caught: unknown) => caught);
+
+    expect(error).to.have.property('name', 'FlowBenchmarkFailed');
+    expect(error).to.have.property('message').that.does.not.include('sensitive creation failure');
+  });
+
+  it('preserves the benchmark failure and reports a retained absolute stage after cleanup fails', async (): Promise<void> => {
+    const retainedStage = join(tmpdir(), 'retained-benchmark-stage');
+    const service = new FlowBenchmarkService(flowBenchmarkGateways(), {
+      create: async (): Promise<string | null> => retainedStage,
+      discard: async (): Promise<void> => {
+        throw new Error('sensitive cleanup failure');
+      },
+    });
+
+    const error = await service
+      .benchmark(flowBenchmarkRequest({ iterations: 1, warmup: 0, rawLogDirectory: '/benchmark/logs' }))
+      .catch((caught: unknown) => caught);
+
+    expect(error).to.have.property('name', 'FlowBenchmarkFailed');
+    expect(error).to.have.property('message').that.includes(`retained at "${retainedStage}"`);
+    expect(error).to.have.property('cause');
+  });
+});
+
 describe('FlowBenchmarkService failed measurements', (): void => {
   it('stops scheduling after failure by default', async (): Promise<void> => {
     const gateways = flowBenchmarkGateways();

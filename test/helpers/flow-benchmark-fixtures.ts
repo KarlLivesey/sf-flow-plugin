@@ -34,7 +34,15 @@ export class FakeBenchmarkGateway implements FlowBenchmarkGateway {
       wallClockMilliseconds: sample * 5,
       transport: {
         correlationId: sampleCorrelation,
-        execution: { compiled: true, success: true, line: -1, column: -1 },
+        execution: {
+          compiled: true,
+          success: true,
+          line: -1,
+          column: -1,
+          compileProblem: null,
+          exceptionMessage: null,
+          exceptionStackTrace: null,
+        },
         log: {
           id: null,
           status: 'Success',

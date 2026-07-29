@@ -27,7 +27,15 @@ describe('ApexSoapFlowBenchmarkGateway success', (): void => {
 
   it('uses the shared Apex SOAP executor and reports its complete request latency', async (): Promise<void> => {
     const execute = sinon.stub(ApexSoapExecuteAnonymous.prototype, 'execute').resolves({
-      execution: { compiled: true, success: true, line: -1, column: -1 },
+      execution: {
+        compiled: true,
+        success: true,
+        line: -1,
+        column: -1,
+        compileProblem: null,
+        exceptionMessage: null,
+        exceptionStackTrace: null,
+      },
       rawLog: 'returned debug log',
       durationMilliseconds: 42.5,
     });
@@ -63,6 +71,39 @@ describe('ApexSoapFlowBenchmarkGateway failures', (): void => {
     expect(error).to.include({ errorCode: 'FlowBenchmarkFailed' });
     expect((error as FlowBenchmarkExecutionError).executionDurationMilliseconds).to.be.a('number');
     expect(execute.calledOnce).to.equal(true);
+  });
+});
+
+describe('ApexSoapFlowBenchmarkGateway compile failures', (): void => {
+  afterEach((): void => {
+    sinon.restore();
+  });
+
+  it('returns compile failures and their inline logs for sample reporting', async (): Promise<void> => {
+    sinon.stub(ApexSoapExecuteAnonymous.prototype, 'execute').resolves({
+      execution: {
+        compiled: false,
+        success: false,
+        line: 2,
+        column: 3,
+        compileProblem: 'Unexpected token',
+        exceptionMessage: null,
+        exceptionStackTrace: null,
+      },
+      rawLog: 'compile failure log',
+      durationMilliseconds: 12,
+    });
+
+    const sample = await new ApexSoapFlowBenchmarkGateway({} as Connection).execute(request);
+
+    expect(sample.transport.execution).to.deep.include({ compiled: false, compileProblem: 'Unexpected token' });
+    expect(sample.transport.rawLog).to.equal('compile failure log');
+  });
+});
+
+describe('ApexSoapFlowBenchmarkGateway permission failures', (): void => {
+  afterEach((): void => {
+    sinon.restore();
   });
 
   it('preserves permission failures as a safe benchmark error code', async (): Promise<void> => {

@@ -4,6 +4,8 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+import { resolve } from 'node:path';
+
 import { flowBenchmarkFailed, flowInputInvalid } from '../errors/flow-errors.js';
 import type { FlowMetadataGateway, JsonObject } from '../types/flow-analysis.js';
 import type { FlowBenchmarkArtifact, FlowBenchmarkGateway, FlowBenchmarkRequest } from '../types/flow-benchmark.js';
@@ -27,6 +29,16 @@ interface FlowBenchmarkGateways {
   debug: FlowDebugGateway;
   benchmark: FlowBenchmarkGateway;
 }
+
+export interface FlowBenchmarkLogStage {
+  create(directory: string | undefined): Promise<string | null>;
+  discard(stage: string | null): Promise<void>;
+}
+
+const defaultLogStage: FlowBenchmarkLogStage = {
+  create: createFlowBenchmarkLogStage,
+  discard: discardFlowBenchmarkLogStage,
+};
 
 interface BenchmarkExecutionContext {
   request: FlowBenchmarkRequest;
@@ -160,8 +172,34 @@ async function runPhases(
   };
 }
 
+async function handleBenchmarkFailure(context: {
+  logStage: FlowBenchmarkLogStage;
+  rawLogStage: string | null;
+  apiName: string;
+  error: unknown;
+}): Promise<never> {
+  const cleanupError = await context.logStage.discard(context.rawLogStage).then(
+    () => null,
+    (caught: unknown) => caught
+  );
+  if (cleanupError !== null) {
+    const retained = context.rawLogStage === null ? 'unknown' : resolve(context.rawLogStage);
+    throw flowBenchmarkFailed(
+      `Flow benchmark "${context.apiName}" failed and raw-log staging cleanup also failed. Recoverable staging data was retained at "${retained}".`,
+      context.error
+    );
+  }
+  if (context.error instanceof Error && context.error.name === 'FlowBenchmarkFailed') {
+    throw context.error;
+  }
+  throw flowBenchmarkFailed(`Flow benchmark "${context.apiName}" failed.`, context.error);
+}
+
 export class FlowBenchmarkService {
-  public constructor(private readonly gateways: FlowBenchmarkGateways) {}
+  public constructor(
+    private readonly gateways: FlowBenchmarkGateways,
+    private readonly logStage: FlowBenchmarkLogStage = defaultLogStage
+  ) {}
 
   public async benchmark(
     request: FlowBenchmarkRequest,
@@ -184,15 +222,17 @@ export class FlowBenchmarkService {
 
   private async withRawLogStage(context: BenchmarkExecutionContext): Promise<FlowBenchmarkArtifact> {
     const { request, prepared } = context;
-    const rawLogStage = await createFlowBenchmarkLogStage(request.rawLogDirectory);
+    let rawLogStage: string | null = null;
     try {
+      rawLogStage = await this.logStage.create(request.rawLogDirectory);
       return await this.execute({ ...context, rawLogStage });
     } catch (error: unknown) {
-      await discardFlowBenchmarkLogStage(rawLogStage);
-      if (error instanceof Error && error.name === 'FlowBenchmarkFailed') {
-        throw error;
-      }
-      throw flowBenchmarkFailed(`Flow benchmark "${prepared.flow.apiName}" failed.`, error);
+      return handleBenchmarkFailure({
+        logStage: this.logStage,
+        rawLogStage,
+        apiName: prepared.flow.apiName,
+        error,
+      });
     }
   }
 

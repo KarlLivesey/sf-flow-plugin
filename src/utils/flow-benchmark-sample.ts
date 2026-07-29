@@ -25,6 +25,26 @@ export interface CompletedBenchmarkSample {
 interface FailedSampleContext {
   wallClockMilliseconds: number | null;
   errorCode: string;
+  errorMessage: string;
+  rawLog?: string | null;
+}
+
+const MAX_DIAGNOSTIC_LENGTH = 500;
+
+function safeCompileMessage(diagnostic: string | null): string {
+  if (diagnostic === null) {
+    return 'Generated Apex could not be compiled.';
+  }
+  const normalised = diagnostic
+    .replaceAll(/[\r\n\t]+/gu, ' ')
+    .replaceAll(/\s{2,}/gu, ' ')
+    .trim();
+  if (normalised.length === 0) {
+    return 'Generated Apex could not be compiled.';
+  }
+  const bounded =
+    normalised.length <= MAX_DIAGNOSTIC_LENGTH ? normalised : `${normalised.slice(0, MAX_DIAGNOSTIC_LENGTH)}…`;
+  return `Generated Apex could not be compiled: ${bounded}`;
 }
 
 export function safeBenchmarkErrorCode(error: unknown): string {
@@ -48,12 +68,28 @@ export function failedBenchmarkSample(
       wallClockMilliseconds: context.wallClockMilliseconds,
       cpuTimeMilliseconds: null,
       errorCode: context.errorCode,
+      errorMessage: context.errorMessage,
     },
-    rawLog: null,
+    rawLog: context.rawLog ?? null,
   };
 }
 
-export function completedBenchmarkSample(
+function compileFailure(
+  planned: PlannedBenchmarkSample,
+  transportSample: FlowBenchmarkTransportSample
+): CompletedBenchmarkSample | null {
+  const { transport } = transportSample;
+  return transport.execution.compiled
+    ? null
+    : failedBenchmarkSample(planned, {
+        wallClockMilliseconds: transportSample.wallClockMilliseconds,
+        errorCode: 'APEX_COMPILE_ERROR',
+        errorMessage: safeCompileMessage(transport.execution.compileProblem),
+        rawLog: transport.rawLog,
+      });
+}
+
+function runtimeSample(
   planned: PlannedBenchmarkSample,
   transportSample: FlowBenchmarkTransportSample
 ): CompletedBenchmarkSample {
@@ -75,6 +111,13 @@ export function completedBenchmarkSample(
         errorCode:
           parsed.error?.type ??
           (successful ? null : rollbackConfirmed ? 'FlowBenchmarkSampleFailed' : 'FlowDebugRollbackFailed'),
+        errorMessage:
+          parsed.error?.message ??
+          (successful
+            ? null
+            : transport.execution.success
+            ? 'The sample did not contain complete rollback confirmation.'
+            : 'Salesforce terminated the benchmark transaction; runtime details were redacted.'),
       },
       rawLog: transport.rawLog,
     };
@@ -82,10 +125,16 @@ export function completedBenchmarkSample(
     const failed = failedBenchmarkSample(planned, {
       wallClockMilliseconds: transportSample.wallClockMilliseconds,
       errorCode: 'FlowDebugFailed',
-    });
-    return {
-      ...failed,
+      errorMessage: 'The returned Apex SOAP debug log was malformed or incomplete.',
       rawLog: transport.rawLog,
-    };
+    });
+    return failed;
   }
+}
+
+export function completedBenchmarkSample(
+  planned: PlannedBenchmarkSample,
+  transportSample: FlowBenchmarkTransportSample
+): CompletedBenchmarkSample {
+  return compileFailure(planned, transportSample) ?? runtimeSample(planned, transportSample);
 }
