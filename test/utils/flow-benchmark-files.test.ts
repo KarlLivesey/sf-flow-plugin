@@ -157,6 +157,24 @@ describe('Flow benchmark files', (): void => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it('releases every backpressured enqueue when a raw-log write fails', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'sf-flow-benchmark-queue-failure-'));
+    try {
+      const writer = createFlowBenchmarkRawLogWriter(directory);
+      const writes = Array.from({ length: 40 }, (_, index) =>
+        writer.enqueue({ phase: 'measured', sample: 1, rawLog: `duplicate ${index + 1}` })
+      );
+      const outcomes = await Promise.allSettled(writes);
+      const drainError = await writer.drain().catch((caught: unknown) => caught);
+
+      expect(outcomes).to.have.length(40);
+      expect(outcomes.some((outcome) => outcome.status === 'rejected')).to.equal(true);
+      expect(drainError).to.be.instanceOf(Error);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('Flow benchmark destination safety', (): void => {

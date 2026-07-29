@@ -119,6 +119,7 @@ class BoundedFlowBenchmarkRawLogWriter implements FlowBenchmarkRawLogWriter {
   private readonly capacityWaiters: Array<(reserved: boolean) => void> = [];
   private readonly idleWaiters: Array<() => void> = [];
   private active = 0;
+  private capacityWaiterCursor = 0;
   private reservedCapacity = 0;
   private failure: unknown;
 
@@ -174,16 +175,39 @@ class BoundedFlowBenchmarkRawLogWriter implements FlowBenchmarkRawLogWriter {
     }
   }
 
+  private pendingCapacityWaiters(): number {
+    return this.capacityWaiters.length - this.capacityWaiterCursor;
+  }
+
+  private takeCapacityWaiter(): ((reserved: boolean) => void) | undefined {
+    const waiter = this.capacityWaiters[this.capacityWaiterCursor];
+    if (waiter === undefined) {
+      return undefined;
+    }
+    this.capacityWaiterCursor += 1;
+    if (this.capacityWaiterCursor >= 1024 && this.capacityWaiterCursor * 2 >= this.capacityWaiters.length) {
+      this.capacityWaiters.splice(0, this.capacityWaiterCursor);
+      this.capacityWaiterCursor = 0;
+    }
+    return waiter;
+  }
+
+  private releaseCapacityWaiters(reserved: boolean): void {
+    let waiter = this.takeCapacityWaiter();
+    while (waiter !== undefined) {
+      waiter(reserved);
+      waiter = this.takeCapacityWaiter();
+    }
+  }
+
   private notifyCapacity(): void {
     if (this.failure !== undefined) {
-      for (const resolveCapacity of this.capacityWaiters.splice(0)) {
-        resolveCapacity(false);
-      }
+      this.releaseCapacityWaiters(false);
       return;
     }
-    while (this.capacityWaiters.length > 0 && this.queue.length + this.reservedCapacity < RAW_LOG_QUEUE_HIGH_WATER) {
+    while (this.pendingCapacityWaiters() > 0 && this.queue.length + this.reservedCapacity < RAW_LOG_QUEUE_HIGH_WATER) {
       this.reservedCapacity += 1;
-      this.capacityWaiters.shift()?.(true);
+      this.takeCapacityWaiter()?.(true);
     }
   }
 

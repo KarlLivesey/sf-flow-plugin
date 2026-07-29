@@ -58,9 +58,17 @@ function plannedSample(context: FlowBenchmarkPhaseRunnerContext, index: number):
   };
 }
 
+async function yieldAfterSchedulingBatch(completedInBatch: number): Promise<number> {
+  const next = completedInBatch + 1;
+  if (next < SCHEDULING_BATCH_SIZE) {
+    return next;
+  }
+  await yieldToEventLoop();
+  return 0;
+}
+
 export class FlowBenchmarkPhaseRunner {
   private readonly completed: CompletedBenchmarkSample[] = [];
-  private readonly active = new Set<Promise<void>>();
   private nextIndex = 0;
   private stopped = false;
   private failure: unknown;
@@ -69,22 +77,24 @@ export class FlowBenchmarkPhaseRunner {
 
   public async run(): Promise<FlowBenchmarkPhaseResult> {
     const started = performance.now();
-    await this.fillAvailableSlots();
-    await this.drainActive();
-    await this.context.rawLogWriter.drain();
+    await this.runWorkers();
+    await this.drainRawLogs();
     const elapsedMilliseconds = performance.now() - started;
     this.throwWorkerFailure();
     return { completed: this.orderedCompleted(), stopped: this.stopped, elapsedMilliseconds };
   }
 
-  private async drainActive(): Promise<void> {
-    while (this.active.size > 0) {
-      // Each settlement frees a slot which is replenished immediately.
-      // eslint-disable-next-line no-await-in-loop
-      await Promise.race(this.active);
-      // eslint-disable-next-line no-await-in-loop
-      await this.fillAvailableSlots();
+  private async drainRawLogs(): Promise<void> {
+    try {
+      await this.context.rawLogWriter.drain();
+    } catch (error: unknown) {
+      this.recordFailure(error);
     }
+  }
+
+  private recordFailure(error: unknown): void {
+    this.failure ??= error;
+    this.stopped = true;
   }
 
   private throwWorkerFailure(): void {
@@ -157,40 +167,41 @@ export class FlowBenchmarkPhaseRunner {
     return { ...completed, rawLog: null };
   }
 
-  private async fillAvailableSlots(): Promise<void> {
-    const concurrency = Math.min(this.context.request.concurrency, this.context.count);
-    let startedInBatch = 0;
-    while (!this.stopped && this.nextIndex < this.context.count && this.active.size < concurrency) {
-      const planned = this.claim();
-      if (planned !== null) {
-        this.start(planned);
-        startedInBatch += 1;
+  private async processSample(planned: PlannedBenchmarkSample): Promise<void> {
+    const completed = await this.execute(planned);
+    if (completed.stopScheduling || (!completed.sample.successful && !this.context.request.continueOnError)) {
+      this.stopped = true;
+    }
+    this.completed.push(await this.retainRawLog(completed));
+  }
+
+  private async runWorker(): Promise<void> {
+    let completedInBatch = 0;
+    try {
+      let planned = this.claim();
+      while (planned !== null) {
+        // eslint-disable-next-line no-await-in-loop
+        await this.processSample(planned);
+        // eslint-disable-next-line no-await-in-loop
+        completedInBatch = await yieldAfterSchedulingBatch(completedInBatch);
+        planned = this.claim();
       }
-      if (startedInBatch === SCHEDULING_BATCH_SIZE) {
-        startedInBatch = 0;
+    } catch (error: unknown) {
+      this.recordFailure(error);
+    }
+  }
+
+  private async runWorkers(): Promise<void> {
+    const workerCount = Math.min(this.context.request.concurrency, this.context.count);
+    const workers: Array<Promise<void>> = [];
+    for (let workerIndex = 0; workerIndex < workerCount && !this.stopped; workerIndex += 1) {
+      workers.push(this.runWorker());
+      if ((workerIndex + 1) % SCHEDULING_BATCH_SIZE === 0) {
         // Very large user-selected concurrency is ramped without monopolising the JavaScript event loop.
         // eslint-disable-next-line no-await-in-loop
         await yieldToEventLoop();
       }
     }
-  }
-
-  private start(planned: PlannedBenchmarkSample): void {
-    const active = this.execute(planned)
-      .then(async (completed) => {
-        if (completed.stopScheduling || (!completed.sample.successful && !this.context.request.continueOnError)) {
-          this.stopped = true;
-        }
-        const retained = await this.retainRawLog(completed);
-        this.completed.push(retained);
-      })
-      .catch((error: unknown) => {
-        this.failure ??= error;
-        this.stopped = true;
-      })
-      .finally(() => {
-        this.active.delete(active);
-      });
-    this.active.add(active);
+    await Promise.allSettled(workers);
   }
 }
