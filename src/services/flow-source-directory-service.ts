@@ -10,7 +10,7 @@ import { join, resolve } from 'node:path';
 
 import { flowSourceInvalid } from '../errors/flow-errors.js';
 import type { FlowSubflowSummary, FlowTraversalWarning } from '../types/flow-inspection.js';
-import type { FlowSource, FlowSourceFile } from '../types/flow-source.js';
+import type { FlowSource } from '../types/flow-source.js';
 import { boundedMap } from '../utils/bounded-map.js';
 import { qualifiedFlowName } from '../utils/flow-state.js';
 import { parseFlowSourceFile, readFlowSourceFile, verifyFlowSourceSnapshot } from './flow-source-service.js';
@@ -78,11 +78,32 @@ async function resolvedDirectory(directory: string): Promise<string> {
   }
 }
 
-function assertSourceByteBudget(files: ReadonlyArray<FlowSourceFile>): void {
-  const totalBytes = files.reduce((total, file) => total + file.snapshot.size, 0);
+function assertSourceByteBudget(totalBytes: number): void {
   if (!Number.isSafeInteger(totalBytes) || totalBytes > MAX_SOURCE_BYTES) {
     throw flowSourceInvalid('Flow source directory exceeds the 256 MiB aggregate source-file safety limit.');
   }
+}
+
+async function preflightSourceByteBudget(files: ReadonlyArray<string>): Promise<void> {
+  try {
+    const sizes = await boundedMap(files, SOURCE_CONCURRENCY, async (file) => (await stat(file)).size);
+    assertSourceByteBudget(sizes.reduce((total, size) => total + size, 0));
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === 'FlowSourceInvalid') {
+      throw error;
+    }
+    throw flowSourceInvalid('Flow source directory file sizes could not be inspected.', error);
+  }
+}
+
+async function loadSourcesWithinBudget(files: ReadonlyArray<string>): Promise<FlowSource[]> {
+  let authoritativeBytes = 0;
+  return boundedMap(files, SOURCE_CONCURRENCY, async (file) => {
+    const opened = await readFlowSourceFile(file);
+    authoritativeBytes += opened.snapshot.size;
+    assertSourceByteBudget(authoritativeBytes);
+    return parseFlowSourceFile(opened);
+  });
 }
 
 function assertUniqueIdentities(sources: ReadonlyArray<FlowSource>): void {
@@ -107,9 +128,8 @@ export async function loadFlowSourceDirectory(directory: string): Promise<FlowSo
   if (files.length === 0) {
     throw flowSourceInvalid(`Flow source directory "${resolved}" does not contain any ${FLOW_SOURCE_SUFFIX} files.`);
   }
-  const loadedFiles = await boundedMap(files, SOURCE_CONCURRENCY, readFlowSourceFile);
-  assertSourceByteBudget(loadedFiles);
-  const sources = await boundedMap(loadedFiles, SOURCE_CONCURRENCY, parseFlowSourceFile);
+  await preflightSourceByteBudget(files);
+  const sources = await loadSourcesWithinBudget(files);
   assertUniqueIdentities(sources);
   return { directory: resolved, sources };
 }
