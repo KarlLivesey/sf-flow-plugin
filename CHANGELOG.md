@@ -11,6 +11,36 @@ All notable user-visible changes to this project will be documented in this file
 - Added strict local XML validation, Salesforce Code Analyzer Flow Scanner linting with installation consent,
   structural metrics, local graph rendering and complete source-file locations in SARIF reports.
 - Added local-to-local and local-to-org comparisons through `sf flow compare --from-file` and `--to-file`.
+- Added recursive project-wide Flow linting, checks, metrics and local subflow resolution through `--source-dir`.
+- Added `sf flow run --if-active-version` to guard invocation and rollback debugging against an unexpected activation.
+- Added `sf flow debug` as the clearer equivalent of `sf flow run --rollback`, using the same rollback execution,
+  request-scoped SOAP log, dry-run, output and safety implementation without requiring the rollback flag.
+- Added `sf flow benchmark` to run repeatable rollback-isolated warm-up and measured samples against the active version
+  of a directly invocable autolaunched Flow.
+- Added deterministic varied-input assignment, configurable concurrency, min/max/mean and nearest-rank percentile
+  statistics for per-sample wall-clock and Salesforce CPU time, total wall-clock time and measured throughput.
+- Added optional raw debug-log retention, production confirmation, active-version concurrency guards, failure policy
+  controls and a non-executing dry-run preflight.
+- Added a positive whole-minute per-sample SOAP timeout without a plugin-defined maximum. Timed-out transactions have
+  unknown rollback status, are never retried and stop new benchmark scheduling. Any other sample whose rollback
+  cannot be verified also stops scheduling.
+
+### Safety and compatibility
+
+- Benchmark execution sustains requested concurrency through the shared Apex SOAP transport and verifies completion
+  and rollback markers for every completed sample. Raw logs are drained after request timing with bounded writes and
+  owner-only permissions on POSIX systems.
+- Rollback affects database changes in the current transaction only. It cannot reverse callouts, email, asynchronous
+  work or separately committed transactions; production execution therefore requires `--confirm`.
+- Benchmark workload, concurrency, input-file-size and input-count are not capped by the plugin. Numeric workload
+  flags must still be safe integers with the required positive or non-negative sign. Returned logs are streamed to
+  private staging only when requested and published after successful completion.
+
+### Changed
+
+- Rollback Flow execution now uses one Apex SOAP request with a request-scoped `DebuggingHeader`. The raw log is
+  returned inline, so the plugin no longer creates `DebugLevel` or `TraceFlag` records, polls `ApexLog`, downloads a
+  separate log body or applies the former REST URI-size limit. `--wait` now controls the SOAP request timeout.
 
 ## 1.4.1 - 2026-07-27
 

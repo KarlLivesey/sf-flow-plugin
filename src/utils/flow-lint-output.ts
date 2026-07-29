@@ -12,7 +12,7 @@ import { z } from 'zod';
 
 import { flowLintFailed } from '../errors/flow-errors.js';
 import { flowApiNameSchema, namespaceSchema } from '../schemas/flow.js';
-import type { FlowLintFinding, FlowLintResult } from '../types/flow-lint.js';
+import type { FlowLintDirectoryResult, FlowLintFinding, FlowLintResult } from '../types/flow-lint.js';
 import { legacyFlowLintFingerprint } from './flow-lint-fingerprint.js';
 import { analyzerFlowLintSarifLocations } from './flow-lint-sarif.js';
 import type { FlowLintSarifLocation } from './flow-lint-sarif.js';
@@ -173,6 +173,10 @@ export function formatFlowLintHuman(result: FlowLintResult): string {
   ].join('\n');
 }
 
+export function formatFlowLintDirectoryHuman(result: FlowLintDirectoryResult): string {
+  return result.flows.map(formatFlowLintHuman).join('\n\n');
+}
+
 interface SarifResult {
   ruleId: string;
   level: 'error' | 'warning';
@@ -237,31 +241,41 @@ function sarifResult(finding: FlowLintFinding, context: SarifResultContext): Sar
   };
 }
 
-export function formatFlowLintSarif(result: FlowLintResult): string {
+function flowLintSarifRun(result: FlowLintResult): object {
   const baseline = new Set(result.baselineFindings.map(findingKey));
   const flowName = qualifiedFlowName(result.apiName, result.namespace);
+  return {
+    tool: {
+      driver: {
+        name: 'sf-flow-plugin',
+        informationUri: 'https://github.com/KarlLivesey/sf-flow-plugin',
+        rules: [...new Set(result.findings.map((finding) => finding.rule))].sort().map((id) => ({ id })),
+      },
+    },
+    results: result.findings.map((finding) =>
+      sarifResult(finding, { flowName, baseline, sourceFile: result.sourceFile })
+    ),
+  };
+}
+
+function sarifDocument(runs: object[]): string {
   return JSON.stringify(
     {
       $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
       version: '2.1.0',
-      runs: [
-        {
-          tool: {
-            driver: {
-              name: 'sf-flow-plugin',
-              informationUri: 'https://github.com/KarlLivesey/sf-flow-plugin',
-              rules: [...new Set(result.findings.map((finding) => finding.rule))].sort().map((id) => ({ id })),
-            },
-          },
-          results: result.findings.map((finding) =>
-            sarifResult(finding, { flowName, baseline, sourceFile: result.sourceFile })
-          ),
-        },
-      ],
+      runs,
     },
     null,
     2
   );
+}
+
+export function formatFlowLintSarif(result: FlowLintResult): string {
+  return sarifDocument([flowLintSarifRun(result)]);
+}
+
+export function formatFlowLintDirectorySarif(result: FlowLintDirectoryResult): string {
+  return sarifDocument(result.flows.map(flowLintSarifRun));
 }
 
 export async function writeFlowLintOutput(outputFile: string, content: string): Promise<string> {

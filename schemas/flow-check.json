@@ -68,6 +68,9 @@
         },
         "sourceFile": {
           "type": "string"
+        },
+        "sourceDirectory": {
+          "type": "string"
         }
       },
       "required": [

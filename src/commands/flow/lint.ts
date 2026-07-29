@@ -8,9 +8,9 @@ import { Messages } from '@salesforce/core';
 import type { Org } from '@salesforce/core';
 import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
-import { flowLintFailed } from '../../errors/flow-errors.js';
 import { FlowLintService } from '../../services/flow-lint-service.js';
 import { lintFlowSource } from '../../services/flow-source-analysis-service.js';
+import { lintSourceDirectory } from '../../services/flow-source-directory-runner.js';
 import { loadFlowSource, verifyFlowSourceSnapshot } from '../../services/flow-source-service.js';
 import { SalesforceCodeAnalyzerFlowService } from '../../services/salesforce-code-analyzer-flow-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
@@ -20,20 +20,20 @@ import type {
   FlowLintRequest,
   FlowLintResult,
   FlowLintResultFormat,
-  FlowLintRule,
 } from '../../types/flow-lint.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
 import { prepareSalesforceCodeAnalyzer } from '../../utils/flow-code-analyzer-command.js';
 import {
-  applyFlowLintBaseline,
-  formatFlowLintHuman,
-  formatFlowLintSarif,
-  writeFlowLintOutput,
-} from '../../utils/flow-lint-output.js';
+  flowLintOutputContent,
+  isFlowLintDirectoryResult,
+  type LintCommandResult,
+} from '../../utils/flow-lint-directory-output.js';
+import { applyFlowLintBaseline, writeFlowLintOutput } from '../../utils/flow-lint-output.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
 import type { FlowProgressReporter } from '../../utils/flow-progress.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
 import { validateFlowSourceFlags } from '../../utils/flow-source-command.js';
+import { orgLintRule } from '../../utils/flow-org-lint-rules.js';
 import { parseInspectionVersionSelector } from './describe.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -42,6 +42,7 @@ const messages = Messages.loadMessages('sf-flow-plugin', 'flow.lint');
 export interface LintFlagValues {
   'api-name': string | undefined;
   'source-file': string | undefined;
+  'source-dir': string | undefined;
   'target-org': Org | undefined;
   'flow-version': FlowComparisonVersionSelector;
   'fail-on': FlowLintFailSeverity | undefined;
@@ -53,24 +54,6 @@ export interface LintFlagValues {
   namespace: string | undefined;
   'api-version': string | undefined;
   'no-prompt': boolean;
-}
-
-const orgLintRules: FlowLintRule[] = [
-  'dml-inside-loop',
-  'hard-coded-id',
-  'inactive-subflow',
-  'missing-fault-path',
-  'missing-subflow',
-  'unconnected-element',
-  'unused-resource',
-];
-
-function orgLintRule(value: string): FlowLintRule {
-  const rule = orgLintRules.find((candidate) => candidate === value);
-  if (rule === undefined) {
-    throw flowLintFailed(`Org-backed Flow lint rule "${value}" is invalid. Valid rules: ${orgLintRules.join(', ')}.`);
-  }
-  return rule;
 }
 
 function createRequest(flags: LintFlagValues, context: ReturnType<typeof createFlowCommandContext>): FlowLintRequest {
@@ -85,7 +68,7 @@ function createRequest(flags: LintFlagValues, context: ReturnType<typeof createF
   };
 }
 
-function shouldFail(result: FlowLintResult, severity: FlowLintFailSeverity | undefined): boolean {
+function shouldFail(result: LintCommandResult, severity: FlowLintFailSeverity | undefined): boolean {
   return severity === 'warning'
     ? result.newErrors + result.newWarnings > 0
     : severity === 'error' && result.newErrors > 0;
@@ -131,13 +114,13 @@ async function prepareLintAnalyzer(
   flags: LintFlagValues
 ): Promise<SalesforceCodeAnalyzerFlowService> {
   const analyzer = new SalesforceCodeAnalyzerFlowService();
-  if (flags['source-file'] !== undefined) {
+  if (flags['source-file'] !== undefined || flags['source-dir'] !== undefined) {
     await prepareSalesforceCodeAnalyzer(command, analyzer, flags['no-prompt']);
   }
   return analyzer;
 }
 
-export default class FlowLint extends SfCommand<FlowLintResult> {
+export default class FlowLint extends SfCommand<LintCommandResult> {
   public static override readonly summary = messages.getMessage('summary');
   public static override readonly description = messages.getMessage('description');
   public static override readonly examples = messages.getMessages('examples');
@@ -145,13 +128,18 @@ export default class FlowLint extends SfCommand<FlowLintResult> {
   public static override readonly flags = {
     'api-name': Flags.string({
       char: 'n',
-      exactlyOne: ['api-name', 'source-file'],
+      exactlyOne: ['api-name', 'source-file', 'source-dir'],
       summary: messages.getMessage('flags.api-name.summary'),
     }),
     'source-file': Flags.file({
-      exactlyOne: ['api-name', 'source-file'],
+      exactlyOne: ['api-name', 'source-file', 'source-dir'],
       exists: true,
       summary: messages.getMessage('flags.source-file.summary'),
+    }),
+    'source-dir': Flags.directory({
+      exactlyOne: ['api-name', 'source-file', 'source-dir'],
+      exists: true,
+      summary: messages.getMessage('flags.source-dir.summary'),
     }),
     'target-org': Flags.optionalOrg({
       char: 'o',
@@ -198,13 +186,24 @@ export default class FlowLint extends SfCommand<FlowLintResult> {
     }),
   };
 
-  public async run(): Promise<FlowLintResult> {
+  public async run(): Promise<LintCommandResult> {
     const flags = await this.parseFlags();
     const analyzer = await prepareLintAnalyzer(this, flags);
-    const lintResult = await withFlowProgress(this.spinner, 'lint', async (progress) =>
-      flags['source-file'] === undefined ? lintOrg(flags, progress) : lintSource(flags, analyzer, progress)
-    );
-    const result = await applyFlowLintBaseline(lintResult, flags.baseline);
+    const lintResult = await withFlowProgress(this.spinner, 'lint', async (progress) => {
+      if (flags['source-dir'] !== undefined) {
+        return lintSourceDirectory({
+          sourceDirectory: flags['source-dir'],
+          rules: flags.rule ?? [],
+          excludedRules: flags['exclude-rule'] ?? [],
+          analyzer,
+          progress,
+        });
+      }
+      return flags['source-file'] === undefined ? lintOrg(flags, progress) : lintSource(flags, analyzer, progress);
+    });
+    const result = isFlowLintDirectoryResult(lintResult)
+      ? lintResult
+      : await applyFlowLintBaseline(lintResult, flags.baseline);
     await this.writeOutput(result, flags);
     if (shouldFail(result, flags['fail-on'])) {
       process.exitCode = 1;
@@ -215,11 +214,16 @@ export default class FlowLint extends SfCommand<FlowLintResult> {
   public async parseFlags(): Promise<LintFlagValues> {
     const { flags } = await this.parse(FlowLint);
     validateFlowSourceFlags(this.argv, ['target-org', 'flow-version', 'namespace', 'api-version']);
+    validateFlowSourceFlags(
+      this.argv,
+      ['target-org', 'flow-version', 'namespace', 'api-version', 'baseline'],
+      'source-dir'
+    );
     return flags;
   }
 
-  private async writeOutput(result: FlowLintResult, flags: LintFlagValues): Promise<void> {
-    const content = flags['result-format'] === 'sarif' ? formatFlowLintSarif(result) : formatFlowLintHuman(result);
+  private async writeOutput(result: LintCommandResult, flags: LintFlagValues): Promise<void> {
+    const content = flowLintOutputContent(result, flags['result-format']);
     if (flags['output-file'] !== undefined) {
       const file = await writeFlowLintOutput(flags['output-file'], content);
       if (!this.jsonEnabled()) {
@@ -231,8 +235,18 @@ export default class FlowLint extends SfCommand<FlowLintResult> {
       return;
     }
     if (flags['result-format'] === 'human') {
-      this.writeHumanOutput(result);
+      this.writeHumanResult(result);
     }
+  }
+
+  private writeHumanResult(result: LintCommandResult): void {
+    if (isFlowLintDirectoryResult(result)) {
+      result.flows.forEach((flow) => {
+        this.writeHumanOutput(flow);
+      });
+      return;
+    }
+    this.writeHumanOutput(result);
   }
 
   private writeHumanOutput(result: FlowLintResult): void {

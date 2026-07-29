@@ -9,6 +9,7 @@ import type { JsonObject, JsonValue } from '../types/flow-analysis.js';
 import type { FlowDebugArtifact, FlowDebugTransportResult } from '../types/flow-debug.js';
 import type { FlowInvocationError, FlowRollbackRequest, FlowRunResult } from '../types/flow-invocation.js';
 import type { FlowDefinition, FlowVersion } from '../types/flow.js';
+import { safeFlowDiagnostic } from './flow-diagnostic.js';
 import type { parseFlowDebugLog } from './flow-debug-log.js';
 
 export interface PreparedFlowDebug {
@@ -33,6 +34,11 @@ interface ResultContext {
   executed: ExecutedFlowDebug;
 }
 
+function logIdContext(context: ResultContext): string {
+  const id = context.executed.transport.log.id;
+  return id === null ? '' : ` ApexLog ID: ${id}.`;
+}
+
 function visibleValues(value: Readonly<Record<string, JsonValue>>, showValues: boolean): Record<string, JsonValue> {
   return showValues ? { ...value } : Object.fromEntries(Object.keys(value).map((key) => [key, '[REDACTED]']));
 }
@@ -44,17 +50,17 @@ function assertCompleted(context: ResultContext): void {
   }
   if (!executed.parsed.beginMarker || !executed.parsed.endMarker) {
     throw flowDebugFailed(
-      `The correlated log for Flow "${prepared.flow.apiName}" did not contain its complete execution markers. ` +
-        `ApexLog ID: ${executed.transport.log.id}.`
+      `The Apex SOAP debug log for Flow "${prepared.flow.apiName}" did not contain its complete execution markers.` +
+        logIdContext(context)
     );
   }
   if (!executed.parsed.rollbackMarker) {
-    throw flowDebugRollbackFailed(prepared.flow.apiName, executed.transport.log.id);
+    throw flowDebugRollbackFailed(prepared.flow.apiName, executed.transport.log.id ?? undefined);
   }
   if (executed.parsed.error === null && !executed.parsed.outputMarker) {
     throw flowDebugFailed(
-      `The correlated log for Flow "${prepared.flow.apiName}" did not contain its output marker. ` +
-        `ApexLog ID: ${executed.transport.log.id}.`
+      `The Apex SOAP debug log for Flow "${prepared.flow.apiName}" did not contain its output marker.` +
+        logIdContext(context)
     );
   }
 }
@@ -63,12 +69,25 @@ function executionError(context: ResultContext): ReturnType<typeof parseFlowDebu
   if (context.executed.parsed.error !== null) {
     return context.executed.parsed.error;
   }
-  return context.executed.transport.execution.success
-    ? null
-    : {
-        type: null,
-        message: 'Salesforce terminated the debug transaction; inspect the Flow trace for details.',
-      };
+  const execution = context.executed.transport.execution;
+  if (!execution.compiled) {
+    const diagnostic = safeFlowDiagnostic(execution.compileProblem);
+    return {
+      type: 'APEX_COMPILE_ERROR',
+      message: `Generated Apex could not be compiled${diagnostic === null ? '.' : `: ${diagnostic}`}`,
+    };
+  }
+  if (execution.success) {
+    return null;
+  }
+  const diagnostic = context.request.showValues ? safeFlowDiagnostic(execution.exceptionMessage) : null;
+  return {
+    type: 'APEX_RUNTIME_ERROR',
+    message:
+      diagnostic === null
+        ? 'Salesforce terminated the debug transaction; inspect the Flow trace for details.'
+        : `Salesforce terminated the debug transaction: ${diagnostic}`,
+  };
 }
 
 function invocationErrors(context: ResultContext): FlowInvocationError[] {
@@ -80,7 +99,8 @@ export function createFlowDebugArtifact(context: ResultContext): FlowDebugArtifa
   assertCompleted(context);
   const { request, prepared, executed } = context;
   const { flow, input, production } = prepared;
-  const successful = executed.transport.execution.success && executed.parsed.error === null;
+  const successful =
+    executed.transport.execution.compiled && executed.transport.execution.success && executed.parsed.error === null;
   return {
     result: {
       apiName: flow.definition.apiName,
@@ -100,7 +120,7 @@ export function createFlowDebugArtifact(context: ResultContext): FlowDebugArtifa
           inputs: visibleValues(input, request.showValues),
           outputs: visibleValues(executed.parsed.outputs, request.showValues),
           errors: invocationErrors(context),
-          executed: true,
+          executed: executed.transport.execution.compiled,
         },
       ],
       targetOrg: request.targetOrg,

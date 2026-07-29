@@ -24,3 +24,9 @@ export interface FlowSourceSnapshot {
   modifiedMilliseconds: number;
   changedMilliseconds: number;
 }
+
+export interface FlowSourceFile {
+  sourceFile: string;
+  content: string;
+  snapshot: FlowSourceSnapshot;
+}

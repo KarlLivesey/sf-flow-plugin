@@ -78,4 +78,5 @@ export interface FlowCheckResult {
   warnings: number;
   targetOrg: string | null;
   sourceFile?: string;
+  sourceDirectory?: string;
 }

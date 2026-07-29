@@ -1,7 +1,73 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$ref": "#/definitions/FlowLintResult",
+  "$ref": "#/definitions/LintCommandResult",
   "definitions": {
+    "LintCommandResult": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/FlowLintDirectoryResult"
+        },
+        {
+          "$ref": "#/definitions/FlowLintResult"
+        }
+      ]
+    },
+    "FlowLintDirectoryResult": {
+      "type": "object",
+      "properties": {
+        "sourceDirectory": {
+          "type": "string"
+        },
+        "flows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowLintResult"
+          }
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowLintFinding"
+          }
+        },
+        "newFindings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowLintFinding"
+          }
+        },
+        "baselineFindings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowLintFinding"
+          }
+        },
+        "errors": {
+          "type": "number"
+        },
+        "warnings": {
+          "type": "number"
+        },
+        "newErrors": {
+          "type": "number"
+        },
+        "newWarnings": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "sourceDirectory",
+        "flows",
+        "findings",
+        "newFindings",
+        "baselineFindings",
+        "errors",
+        "warnings",
+        "newErrors",
+        "newWarnings"
+      ],
+      "additionalProperties": false
+    },
     "FlowLintResult": {
       "type": "object",
       "properties": {
