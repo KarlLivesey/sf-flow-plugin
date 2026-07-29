@@ -21,8 +21,9 @@ All notable user-visible changes to this project will be documented in this file
   statistics for per-sample wall-clock and Salesforce CPU time, total wall-clock time and measured throughput.
 - Added optional raw debug-log retention, production confirmation, active-version concurrency guards, failure policy
   controls and a non-executing dry-run preflight.
-- Added a one-to-ten-minute per-sample SOAP timeout. Timed-out transactions have unknown rollback status, are never
-  retried and stop new benchmark scheduling. Any other sample whose rollback cannot be verified also stops scheduling.
+- Added a positive whole-minute per-sample SOAP timeout without a plugin-defined maximum. Timed-out transactions have
+  unknown rollback status, are never retried and stop new benchmark scheduling. Any other sample whose rollback
+  cannot be verified also stops scheduling.
 
 ### Safety and compatibility
 

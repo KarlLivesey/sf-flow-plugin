@@ -14,7 +14,7 @@ import type {
   FlowBenchmarkGateway,
   FlowBenchmarkTransportSample,
 } from '../types/flow-benchmark.js';
-import { createBoundedFlowDebugApex } from '../utils/flow-debug-apex.js';
+import { createFlowDebugApex } from '../utils/flow-debug-apex.js';
 import { FlowBenchmarkExecutionError } from '../utils/flow-benchmark-error.js';
 import { ApexSoapExecuteAnonymous, type ApexSoapExecuteResult } from './apex-soap-execute-anonymous.js';
 import { isPermissionFailure, transportCodes } from './flow-debug-transport-support.js';
@@ -120,7 +120,7 @@ export class ApexSoapFlowBenchmarkGateway implements FlowBenchmarkGateway {
 
   public async execute(request: FlowBenchmarkExecutionRequest): Promise<FlowBenchmarkTransportSample> {
     const correlationId = randomUUID();
-    const apexSource = createBoundedFlowDebugApex({ correlationId, ...request });
+    const apexSource = createFlowDebugApex({ correlationId, ...request });
     return executeSample(this.soap, { request, correlationId, apexSource });
   }
 }

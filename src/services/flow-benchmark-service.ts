@@ -12,7 +12,6 @@ import type { FlowBenchmarkArtifact, FlowBenchmarkGateway, FlowBenchmarkRequest 
 import type { FlowDebugGateway } from '../types/flow-debug.js';
 import type { FlowRollbackRequest } from '../types/flow-invocation.js';
 import type { FlowDefinitionGateway } from '../types/flow.js';
-import { createBoundedFlowDebugApex } from '../utils/flow-debug-apex.js';
 import {
   createFlowBenchmarkLogStage,
   createFlowBenchmarkRawLogWriter,
@@ -76,17 +75,7 @@ function rollbackRequest(request: FlowBenchmarkRequest, input: JsonObject): Flow
 
 function validateInputs(prepared: PreparedDebug, request: FlowBenchmarkRequest): JsonObject[] {
   const description = analyseFlowMetadata({ ...prepared.flow, depth: 0 });
-  const inputs = validateFlowInputs(request.inputs, description.variables);
-  for (const input of inputs) {
-    createBoundedFlowDebugApex({
-      correlationId: '00000000-0000-0000-0000-000000000000',
-      apiName: prepared.flow.definition.apiName,
-      namespace: prepared.flow.definition.namespace,
-      input,
-      outputVariables: prepared.outputVariables,
-    });
-  }
-  return inputs;
+  return validateFlowInputs(request.inputs, description.variables);
 }
 
 function firstBenchmarkInput(request: FlowBenchmarkRequest): JsonObject {
@@ -194,7 +183,10 @@ async function handleBenchmarkFailure(context: {
     const retained = context.rawLogStage === null ? 'unknown' : resolve(context.rawLogStage);
     throw flowBenchmarkFailed(
       `Flow benchmark "${context.apiName}" failed and raw-log staging cleanup also failed. Recoverable staging data was retained at "${retained}".`,
-      context.error
+      new AggregateError(
+        [context.error, cleanupError],
+        'Flow benchmark execution and raw-log staging cleanup both failed.'
+      )
     );
   }
   if (context.error instanceof Error && context.error.name === 'FlowBenchmarkFailed') {

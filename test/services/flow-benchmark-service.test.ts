@@ -123,10 +123,11 @@ describe('FlowBenchmarkService staging failures', (): void => {
 
   it('preserves the benchmark failure and reports a retained absolute stage after cleanup fails', async (): Promise<void> => {
     const retainedStage = join(tmpdir(), 'retained-benchmark-stage');
+    const cleanupFailure = new Error('sensitive cleanup failure');
     const service = new FlowBenchmarkService(flowBenchmarkGateways(), {
       create: async (): Promise<string | null> => retainedStage,
       discard: async (): Promise<void> => {
-        throw new Error('sensitive cleanup failure');
+        throw cleanupFailure;
       },
     });
 
@@ -136,7 +137,8 @@ describe('FlowBenchmarkService staging failures', (): void => {
 
     expect(error).to.have.property('name', 'FlowBenchmarkFailed');
     expect(error).to.have.property('message').that.includes(`retained at "${retainedStage}"`);
-    expect(error).to.have.property('cause');
+    expect((error as Error & { cause?: unknown }).cause).to.be.instanceOf(AggregateError);
+    expect((error as Error & { cause: AggregateError }).cause.errors).to.include(cleanupFailure);
   });
 });
 
@@ -216,13 +218,13 @@ describe('FlowBenchmarkService concurrent ordering', (): void => {
 
 describe('FlowBenchmarkService timeout scheduling', (): void => {
   it('rejects unsafe sample timeouts at the service boundary', async (): Promise<void> => {
-    for (const sampleTimeoutMilliseconds of [59_999, 600_001, Number.MAX_SAFE_INTEGER]) {
+    for (const sampleTimeoutMilliseconds of [59_999, 60_001, Number.MAX_SAFE_INTEGER]) {
       // eslint-disable-next-line no-await-in-loop
       const error = await new FlowBenchmarkService(flowBenchmarkGateways())
         .benchmark(flowBenchmarkRequest({ sampleTimeoutMilliseconds }))
         .catch((caught: unknown) => caught);
       expect(error).to.have.property('name', 'FlowInputInvalid');
-      expect(error).to.have.property('message').that.includes('60,000 to 600,000 milliseconds');
+      expect(error).to.have.property('message').that.includes('positive, safely representable whole-minute value');
     }
   });
 

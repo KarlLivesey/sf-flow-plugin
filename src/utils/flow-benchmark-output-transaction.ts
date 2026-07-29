@@ -124,7 +124,10 @@ async function recoverBenchmarkArtifacts(
         : `Recoverable staging data was retained at ${retained.map((file) => `"${file}"`).join(' and ')}.`;
     throw flowBenchmarkFailed(
       `Could not write the Flow benchmark output and recovery was incomplete. ${recovery}`,
-      error
+      new AggregateError(
+        [error, ...logCleanup, ...outputRollback],
+        'Flow benchmark output persistence and artifact recovery both failed.'
+      )
     );
   }
   throw flowBenchmarkFailed(

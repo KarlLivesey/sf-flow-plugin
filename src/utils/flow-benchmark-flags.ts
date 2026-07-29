@@ -23,9 +23,9 @@ export function parseNonnegativeBenchmarkInteger(input: string): number {
 }
 
 export function parseBenchmarkWaitMinutes(input: string): number {
-  const value = Number(input);
-  if (!/^(?:[1-9]|10)$/u.test(input) || !Number.isSafeInteger(value)) {
-    throw flowInputInvalid(`Expected "${input}" to be a whole number from 1 to 10 minutes.`);
+  const value = parsePositiveBenchmarkInteger(input);
+  if (!Number.isSafeInteger(value * 60_000)) {
+    throw flowInputInvalid(`Expected "${input}" minutes to have a safely representable millisecond value.`);
   }
   return value;
 }
@@ -34,9 +34,11 @@ export function assertBenchmarkSampleTimeout(sampleTimeoutMilliseconds: number):
   if (
     !Number.isSafeInteger(sampleTimeoutMilliseconds) ||
     sampleTimeoutMilliseconds < 60_000 ||
-    sampleTimeoutMilliseconds > 600_000
+    sampleTimeoutMilliseconds % 60_000 !== 0
   ) {
-    throw flowInputInvalid('Flow benchmark sample timeout must be a whole number from 60,000 to 600,000 milliseconds.');
+    throw flowInputInvalid(
+      'Flow benchmark sample timeout must be a positive, safely representable whole-minute value.'
+    );
   }
 }
 

@@ -17,9 +17,11 @@ does not impose workload, concurrency, input-file-size or input-count caps. Loca
 load grow with the requested workload.
 
 The command stops scheduling new samples after a failure by default. Concurrent samples already in progress are
-allowed to finish. Use `--continue-on-error` to continue after failures whose rollback was confirmed. Failed samples
-are reported but excluded from statistics unless `--include-failed` is supplied and timing data exists. A SOAP
-timeout or any other unconfirmed rollback always stops new scheduling, even with `--continue-on-error`.
+allowed to finish. Use `--continue-on-error` to continue after failures whose rollback was confirmed or known
+pre-execution failures where the Flow never began, such as generated Apex compilation failure. Failed samples are
+reported but excluded from statistics unless `--include-failed` is supplied and timing data exists. A SOAP timeout
+or any other failure after execution may have begun without confirmed rollback always stops new scheduling, even
+with `--continue-on-error`.
 
 Rollback affects database changes in the current transaction only. It cannot reverse callouts, email, asynchronous
 work or separately committed transactions. Production execution requires `--confirm`.
@@ -54,7 +56,7 @@ Positive number of samples to run concurrently. Defaults to 1.
 
 # flags.wait.summary
 
-Per-sample Apex SOAP timeout from 1 to 10 minutes. Defaults to 2. A timeout stops new samples because transaction completion and rollback are unknown.
+Per-sample Apex SOAP timeout in positive whole minutes. Defaults to 2. A timeout stops new samples because transaction completion and rollback are unknown.
 
 # flags.percentile.summary
 
@@ -62,7 +64,7 @@ Percentile to calculate, greater than 0 and no greater than 100. Repeat to overr
 
 # flags.continue-on-error.summary
 
-Continue scheduling after failed samples whose database rollback was confirmed.
+Continue after rollback-confirmed failures and known pre-execution failures where the Flow never began.
 
 # flags.include-failed.summary
 

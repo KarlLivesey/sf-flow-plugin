@@ -117,6 +117,15 @@ async function retainedWriteFailure(directory: string): Promise<unknown> {
   }
 }
 
+function expectAggregateRecoveryCause(error: unknown): void {
+  const cause = (error as Error & { cause?: unknown }).cause;
+  expect(cause).to.be.instanceOf(AggregateError);
+  expect((cause as AggregateError).errors).to.have.length.greaterThan(1);
+  expect((cause as AggregateError).errors[0])
+    .to.have.property('message')
+    .that.includes('circular');
+}
+
 describe('Flow benchmark files', (): void => {
   it('writes owner-only debug logs and can exclude warm-up logs', async (): Promise<void> => {
     const directory = await mkdtemp(join(tmpdir(), 'sf-flow-benchmark-'));
@@ -227,7 +236,7 @@ describe('Flow benchmark staged-write recovery', (): void => {
     try {
       expect(error).to.have.property('name', 'FlowBenchmarkFailed');
       expect(error).to.have.property('message').that.includes('recovery was incomplete');
-      expect((error as Error & { cause?: Error }).cause?.message).to.include('circular');
+      expectAggregateRecoveryCause(error);
       expect((await readdir(directory)).some((entry) => entry.startsWith('.sf-flow-benchmark-output-'))).to.equal(true);
     } finally {
       await rm(directory, { recursive: true, force: true });

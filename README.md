@@ -829,7 +829,7 @@ round-robin order. The command does not impose workload, concurrency, input-file
 memory, output volume and org/API load grow with the requested workload. Effective measured concurrency is the
 smaller of the requested concurrency and iteration count, and completed request slots are replenished immediately.
 
-Each Apex SOAP sample has a timeout controlled by `--wait` from 1 to 10 minutes, defaulting to `2`. A timeout makes
+Each Apex SOAP sample has a timeout controlled by `--wait` in positive whole minutes, defaulting to `2`. A timeout makes
 transaction completion and rollback unknown, is never retried and always stops new sample scheduling even when
 `--continue-on-error` is supplied. Concurrent samples already in progress are allowed to finish.
 
@@ -842,11 +842,13 @@ percentile set. Warm-up samples are excluded from statistics. The structured res
 log level when comparing benchmarks because response size and latency vary with logging detail.
 
 The command stops scheduling new samples after the first failure by default; samples already in progress may finish.
-Use `--continue-on-error` to continue after failures whose rollback was confirmed. A timeout, malformed response or
-other unconfirmed rollback always stops new scheduling. Failed samples are excluded from statistics unless
-`--include-failed` is supplied and the relevant timing exists. Any failure gives the command a non-zero exit status.
-Transport failures retain the client-observed elapsed time when it is available. Failed samples include a stable
-error code and a bounded, sanitised message; runtime exception values and stack traces are not exposed.
+Use `--continue-on-error` to continue after failures whose rollback was confirmed and known pre-execution failures,
+such as generated Apex compilation failure, where the Flow never began. A timeout, malformed response or other
+failure after execution may have begun without confirmed rollback always stops new scheduling. Failed samples are
+excluded from statistics unless `--include-failed` is supplied and the relevant timing exists. Any failure gives the
+command a non-zero exit status. Transport failures retain the client-observed elapsed time when it is available.
+Failed samples include a stable error code and a bounded, sanitised message; runtime exception values and stack
+traces are not exposed.
 
 `--raw-log-dir` streams each complete raw log returned by Apex SOAP to a private staging directory. The directory is
 published only after the command has successfully produced a complete benchmark result and output transaction,
@@ -857,7 +859,7 @@ scheduling and therefore reduce measured throughput, but file writes are exclude
 wall-clock time. Logs can be processed by Apex log analysers and flame-graph tooling. They are unredacted and can
 contain sensitive Flow data; new files use owner-only permissions on POSIX systems.
 
-`--dry-run` validates the Flow, every varied input, generated SOAP request size, production context, SOAP
+`--dry-run` validates the Flow, every varied input, production context, SOAP
 authentication, active-version guard and output destinations without executing samples or creating a raw-log
 directory. Production execution requires `--confirm`. This preflight cannot conclusively prove Execute Anonymous
 permission without executing Apex.

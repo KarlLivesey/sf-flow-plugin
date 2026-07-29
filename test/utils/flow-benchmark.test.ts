@@ -8,6 +8,7 @@ import { expect } from 'chai';
 
 import { parseApexCpuTime } from '../../src/utils/flow-benchmark-log.js';
 import {
+  assertBenchmarkSampleTimeout,
   assertBenchmarkWorkload,
   parseBenchmarkWaitMinutes,
   parseNonnegativeBenchmarkInteger,
@@ -68,11 +69,14 @@ describe('Flow benchmark workload limits', (): void => {
 });
 
 describe('Flow benchmark timeout flags', (): void => {
-  it('accepts only whole-minute SOAP timeouts from 1 to 10 minutes', (): void => {
+  it('accepts positive whole-minute SOAP timeouts without an arbitrary ceiling', (): void => {
     expect(parseBenchmarkWaitMinutes('1')).to.equal(1);
-    expect(parseBenchmarkWaitMinutes('10')).to.equal(10);
-    for (const invalid of ['0', '11', '1.5', '9007199254740991']) {
-      expect(() => parseBenchmarkWaitMinutes(invalid)).to.throw('1 to 10 minutes');
+    expect(parseBenchmarkWaitMinutes('11')).to.equal(11);
+    expect(() => {
+      assertBenchmarkSampleTimeout(660_000);
+    }).not.to.throw();
+    for (const invalid of ['0', '1.5', '9007199254740991']) {
+      expect(() => parseBenchmarkWaitMinutes(invalid)).to.throw();
     }
   });
 

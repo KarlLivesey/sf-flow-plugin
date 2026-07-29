@@ -5,6 +5,7 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import { readFile } from 'node:fs/promises';
+import { TextDecoder } from 'node:util';
 
 import { z } from 'zod';
 
@@ -39,7 +40,8 @@ export async function readFlowInputs(
     return [parseInputFlags(values)];
   }
   try {
-    const document = inputDocumentSchema.parse(parseSafeFlowJson(await readFile(inputFile, 'utf8')));
+    const content = new TextDecoder('utf-8', { fatal: true }).decode(await readFile(inputFile));
+    const document = inputDocumentSchema.parse(parseSafeFlowJson(content));
     return Array.isArray(document) ? document : [document];
   } catch (error: unknown) {
     const detail = error instanceof RangeError ? ` ${error.message}` : '';
