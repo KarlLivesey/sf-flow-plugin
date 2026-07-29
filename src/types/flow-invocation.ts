@@ -21,7 +21,7 @@ export interface FlowRollbackRequest extends NamedFlowRequest {
   confirm: boolean;
   logLevel: FlowDebugLogLevel;
   showValues: boolean;
-  waitMilliseconds: number;
+  waitMilliseconds?: number;
   expectedActiveVersion?: FlowVersionNumber;
 }
 
