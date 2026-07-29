@@ -4,12 +4,21 @@ Lint a Salesforce Flow.
 
 # description
 
-Inspect a Flow version for unconnected elements, missing fault paths, DML inside loops, hard-coded Salesforce IDs,
-inactive or missing subflows, and unused resources.
+Inspect an org-backed Flow version using this plugin's lint rules. Use `--source-file` to analyse one local Flow or
+`--source-dir` to recursively discover every `.flow-meta.xml` file under a directory without an org. Local lint runs
+Salesforce Code Analyzer's official Flow Scanner once for the selected file or directory.
 
 # flags.api-name.summary
 
 API name of the Flow to lint.
+
+# flags.source-file.summary
+
+Local .flow-meta.xml file to lint without authenticating to an org.
+
+# flags.source-dir.summary
+
+Directory to scan recursively for local .flow-meta.xml files.
 
 # flags.target-org.summary
 
@@ -25,11 +34,13 @@ Set a failing exit code when a new finding has this severity or worse.
 
 # flags.rule.summary
 
-Run only this lint rule. Repeat the flag to select multiple rules.
+Run only this lint rule. Local values are Salesforce Code Analyzer rule selectors constrained to the `flow` engine;
+org-backed values use this plugin's Flow lint rule names. Repeat the flag to select multiple rules.
 
 # flags.exclude-rule.summary
 
-Exclude this lint rule. Repeat the flag to exclude multiple rules. Exclusions take precedence over `--rule`.
+Exclude this lint rule. Local values match Salesforce Code Analyzer Flow Scanner rule names. Repeat the flag to
+exclude multiple rules. Exclusions take precedence over `--rule`.
 
 # flags.result-format.summary
 
@@ -51,6 +62,10 @@ Namespace of the Flow. Use this to disambiguate managed-package Flows.
 
 Salesforce API version to use for the Tooling API requests.
 
+# flags.no-prompt.summary
+
+Do not offer to install Salesforce Code Analyzer when local Flow linting requires it.
+
 # examples
 
 - Lint the latest version of a Flow in the default target org:
@@ -60,6 +75,18 @@ Salesforce API version to use for the Tooling API requests.
 - Lint the active version and return structured JSON:
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --flow-version active --json
+
+- Lint a local Flow source file with every Salesforce Code Analyzer Flow Scanner rule:
+
+  <%= config.bin %> <%= command.id %> --source-file force-app/main/default/flows/Order_Processing.flow-meta.xml
+
+- Run one Salesforce Code Analyzer Flow Scanner rule:
+
+  <%= config.bin %> <%= command.id %> --source-file force-app/main/default/flows/Order_Processing.flow-meta.xml --rule MissingDescription
+
+- Recursively lint every Flow source file under a project directory:
+
+  <%= config.bin %> <%= command.id %> --source-dir force-app/main/default/flows --fail-on warning
 
 - Fail CI for new warnings while retaining known findings in a baseline:
 
@@ -71,11 +98,11 @@ Salesforce API version to use for the Tooling API requests.
 
 # info.clean
 
-No lint findings for %s v%s.
+No lint findings for %s %s.
 
 # info.new-title
 
-New lint findings for %s v%s (%s)
+New lint findings for %s %s (%s)
 
 # info.baseline-title
 

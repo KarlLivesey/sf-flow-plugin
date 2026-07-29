@@ -16,6 +16,9 @@ import type {
   FlowGraphElkNodePlacement,
   FlowGraphFormat,
   FlowGraphLayout,
+  FlowGraphRequest,
+  FlowGraphRenderRequest,
+  FlowGraphDirection,
 } from '../types/flow-inspection.js';
 
 export interface FlowGraphFormatOptions {
@@ -27,6 +30,54 @@ export interface FlowGraphFormatOptions {
   cycleBreaking: FlowGraphElkCycleBreaking;
   mergeEdges: boolean;
   forceNodeOrder: boolean;
+}
+
+interface FlowSourceGraphFlags {
+  format: FlowGraphRequest['format'];
+  'include-variables': boolean;
+  'include-formulas': boolean;
+  direction: FlowGraphDirection;
+  layout: FlowGraphRequest['layout'];
+  curve: FlowGraphRequest['curve'];
+  'node-placement': FlowGraphElkNodePlacement;
+  'model-order': FlowGraphElkModelOrder;
+  'cycle-breaking': FlowGraphElkCycleBreaking;
+  'merge-edges': boolean;
+  'force-node-order': boolean;
+  'node-spacing': number;
+  'rank-spacing': number;
+  legend: boolean;
+  'label-width': number;
+  color: string[] | undefined;
+  'font-family': string;
+  'font-size': number;
+}
+
+export function createSourceGraphRequest(flags: FlowSourceGraphFlags): FlowGraphRenderRequest {
+  return {
+    format: flags.format,
+    includeVariables: flags['include-variables'],
+    includeFormulas: flags['include-formulas'],
+    direction: flags.direction,
+    layout: flags.layout,
+    curve: flags.curve,
+    elk: {
+      nodePlacement: flags['node-placement'],
+      modelOrder: flags['model-order'],
+      cycleBreaking: flags['cycle-breaking'],
+      mergeEdges: flags['merge-edges'],
+      forceNodeOrder: flags['force-node-order'],
+    },
+    nodeSpacing: flags['node-spacing'],
+    rankSpacing: flags['rank-spacing'],
+    legend: flags.legend,
+    labelWidth: flags['label-width'],
+    style: {
+      colors: parseGraphColorOverrides(flags.color ?? []),
+      fontFamily: flags['font-family'],
+      fontSize: flags['font-size'],
+    },
+  };
 }
 
 export function validateGraphFormatOptions(options: FlowGraphFormatOptions): void {

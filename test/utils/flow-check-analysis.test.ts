@@ -4,6 +4,8 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+import { pathToFileURL } from 'node:url';
+
 import { expect } from 'chai';
 
 import type { FlowCheckResult } from '../../src/types/flow-check.js';
@@ -53,5 +55,39 @@ describe('Flow check SARIF output', (): void => {
     expect(sarif.match(/"fullyQualifiedName": "managed__Order_Flow"/gu)).to.have.length(2);
     expect(formatFlowCheckHuman(result)).to.contain('ERROR\tmanaged__Order_Flow\tversions');
     expect(sarif).not.to.contain('"physicalLocation"');
+  });
+});
+
+describe('Flow check local SARIF output', (): void => {
+  it('includes the analysed local source file as a SARIF physical location', (): void => {
+    const sourceFile = '/workspace/flows/Order_Flow.flow-meta.xml';
+    const result: FlowCheckResult = {
+      apiNames: ['Order_Flow'],
+      requestedVersion: null,
+      subflowVersion: 'active',
+      checks: ['lint'],
+      excludedChecks: [],
+      recursive: false,
+      maxDepth: 0,
+      allowTruncated: false,
+      flows: [],
+      findings: [
+        {
+          apiName: 'Order_Flow',
+          namespace: null,
+          version: null,
+          check: 'lint',
+          code: 'unconnected-element',
+          severity: 'warning',
+          message: 'Element is unreachable.',
+          path: 'assignments/Set_Total',
+        },
+      ],
+      errors: 0,
+      warnings: 1,
+      targetOrg: null,
+      sourceFile,
+    };
+    expect(formatFlowCheckSarif(result)).to.contain(pathToFileURL(sourceFile).toString());
   });
 });

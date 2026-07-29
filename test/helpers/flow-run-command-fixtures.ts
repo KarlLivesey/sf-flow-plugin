@@ -102,6 +102,7 @@ export function runFlags(): RunFlagValues {
     'show-values': false,
     wait: 2,
     'fail-on-flow-error': false,
+    'if-active-version': undefined,
     namespace: undefined,
     'api-version': undefined,
   };

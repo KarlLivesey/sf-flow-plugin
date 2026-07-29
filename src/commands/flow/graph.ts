@@ -6,9 +6,11 @@
  */
 import { Messages } from '@salesforce/core';
 import type { Org } from '@salesforce/core';
-import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
+import { SfCommand } from '@salesforce/sf-plugins-core';
 
 import { FlowGraphService } from '../../services/flow-graph-service.js';
+import { graphFlowSource } from '../../services/flow-source-analysis-service.js';
+import { loadFlowSource } from '../../services/flow-source-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
 import type { FlowComparisonVersionSelector } from '../../types/flow-analysis.js';
 import type {
@@ -26,12 +28,14 @@ import type {
 } from '../../types/flow-inspection.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
 import {
+  createSourceGraphRequest,
   parseGraphColorOverrides,
   validateGraphFormatOptions,
   writeGraphOutput,
 } from '../../utils/flow-graph-command.js';
+import { flowGraphFlags } from '../../utils/flow-graph-flags.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
-import { parseInspectionVersionSelector } from './describe.js';
+import { validateFlowSourceFlags } from '../../utils/flow-source-command.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('sf-flow-plugin', 'flow.graph');
@@ -44,7 +48,8 @@ const warningMessages: Record<FlowTraversalWarningKind, (path: string) => string
 };
 
 export interface GraphFlagValues {
-  'api-name': string;
+  'api-name': string | undefined;
+  'source-file': string | undefined;
   'target-org': Org | undefined;
   'flow-version': FlowComparisonVersionSelector;
   'subflow-version': FlowSubflowVersionSelector;
@@ -74,8 +79,11 @@ export interface GraphFlagValues {
 }
 
 function createRequest(flags: GraphFlagValues, context: ReturnType<typeof createFlowCommandContext>): FlowGraphRequest {
+  if (flags['api-name'] === undefined) {
+    throw new Error('An API name is required for org-backed Flow graphing.');
+  }
   return {
-    ...createNamedFlowRequest(flags, context),
+    ...createNamedFlowRequest({ ...flags, 'api-name': flags['api-name'] }, context),
     version: flags['flow-version'],
     subflowVersion: flags['subflow-version'],
     format: flags.format,
@@ -118,163 +126,38 @@ function validateFormat(flags: GraphFlagValues): void {
   });
 }
 
+async function graphOrg(
+  flags: GraphFlagValues,
+  progress: Parameters<FlowGraphService['graph']>[1]
+): Promise<FlowGraphResult> {
+  if (flags['api-name'] === undefined) {
+    throw new Error('An API name is required for org-backed Flow graphing.');
+  }
+  validateNamedFlowFlags({ ...flags, 'api-name': flags['api-name'] });
+  const context = createFlowCommandContext(flags);
+  return new FlowGraphService(new ToolingFlowDefinitionGateway(context.connection)).graph(
+    createRequest(flags, context),
+    progress
+  );
+}
+
 export default class FlowGraph extends SfCommand<FlowGraphResult> {
   public static override readonly summary = messages.getMessage('summary');
   public static override readonly description = messages.getMessage('description');
   public static override readonly examples = messages.getMessages('examples');
 
-  public static override readonly flags = {
-    'api-name': Flags.string({
-      char: 'n',
-      required: true,
-      summary: messages.getMessage('flags.api-name.summary'),
-    }),
-    'target-org': Flags.requiredOrg({
-      char: 'o',
-      required: false,
-      summary: messages.getMessage('flags.target-org.summary'),
-    }),
-    'flow-version': Flags.custom<FlowComparisonVersionSelector>({
-      default: 'latest',
-      summary: messages.getMessage('flags.flow-version.summary'),
-      parse: (input: string): Promise<FlowComparisonVersionSelector> =>
-        Promise.resolve(parseInspectionVersionSelector(input)),
-    })(),
-    'subflow-version': Flags.custom<FlowSubflowVersionSelector>({
-      default: 'active',
-      options: ['active', 'latest'],
-      summary: messages.getMessage('flags.subflow-version.summary'),
-      parse: (input: string): Promise<FlowSubflowVersionSelector> =>
-        Promise.resolve(input === 'latest' ? 'latest' : 'active'),
-    })(),
-    format: Flags.custom<FlowGraphFormat>({
-      char: 'f',
-      default: 'mermaid',
-      options: ['mermaid', 'dot'],
-      summary: messages.getMessage('flags.format.summary'),
-      parse: (input: string): Promise<FlowGraphFormat> => Promise.resolve(input === 'dot' ? 'dot' : 'mermaid'),
-    })(),
-    recursive: Flags.boolean({
-      char: 'r',
-      default: false,
-      summary: messages.getMessage('flags.recursive.summary'),
-    }),
-    'max-depth': Flags.integer({
-      default: 10,
-      min: 0,
-      summary: messages.getMessage('flags.max-depth.summary'),
-    }),
-    'include-variables': Flags.boolean({
-      default: false,
-      summary: messages.getMessage('flags.include-variables.summary'),
-    }),
-    'include-formulas': Flags.boolean({
-      default: false,
-      summary: messages.getMessage('flags.include-formulas.summary'),
-    }),
-    direction: Flags.custom<FlowGraphDirection>({
-      default: 'auto',
-      options: ['auto', 'left-right', 'top-down'],
-      summary: messages.getMessage('flags.direction.summary'),
-      parse: (input: string): Promise<FlowGraphDirection> => Promise.resolve(input as FlowGraphDirection),
-    })(),
-    layout: Flags.custom<FlowGraphLayout>({
-      default: ['auto'],
-      multiple: true,
-      options: ['auto', 'dagre', 'elk'],
-      summary: messages.getMessage('flags.layout.summary'),
-      parse: (input: string): Promise<FlowGraphLayout> => Promise.resolve(input as FlowGraphLayout),
-    })(),
-    curve: Flags.custom<FlowGraphCurve>({
-      default: 'auto',
-      options: ['auto', 'basis', 'linear', 'step', 'step-after', 'step-before'],
-      summary: messages.getMessage('flags.curve.summary'),
-      parse: (input: string): Promise<FlowGraphCurve> => Promise.resolve(input as FlowGraphCurve),
-    })(),
-    'node-placement': Flags.custom<FlowGraphElkNodePlacement>({
-      default: 'auto',
-      options: ['auto', 'brandes-koepf', 'linear-segments', 'network-simplex', 'simple'],
-      summary: messages.getMessage('flags.node-placement.summary'),
-      parse: (input: string): Promise<FlowGraphElkNodePlacement> => Promise.resolve(input as FlowGraphElkNodePlacement),
-    })(),
-    'model-order': Flags.custom<FlowGraphElkModelOrder>({
-      default: 'auto',
-      options: ['auto', 'none', 'nodes-and-edges', 'prefer-edges', 'prefer-nodes'],
-      summary: messages.getMessage('flags.model-order.summary'),
-      parse: (input: string): Promise<FlowGraphElkModelOrder> => Promise.resolve(input as FlowGraphElkModelOrder),
-    })(),
-    'cycle-breaking': Flags.custom<FlowGraphElkCycleBreaking>({
-      default: 'auto',
-      options: ['auto', 'depth-first', 'greedy', 'greedy-model-order', 'interactive', 'model-order'],
-      summary: messages.getMessage('flags.cycle-breaking.summary'),
-      parse: (input: string): Promise<FlowGraphElkCycleBreaking> => Promise.resolve(input as FlowGraphElkCycleBreaking),
-    })(),
-    'merge-edges': Flags.boolean({
-      allowNo: true,
-      default: false,
-      summary: messages.getMessage('flags.merge-edges.summary'),
-    }),
-    'force-node-order': Flags.boolean({
-      allowNo: true,
-      default: false,
-      summary: messages.getMessage('flags.force-node-order.summary'),
-    }),
-    'node-spacing': Flags.integer({
-      default: 35,
-      min: 10,
-      max: 200,
-      summary: messages.getMessage('flags.node-spacing.summary'),
-    }),
-    'rank-spacing': Flags.integer({
-      default: 45,
-      min: 10,
-      max: 200,
-      summary: messages.getMessage('flags.rank-spacing.summary'),
-    }),
-    legend: Flags.boolean({
-      default: false,
-      summary: messages.getMessage('flags.legend.summary'),
-    }),
-    'label-width': Flags.integer({
-      default: 32,
-      min: 12,
-      max: 80,
-      summary: messages.getMessage('flags.label-width.summary'),
-    }),
-    color: Flags.string({
-      aliases: ['colour'],
-      multiple: true,
-      summary: messages.getMessage('flags.color.summary'),
-    }),
-    'font-family': Flags.string({
-      default: 'Arial',
-      summary: messages.getMessage('flags.font-family.summary'),
-    }),
-    'font-size': Flags.integer({
-      default: 14,
-      min: 8,
-      max: 32,
-      summary: messages.getMessage('flags.font-size.summary'),
-    }),
-    'output-file': Flags.string({
-      summary: messages.getMessage('flags.output-file.summary'),
-    }),
-    namespace: Flags.string({
-      summary: messages.getMessage('flags.namespace.summary'),
-    }),
-    'api-version': Flags.orgApiVersion({
-      summary: messages.getMessage('flags.api-version.summary'),
-    }),
-  };
+  public static override readonly flags = flowGraphFlags;
 
   public async run(): Promise<FlowGraphResult> {
     const flags = await this.parseFlags();
-    validateNamedFlowFlags(flags);
     validateFormat(flags);
-    const context = createFlowCommandContext(flags);
-    const service = new FlowGraphService(new ToolingFlowDefinitionGateway(context.connection));
     const result = await withFlowProgress(this.spinner, 'graph', async (progress) =>
-      service.graph(createRequest(flags, context), progress)
+      flags['source-file'] === undefined
+        ? graphOrg(flags, progress)
+        : (progress('loading-source', flags['source-file']),
+          loadFlowSource(flags['source-file']).then((source) =>
+            graphFlowSource(source, createSourceGraphRequest(flags), progress)
+          ))
     );
     await writeGraphOutput(flags['output-file'], result.graph);
     this.writeHumanOutput(result, flags['output-file']);
@@ -283,6 +166,15 @@ export default class FlowGraph extends SfCommand<FlowGraphResult> {
 
   public async parseFlags(): Promise<GraphFlagValues> {
     const { flags } = await this.parse(FlowGraph);
+    validateFlowSourceFlags(this.argv, [
+      'target-org',
+      'flow-version',
+      'subflow-version',
+      'recursive',
+      'max-depth',
+      'namespace',
+      'api-version',
+    ]);
     return flags;
   }
 

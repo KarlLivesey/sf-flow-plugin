@@ -51,6 +51,10 @@ export interface FlowMetricEntry extends FlowMetricCounts {
   unreachableElementNames: string[];
 }
 
+export interface AnalysedFlowMetricEntry extends Omit<FlowMetricEntry, 'version'> {
+  version: number | null;
+}
+
 export interface FlowRuntimeMetricBreakdown {
   status: string;
   errorReason: string | null;
@@ -109,4 +113,17 @@ export interface FlowMetricsResult {
 
 export interface FlowMetricsCommandResult extends FlowMetricsResult {
   dataCloud: FlowRuntimeMetrics | null;
+}
+
+export interface FlowSourceMetricEntry extends Omit<FlowMetricEntry, 'version'> {
+  version: null;
+}
+
+export interface FlowSourceMetricsResult
+  extends Omit<FlowMetricsResult, 'flows' | 'requestedVersion' | 'resolvedVersion' | 'targetOrg'> {
+  requestedVersion: null;
+  resolvedVersion: null;
+  flows: FlowSourceMetricEntry[];
+  targetOrg: null;
+  sourceFile: string;
 }

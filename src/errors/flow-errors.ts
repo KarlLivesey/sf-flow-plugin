@@ -203,6 +203,15 @@ export function flowInspectionFailed(message: string, cause?: unknown): SfError 
   });
 }
 
+export function flowSourceInvalid(message: string, cause?: unknown): SfError {
+  return createFlowError({
+    code: 'FlowSourceInvalid',
+    message,
+    action: 'Provide a readable Salesforce Flow .flow-meta.xml file with valid metadata.',
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
 export function flowLintFailed(message: string, cause?: unknown): SfError {
   return createFlowError({
     code: 'FlowLintFailed',
@@ -236,7 +245,7 @@ export function flowPruneVerificationFailed(apiName: string): SfError {
     action: 'Query the Flow versions in Salesforce and retry the prune operation.',
   });
 }
-
+export { flowCodeAnalyzerFailed, flowCodeAnalyzerUnavailable } from './flow-code-analyzer-errors.js';
 export {
   flowBundleFailed,
   flowCheckFailed,
@@ -248,9 +257,8 @@ export {
 } from './flow-release-errors.js';
 
 export {
-  flowDebugCleanupFailed,
+  flowBenchmarkFailed,
   flowDebugFailed,
-  flowDebugLogNotFound,
   flowDebugPermissionDenied,
   flowDebugRollbackFailed,
 } from './flow-debug-errors.js';

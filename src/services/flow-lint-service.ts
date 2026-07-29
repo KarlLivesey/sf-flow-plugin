@@ -8,7 +8,7 @@ import { flowDefinitionAmbiguous, flowLintFailed } from '../errors/flow-errors.j
 import { flowApiNameSchema, namespaceSchema } from '../schemas/flow.js';
 import type { FlowComparisonVersionSelector, FlowMetadataGateway } from '../types/flow-analysis.js';
 import type { FlowDefinition, FlowDefinitionGateway, FlowDefinitionLookup, FlowVersion } from '../types/flow.js';
-import type { FlowLintFinding, FlowLintRequest, FlowLintResult } from '../types/flow-lint.js';
+import type { FlowLintFinding, FlowLintRequest, FlowLintResult, FlowLintRule } from '../types/flow-lint.js';
 import { AsyncTaskLimiter } from '../utils/async-task-limiter.js';
 import { analyseFlowLintMetadata } from '../utils/flow-lint-analysis.js';
 import { createFlowLintFingerprint } from '../utils/flow-lint-fingerprint.js';
@@ -132,12 +132,12 @@ function createResult(context: LintResultContext): FlowLintResult {
 }
 
 function filterFindings(request: FlowLintRequest, findings: ReadonlyArray<FlowLintFinding>): FlowLintFinding[] {
-  const selected = new Set(request.rules);
-  const excluded = new Set(request.excludedRules);
+  const selected: ReadonlySet<string> = new Set(request.rules);
+  const excluded: ReadonlySet<string> = new Set(request.excludedRules);
   return findings.filter((item) => (selected.size === 0 || selected.has(item.rule)) && !excluded.has(item.rule));
 }
 
-function ruleSelected(request: FlowLintRequest, rule: FlowLintFinding['rule']): boolean {
+function ruleSelected(request: FlowLintRequest, rule: FlowLintRule): boolean {
   return (request.rules.length === 0 || request.rules.includes(rule)) && !request.excludedRules.includes(rule);
 }
 

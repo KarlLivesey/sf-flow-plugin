@@ -5,10 +5,19 @@ Compare the structure of two Salesforce Flow versions.
 # description
 
 Resolve two Flow versions, retrieve their validated Tooling API metadata and report stable path-based structural changes. Top-level lifecycle status is excluded.
+Either side can instead be a local deployable `.flow-meta.xml` file.
 
 # flags.api-name.summary
 
 API name of the Flow definition.
+
+# flags.from-file.summary
+
+Local `.flow-meta.xml` file to use as the source side.
+
+# flags.to-file.summary
+
+Local `.flow-meta.xml` file to use as the target side.
 
 # flags.target-org.summary
 
@@ -75,6 +84,14 @@ Salesforce API version to use for the Tooling API requests.
 - Compare a Flow across two orgs:
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --from-org Development --to-org Preprod --from latest --to active
+
+- Compare local source with the active org version:
+
+  <%= config.bin %> <%= command.id %> --from-file force-app/main/default/flows/Order_Processing.flow-meta.xml --to active
+
+- Compare two local Flow files:
+
+  <%= config.bin %> <%= command.id %> --from-file before/Order_Processing.flow-meta.xml --to-file after/Order_Processing.flow-meta.xml
 
 - Return machine-readable structural changes:
 

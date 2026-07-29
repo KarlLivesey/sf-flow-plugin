@@ -7,9 +7,14 @@
 import type { Connection } from '@salesforce/core';
 import { expect } from 'chai';
 
-import FlowCompare, { parseComparisonVersionSelector } from '../../../src/commands/flow/compare.js';
+import FlowCompare, {
+  comparisonIdentity,
+  type CompareFlagValues,
+  parseComparisonVersionSelector,
+} from '../../../src/commands/flow/compare.js';
 import { FlowComparisonService } from '../../../src/services/flow-comparison-service.js';
 import type { FlowCompareResult } from '../../../src/types/flow-analysis.js';
+import type { FlowSource } from '../../../src/types/flow-source.js';
 import { renderFlowComparison } from '../../../src/utils/flow-comparison-renderer.js';
 import { createCommandOrg } from '../../helpers/command-org.js';
 import { commandTestContext as $$, commandUx } from '../../helpers/command-test-context.js';
@@ -27,6 +32,8 @@ const result: FlowCompareResult = {
   ignorePaths: [],
   fromVersion: 1,
   toVersion: 2,
+  fromSourceFile: null,
+  toSourceFile: null,
   changes: [{ kind: 'changed', path: '$.label', before: 'One', after: 'Two' }],
   added: 0,
   removed: 0,
@@ -42,6 +49,13 @@ describe('flow compare flags', (): void => {
   it('defaults to comparing active with latest', (): void => {
     expect(FlowCompare.flags.from.default).to.equal('active');
     expect(FlowCompare.flags.to.default).to.equal('latest');
+  });
+
+  it('preserves an explicit unmanaged identity from a local source filename', (): void => {
+    const identity = comparisonIdentity({ 'api-name': undefined, namespace: undefined } as CompareFlagValues, {
+      from: { apiName: 'Example', namespace: null } as FlowSource,
+    });
+    expect(identity).to.deep.equal({ apiName: 'Example', namespace: null });
   });
 
   it('rejects combining the single-org and cross-org flags', (): void => {
@@ -67,6 +81,8 @@ describe('flow compare request execution', (): void => {
   it('passes selectors and namespace to the service', async (): Promise<void> => {
     const flags = {
       'api-name': 'Order_Processing',
+      'from-file': undefined,
+      'to-file': undefined,
       'target-org': createCommandOrg({} as Connection),
       'from-org': undefined,
       'to-org': undefined,
@@ -104,6 +120,8 @@ describe('flow compare interactive output', (): void => {
   it('prints the summary renderer for interactive output', async (): Promise<void> => {
     const flags = {
       'api-name': 'Order_Processing',
+      'from-file': undefined,
+      'to-file': undefined,
       'target-org': createCommandOrg({} as Connection),
       'from-org': undefined,
       'to-org': undefined,
@@ -129,6 +147,8 @@ describe('flow compare exit status', (): void => {
   it('sets a failing process status when requested and versions differ', async (): Promise<void> => {
     const flags = {
       'api-name': 'Order_Processing',
+      'from-file': undefined,
+      'to-file': undefined,
       'target-org': createCommandOrg({} as Connection),
       'from-org': undefined,
       'to-org': undefined,
@@ -158,6 +178,8 @@ describe('flow compare cross-org execution', (): void => {
   it('passes separate authenticated orgs to a cross-org comparison', async (): Promise<void> => {
     const flags = {
       'api-name': 'Order_Processing',
+      'from-file': undefined,
+      'to-file': undefined,
       'target-org': createCommandOrg({} as Connection),
       'from-org': createCommandOrg({} as Connection, 'developer@example.com'),
       'to-org': createCommandOrg({} as Connection, 'preprod@example.com'),

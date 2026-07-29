@@ -121,9 +121,14 @@ function parseDependency(value: unknown, direction: FlowDependencyQueryDirection
   return { direction, ...dependencyFields(external, direction) };
 }
 
-function buildDefinitionQuery(lookup: FlowDefinitionLookup): string {
+export function buildDefinitionQuery(lookup: FlowDefinitionLookup): string {
   const fields = 'Id, DeveloperName, NamespacePrefix, ActiveVersionId, LatestVersionId';
-  const namespaceClause = lookup.namespace === undefined ? '' : ` AND NamespacePrefix = '${lookup.namespace}'`;
+  const namespaceClause =
+    lookup.namespace === undefined
+      ? ''
+      : lookup.namespace === null
+      ? ' AND NamespacePrefix = null'
+      : ` AND NamespacePrefix = '${lookup.namespace}'`;
   return `SELECT ${fields} FROM FlowDefinition WHERE DeveloperName = '${lookup.apiName}'${namespaceClause}`;
 }
 
@@ -178,7 +183,7 @@ export class ToolingFlowDefinitionGateway implements FlowDefinitionGateway {
 
   public async findDefinitions(lookup: FlowDefinitionLookup): Promise<ReadonlyArray<FlowDefinition>> {
     validateFlowApiName(lookup.apiName);
-    if (lookup.namespace !== undefined) {
+    if (typeof lookup.namespace === 'string') {
       validateNamespace(lookup.namespace);
     }
     const records = await this.queryAll(buildDefinitionQuery(lookup));
@@ -278,7 +283,6 @@ export class ToolingFlowDefinitionGateway implements FlowDefinitionGateway {
       throw flowQueryFailed(`The Salesforce Tooling API could not describe ${objectName} permissions.`, error);
     }
   }
-
   private async collectPages(
     page: ToolingQueryResult<unknown>,
     accumulated: ReadonlyArray<unknown>

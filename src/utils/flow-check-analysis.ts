@@ -5,10 +5,20 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import type { FlowDependenciesResult } from '../types/flow-analysis.js';
-import type { FlowCheckFinding, FlowCheckKind, FlowCheckResult, FlowInputOutputContract } from '../types/flow-check.js';
+import type {
+  FlowCheckEntry,
+  FlowCheckFinding,
+  FlowCheckKind,
+  FlowCheckResult,
+  FlowInputOutputContract,
+} from '../types/flow-check.js';
 import type { FlowVersionsResult } from '../types/flow.js';
 import type { FlowDescription, FlowTraversalWarning } from '../types/flow-inspection.js';
 import type { FlowLintResult } from '../types/flow-lint.js';
+import type { FlowLintRule } from '../types/flow-lint.js';
+import type { FlowMetricsResult } from '../types/flow-metrics.js';
+import { flowCheckSarifLocations } from './flow-check-sarif.js';
+import { flowCheckSourceFile } from './flow-check-source-file.js';
 import { qualifiedFlowName } from './flow-state.js';
 
 export const FLOW_CHECK_KINDS: FlowCheckKind[] = ['lint', 'dependencies', 'subflows', 'versions', 'metrics'];
@@ -23,9 +33,55 @@ export function selectedFlowChecks(
   return FLOW_CHECK_KINDS.filter((check) => selected.has(check));
 }
 
+export function flowCheckLintRules(checks: ReadonlyArray<FlowCheckKind>): {
+  rules: FlowLintRule[];
+  excludedRules: FlowLintRule[];
+} {
+  const subflowRules: FlowLintRule[] = ['inactive-subflow', 'missing-subflow'];
+  if (!checks.includes('lint')) {
+    return { rules: subflowRules, excludedRules: [] };
+  }
+  return checks.includes('subflows') ? { rules: [], excludedRules: [] } : { rules: [], excludedRules: subflowRules };
+}
+
+interface FlowCheckEntryData {
+  root: { apiName: string; namespace: string | null; versionNumber: number };
+  descriptions: FlowDescription[];
+  traversalFindings: FlowCheckFinding[];
+  lintResults: FlowLintResult[];
+  dependencyFindings: FlowCheckFinding[];
+  versionFindings: FlowCheckFinding[];
+  metrics: FlowMetricsResult | null;
+}
+
+function flowCheckEntryFindings(checks: ReadonlyArray<FlowCheckKind>, data: FlowCheckEntryData): FlowCheckFinding[] {
+  return [
+    ...(checks.includes('lint') ? data.lintResults.flatMap((result) => lintCheckFindings(result, 'lint')) : []),
+    ...(checks.includes('subflows') ? subflowCheckFindings(data.lintResults, data.traversalFindings) : []),
+    ...(checks.includes('dependencies') ? data.dependencyFindings : []),
+    ...(checks.includes('versions') ? data.versionFindings : []),
+  ];
+}
+
+export function createFlowCheckEntry(checks: FlowCheckKind[], data: FlowCheckEntryData): FlowCheckEntry {
+  const findings = flowCheckEntryFindings(checks, data);
+  return {
+    apiName: data.root.apiName,
+    namespace: data.root.namespace,
+    resolvedVersion: data.root.versionNumber,
+    checks,
+    contracts: flowContracts(data.descriptions),
+    metrics: data.metrics,
+    findings,
+    errors: findings.filter((item) => item.severity === 'error').length,
+    warnings: findings.filter((item) => item.severity === 'warning').length,
+  };
+}
+
 function finding(
   base: Pick<FlowCheckFinding, 'apiName' | 'namespace' | 'version' | 'check'>,
-  detail: Pick<FlowCheckFinding, 'code' | 'severity' | 'message' | 'path'>
+  detail: Pick<FlowCheckFinding, 'code' | 'severity' | 'message' | 'path'> &
+    Partial<Pick<FlowCheckFinding, 'analyzerSeverity' | 'tags' | 'locations'>>
 ): FlowCheckFinding {
   return { ...base, ...detail };
 }
@@ -42,7 +98,15 @@ export function lintCheckFindings(result: FlowLintResult, check: 'lint' | 'subfl
           version: result.resolvedVersion,
           check,
         },
-        { code: item.rule, severity: item.severity, message: item.message, path: item.path ?? item.element }
+        {
+          code: item.rule,
+          severity: item.severity,
+          message: item.message,
+          path: item.path ?? item.element,
+          ...(item.analyzerSeverity === undefined ? {} : { analyzerSeverity: item.analyzerSeverity }),
+          ...(item.tags === undefined ? {} : { tags: item.tags }),
+          ...(item.locations === undefined ? {} : { locations: item.locations }),
+        }
       )
     );
 }
@@ -167,28 +231,6 @@ export function formatFlowCheckHuman(result: FlowCheckResult): string {
   return [`Flow check (${result.errors} errors, ${result.warnings} warnings)`, ...lines].join('\n');
 }
 
-function sarifLocation(item: FlowCheckFinding): object {
-  const flowName = qualifiedFlowName(item.apiName, item.namespace);
-  return {
-    logicalLocations: [
-      { name: flowName, fullyQualifiedName: flowName, kind: 'flow' },
-      ...(item.path === null
-        ? []
-        : [
-            {
-              name: item.path,
-              fullyQualifiedName: `${flowName}:${item.path}`,
-              kind: 'flowElementOrMetadataPath',
-            },
-          ]),
-    ],
-    properties: {
-      flowApiName: flowName,
-      ...(item.path === null ? {} : { metadataPath: item.path }),
-    },
-  };
-}
-
 export function formatFlowCheckSarif(result: FlowCheckResult): string {
   return JSON.stringify(
     {
@@ -201,7 +243,7 @@ export function formatFlowCheckSarif(result: FlowCheckResult): string {
             ruleId: `${item.check}/${item.code}`,
             level: item.severity,
             message: { text: item.message },
-            locations: [sarifLocation(item)],
+            locations: flowCheckSarifLocations(item, flowCheckSourceFile(item) ?? result.sourceFile),
           })),
         },
       ],

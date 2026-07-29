@@ -5,11 +5,22 @@ Run aggregated read-only checks against Salesforce Flows.
 # description
 
 Run static lint, subflow, dependency and version checks for one or more Flows. Metrics are opt-in. The command returns
-one structured result suitable for local review or CI and fails on errors by default.
+one structured result suitable for local review or CI and fails on errors by default. Local `--source-file` mode
+supports Salesforce Code Analyzer Flow Scanner lint and structural metrics. `--source-dir` recursively discovers
+local Flow files and also supports subflow resolution; `--recursive` follows those references breadth-first up to
+`--max-depth`. Checks that require org state are rejected.
 
 # flags.api-name.summary
 
 API name of a Flow to check. Repeat the flag to check multiple Flows.
+
+# flags.source-file.summary
+
+Local .flow-meta.xml file to check without authenticating to an org.
+
+# flags.source-dir.summary
+
+Directory to scan recursively for local .flow-meta.xml files.
 
 # flags.target-org.summary
 
@@ -63,6 +74,10 @@ Namespace of each requested Flow. Use this to disambiguate managed-package Flows
 
 Salesforce API version to use for Tooling API requests.
 
+# flags.no-prompt.summary
+
+Do not offer to install Salesforce Code Analyzer when a local lint check requires it.
+
 # examples
 
 - Run the default checks for one Flow:
@@ -76,6 +91,14 @@ Salesforce API version to use for Tooling API requests.
 - Write a SARIF report for CI:
 
   <%= config.bin %> <%= command.id %> --api-name Order_Processing --result-format sarif --output-file flow-check.sarif
+
+- Run local lint and metrics without an org:
+
+  <%= config.bin %> <%= command.id %> --source-file force-app/main/default/flows/Order_Processing.flow-meta.xml --only lint --only metrics
+
+- Check every Flow in a local directory and include recursively referenced subflows in metrics and contracts:
+
+  <%= config.bin %> <%= command.id %> --source-dir force-app/main/default/flows --recursive --max-depth 10 --only subflows --only metrics
 
 # info.title
 

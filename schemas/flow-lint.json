@@ -1,7 +1,73 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$ref": "#/definitions/FlowLintResult",
+  "$ref": "#/definitions/LintCommandResult",
   "definitions": {
+    "LintCommandResult": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/FlowLintDirectoryResult"
+        },
+        {
+          "$ref": "#/definitions/FlowLintResult"
+        }
+      ]
+    },
+    "FlowLintDirectoryResult": {
+      "type": "object",
+      "properties": {
+        "sourceDirectory": {
+          "type": "string"
+        },
+        "flows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowLintResult"
+          }
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowLintFinding"
+          }
+        },
+        "newFindings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowLintFinding"
+          }
+        },
+        "baselineFindings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowLintFinding"
+          }
+        },
+        "errors": {
+          "type": "number"
+        },
+        "warnings": {
+          "type": "number"
+        },
+        "newErrors": {
+          "type": "number"
+        },
+        "newWarnings": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "sourceDirectory",
+        "flows",
+        "findings",
+        "newFindings",
+        "baselineFindings",
+        "errors",
+        "warnings",
+        "newErrors",
+        "newWarnings"
+      ],
+      "additionalProperties": false
+    },
     "FlowLintResult": {
       "type": "object",
       "properties": {
@@ -12,13 +78,27 @@
           "type": ["string", "null"]
         },
         "definitionId": {
-          "type": "string"
+          "type": ["string", "null"]
         },
         "requestedVersion": {
-          "$ref": "#/definitions/FlowComparisonVersionSelector"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowComparisonVersionSelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "resolvedVersion": {
-          "$ref": "#/definitions/FlowVersionNumber"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowVersionNumber"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "status": {
           "type": "string"
@@ -54,6 +134,9 @@
           "type": "number"
         },
         "targetOrg": {
+          "type": ["string", "null"]
+        },
+        "sourceFile": {
           "type": "string"
         }
       },
@@ -100,7 +183,7 @@
           "type": "string"
         },
         "rule": {
-          "$ref": "#/definitions/FlowLintRule"
+          "type": "string"
         },
         "severity": {
           "$ref": "#/definitions/FlowLintSeverity"
@@ -113,26 +196,54 @@
         },
         "path": {
           "type": ["string", "null"]
+        },
+        "analyzerSeverity": {
+          "type": "number"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "locations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowLintLocation"
+          }
         }
       },
       "required": ["fingerprint", "rule", "severity", "message", "element", "path"],
       "additionalProperties": false
     },
-    "FlowLintRule": {
-      "type": "string",
-      "enum": [
-        "dml-inside-loop",
-        "hard-coded-id",
-        "inactive-subflow",
-        "missing-fault-path",
-        "missing-subflow",
-        "unconnected-element",
-        "unused-resource"
-      ]
-    },
     "FlowLintSeverity": {
       "type": "string",
       "enum": ["error", "warning"]
+    },
+    "FlowLintLocation": {
+      "type": "object",
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "startLine": {
+          "type": "number"
+        },
+        "startColumn": {
+          "type": "number"
+        },
+        "endLine": {
+          "type": ["number", "null"]
+        },
+        "endColumn": {
+          "type": ["number", "null"]
+        },
+        "primary": {
+          "type": "boolean"
+        }
+      },
+      "required": ["file", "startLine", "startColumn", "endLine", "endColumn", "primary"],
+      "additionalProperties": false
     }
   }
 }

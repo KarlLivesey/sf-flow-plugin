@@ -169,6 +169,9 @@ function collectHardCodedIdsFromObject(value: JsonObject, path: string, findings
 
 function addHardCodedIdFindings(value: string, path: string, findings: FlowLintFinding[]): void {
   for (const match of value.matchAll(SALESFORCE_ID_PATTERN)) {
+    if (!/\d/u.test(match[0])) {
+      continue;
+    }
     findings.push(
       finding('hard-coded-id', `Salesforce ID "${match[0]}" is hard-coded in Flow metadata.`, {
         path,

@@ -110,6 +110,16 @@ describe('analyseFlowLintMetadata value and resource rules', (): void => {
       'UnusedFormula',
     ]);
   });
+
+  it('does not treat a 15-letter Flow global name as a Salesforce ID', (): void => {
+    const metadata = {
+      start: {},
+      interviewLabel: 'Run {!$Flow.CurrentDateTime}',
+    };
+    const description = analyseFlowMetadata({ definition, version, metadata, depth: 0 });
+    const findings = analyseFlowLintMetadata(metadata, description);
+    expect(findings.filter((item) => item.rule === 'hard-coded-id')).to.deep.equal([]);
+  });
 });
 
 describe('analyseFlowLintMetadata resource-reference rules', (): void => {

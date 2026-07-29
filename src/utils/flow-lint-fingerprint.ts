@@ -6,10 +6,10 @@
  */
 import { createHash } from 'node:crypto';
 
-import type { FlowLintFinding, FlowLintRule } from '../types/flow-lint.js';
+import type { FlowLintFinding } from '../types/flow-lint.js';
 
 export interface FlowLintFingerprintInput {
-  rule: FlowLintRule;
+  rule: string;
   element?: string;
   path?: string;
   evidence?: ReadonlyArray<string>;

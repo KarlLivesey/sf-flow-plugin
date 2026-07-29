@@ -6,7 +6,7 @@
  */
 import { expect } from 'chai';
 
-import { createBoundedFlowDebugApex, createFlowDebugApex } from '../../src/utils/flow-debug-apex.js';
+import { createFlowDebugApex } from '../../src/utils/flow-debug-apex.js';
 import { parseFlowDebugLog } from '../../src/utils/flow-debug-log.js';
 import { correlationId, debugLog, interviewId } from '../helpers/flow-debug-fixtures.js';
 
@@ -40,16 +40,15 @@ describe('Flow debug Apex generation', (): void => {
     expect(source).to.include('Database.rollback');
   });
 
-  it('rejects source that cannot fit safely in the REST Execute Anonymous URI', (): void => {
-    expect(() =>
-      createBoundedFlowDebugApex({
-        correlationId,
-        apiName: 'Calculate_Discount',
-        namespace: null,
-        input: { value: 'x'.repeat(12_000) },
-        outputVariables: [],
-      })
-    ).to.throw('Execute Anonymous URI');
+  it('does not impose a plugin payload ceiling on SOAP requests', (): void => {
+    const source = createFlowDebugApex({
+      correlationId,
+      apiName: 'Calculate_Discount',
+      namespace: null,
+      input: { value: 'x'.repeat(300 * 1024) },
+      outputVariables: [],
+    });
+    expect(source).to.include('Database.rollback(sfFlowSavepoint)');
   });
 });
 
