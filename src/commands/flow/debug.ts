@@ -9,10 +9,12 @@ import { Messages } from '@salesforce/core';
 import { SfCommand } from '@salesforce/sf-plugins-core';
 
 import type { FlowRunResult } from '../../types/flow-invocation.js';
-import FlowRun from './run.js';
+import { createFlowCommandContext, validateNamedFlowFlags } from '../../utils/flow-command.js';
+import FlowRun, { executeFlowRunCommand, type RunFlagValues } from './run.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('sf-flow-plugin', 'flow.debug');
+type DebugFlagValues = Omit<RunFlagValues, 'rollback'>;
 
 export default class FlowDebug extends SfCommand<FlowRunResult> {
   public static override readonly summary = messages.getMessage('summary');
@@ -55,12 +57,15 @@ export default class FlowDebug extends SfCommand<FlowRunResult> {
     'api-version': FlowRun.flags['api-version'],
   };
 
-  public async parseFlags(): Promise<void> {
-    await this.parse(FlowDebug);
+  public async parseFlags(): Promise<DebugFlagValues> {
+    const { flags } = await this.parse(FlowDebug);
+    return flags as unknown as DebugFlagValues;
   }
 
   public override async run(): Promise<FlowRunResult> {
-    await this.parseFlags();
-    return new FlowRun([...this.argv, '--rollback'], this.config).run();
+    const flags = await this.parseFlags();
+    validateNamedFlowFlags(flags);
+    const context = createFlowCommandContext(flags);
+    return executeFlowRunCommand(this, { ...flags, rollback: true }, context);
   }
 }
