@@ -17,7 +17,7 @@ import type {
 } from '../types/flow-debug.js';
 import { createFlowDebugApex } from '../utils/flow-debug-apex.js';
 import { qualifiedFlowName } from '../utils/flow-state.js';
-import { ApexSoapExecuteAnonymous } from './apex-soap-execute-anonymous.js';
+import { ApexSoapExecuteAnonymous, ApexSoapResponseValidationError } from './apex-soap-execute-anonymous.js';
 import {
   isPermissionFailure,
   organisationResultSchema,
@@ -41,6 +41,21 @@ function reportProgress(
   } catch {
     throw flowDebugFailed('Could not report Flow debug progress.');
   }
+}
+
+function debugExecutionFailure(error: unknown, apiName: string): never {
+  if (error instanceof ApexSoapResponseValidationError) {
+    throw error;
+  }
+  if (isPermissionFailure(error)) {
+    throw flowDebugPermissionDenied(apiName);
+  }
+  if (error instanceof Error && error.name.startsWith('FlowDebug')) {
+    throw error;
+  }
+  throw flowDebugFailed(
+    `Salesforce could not execute the rollback transaction for Flow "${apiName}".${transportStatusSuffix(error)}`
+  );
 }
 
 export class ApexSoapFlowDebugGateway {
@@ -109,17 +124,7 @@ export class ApexSoapFlowDebugGateway {
         },
       };
     } catch (error: unknown) {
-      if (isPermissionFailure(error)) {
-        throw flowDebugPermissionDenied(context.apiName);
-      }
-      if (error instanceof Error && error.name.startsWith('FlowDebug')) {
-        throw error;
-      }
-      throw flowDebugFailed(
-        `Salesforce could not execute the rollback transaction for Flow "${context.apiName}".${transportStatusSuffix(
-          error
-        )}`
-      );
+      return debugExecutionFailure(error, context.apiName);
     }
   }
 }

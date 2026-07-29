@@ -8,6 +8,7 @@ import type { Connection } from '@salesforce/core';
 import { expect } from 'chai';
 import sinon from 'sinon';
 
+import { ApexSoapResponseValidationError } from '../../src/services/apex-soap-execute-anonymous.js';
 import { ApexSoapFlowDebugGateway } from '../../src/services/apex-soap-flow-debug-gateway.js';
 import type { FlowDebugExecutionRequest } from '../../src/types/flow-debug.js';
 import { expectErrorName } from '../helpers/fake-flow-gateway.js';
@@ -108,6 +109,22 @@ describe('ApexSoapFlowDebugGateway execution', (): void => {
     await expectErrorName(new ApexSoapFlowDebugGateway(fake.connection).execute(request()), 'FlowDebugFailed');
     expect(fake.request.calledOnce).to.equal(true);
     expect(fake.refreshAuth.called).to.equal(false);
+  });
+});
+
+describe('ApexSoapFlowDebugGateway response validation', (): void => {
+  it('does not discard the typed failure containing a privately retained log', async (): Promise<void> => {
+    const fake = connection();
+    const malformed = structuredClone(soapResponse);
+    malformed['soapenv:Envelope']['soapenv:Body'].executeAnonymousResponse.result.success = 'invalid';
+    fake.request.resolves(malformed);
+
+    const error = await new ApexSoapFlowDebugGateway(fake.connection)
+      .execute(request())
+      .catch((caught: unknown) => caught);
+
+    expect(error).to.be.instanceOf(ApexSoapResponseValidationError);
+    expect((error as ApexSoapResponseValidationError).rawLog).to.equal(rawLog);
   });
 });
 

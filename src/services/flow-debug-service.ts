@@ -4,6 +4,8 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+import { SfError } from '@salesforce/core';
+
 import { flowDebugFailed, flowInputInvalid, flowProductionConfirmationRequired } from '../errors/flow-errors.js';
 import type { FlowMetadataGateway, JsonObject } from '../types/flow-analysis.js';
 import type {
@@ -26,6 +28,7 @@ import { analyseFlowMetadata } from '../utils/flow-metadata-analysis.js';
 import { validateFlowInputs } from '../utils/flow-input-schema.js';
 import { noFlowProgress, type FlowProgressReporter, type FlowProgressStage } from '../utils/flow-progress.js';
 import { qualifiedFlowName, selectFlowDefinition } from '../utils/flow-state.js';
+import { ApexSoapResponseValidationError } from './apex-soap-execute-anonymous.js';
 
 interface FlowDebugGateways {
   definition: FlowDefinitionGateway & FlowMetadataGateway;
@@ -117,13 +120,46 @@ async function throwAfterPreservingRawLog(
   try {
     await writer(rawLog);
   } catch (persistenceError: unknown) {
-    const message = error instanceof Error ? error.message : 'Flow debug result validation failed.';
-    throw new AggregateError(
+    const aggregate = new AggregateError(
       [error, persistenceError],
-      `${message} The raw Salesforce debug log also could not be written to the requested destination.`
+      'The Flow debug failure and raw-log persistence failure are both available as causes.'
     );
+    if (error instanceof SfError) {
+      throw SfError.create({
+        name: error.name,
+        message: error.message,
+        ...(error.actions === undefined ? {} : { actions: error.actions }),
+        cause: aggregate,
+      });
+    }
+    throw flowDebugFailed('Flow debug result validation failed.', aggregate);
   }
   throw error;
+}
+
+async function preserveSoapValidationFailure(
+  error: ApexSoapResponseValidationError,
+  writer: FlowDebugFailureLogWriter | undefined
+): Promise<never> {
+  return throwAfterPreservingRawLog(
+    flowDebugFailed('Salesforce returned a malformed Apex SOAP execution result.', error.cause),
+    error.rawLog,
+    writer
+  );
+}
+
+async function executeWithFailureLog(
+  operation: Promise<Omit<ExecutedDebug, 'parsed'>>,
+  writer: FlowDebugFailureLogWriter | undefined
+): Promise<Omit<ExecutedDebug, 'parsed'>> {
+  try {
+    return await operation;
+  } catch (error: unknown) {
+    if (error instanceof ApexSoapResponseValidationError) {
+      return preserveSoapValidationFailure(error, writer);
+    }
+    throw error;
+  }
 }
 
 function parseDebugLog(transport: FlowDebugTransportResult, showValues: boolean): ReturnType<typeof parseFlowDebugLog> {
@@ -161,7 +197,7 @@ export class FlowDebugService {
     if (request.dryRun) {
       return createFlowDebugDryRunArtifact(request, prepared);
     }
-    const execution = await this.execute(prepared, request, progress);
+    const execution = await executeWithFailureLog(this.execute(prepared, request, progress), failureLogWriter);
     try {
       const executed: ExecutedDebug = {
         ...execution,

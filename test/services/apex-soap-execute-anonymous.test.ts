@@ -8,7 +8,11 @@ import type { Connection } from '@salesforce/core';
 import { expect } from 'chai';
 import sinon from 'sinon';
 
-import { ApexSoapExecuteAnonymous, createApexSoapEnvelope } from '../../src/services/apex-soap-execute-anonymous.js';
+import {
+  ApexSoapExecuteAnonymous,
+  ApexSoapResponseValidationError,
+  createApexSoapEnvelope,
+} from '../../src/services/apex-soap-execute-anonymous.js';
 
 function response(rawLog = 'returned log'): unknown {
   return {
@@ -140,6 +144,34 @@ describe('ApexSoapExecuteAnonymous empty response values', (): void => {
 });
 
 describe('ApexSoapExecuteAnonymous failure responses', (): void => {
+  it('retains a valid debug log privately when execution-result validation fails', async (): Promise<void> => {
+    const sensitiveRawLog = 'sensitive returned debug log';
+    const soapResponse = response(sensitiveRawLog);
+    const result = (
+      soapResponse as {
+        'env:Envelope': {
+          'env:Body': { executeAnonymousResponse: { result: Record<string, unknown> } };
+        };
+      }
+    )['env:Envelope']['env:Body'].executeAnonymousResponse.result;
+    result.success = 'not-a-boolean';
+
+    const failure = await capturedFailure(
+      new ApexSoapExecuteAnonymous(connection(sinon.stub().resolves(soapResponse))).execute({
+        apexSource: 'System.debug(1);',
+        logLevel: 'basic',
+      })
+    );
+
+    expect(failure).to.be.instanceOf(ApexSoapResponseValidationError);
+    expect((failure as ApexSoapResponseValidationError).rawLog).to.equal(sensitiveRawLog);
+    expect((failure as ApexSoapResponseValidationError).cause).to.be.instanceOf(Error);
+    expect(Object.keys(failure as object)).not.to.include('rawLog');
+    expect(JSON.stringify(failure)).not.to.include(sensitiveRawLog);
+  });
+});
+
+describe('ApexSoapExecuteAnonymous compile failure responses', (): void => {
   it('preserves nullable compile diagnostics when Salesforce omits the inline log', async (): Promise<void> => {
     const soapResponse = response();
     const envelope = soapResponse as {

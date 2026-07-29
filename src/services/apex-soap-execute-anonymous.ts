@@ -72,6 +72,20 @@ export interface ApexSoapExecuteResult {
   durationMilliseconds: number;
 }
 
+export class ApexSoapResponseValidationError extends Error {
+  public override readonly cause!: unknown;
+  public readonly rawLog!: string;
+
+  public constructor(cause: unknown, rawLog: string) {
+    super('Salesforce returned a malformed Apex SOAP execution result.');
+    this.name = 'ApexSoapResponseValidationError';
+    Object.defineProperties(this, {
+      cause: { value: cause, enumerable: false },
+      rawLog: { value: rawLog, enumerable: false },
+    });
+  }
+}
+
 function xmlEscape(value: string): string {
   return value
     .replaceAll('&', '&amp;')
@@ -196,9 +210,14 @@ export class ApexSoapExecuteAnonymous {
     );
     const durationMilliseconds = performance.now() - started;
     const fields = responseFields(response);
+    const rawLog = debugLogSchema.parse(fields.rawLog);
+    const execution = executionSchema.safeParse(fields.result);
+    if (!execution.success) {
+      throw new ApexSoapResponseValidationError(execution.error, rawLog);
+    }
     return {
-      execution: executionSchema.parse(fields.result),
-      rawLog: debugLogSchema.parse(fields.rawLog),
+      execution: execution.data,
+      rawLog,
       durationMilliseconds,
     };
   }
