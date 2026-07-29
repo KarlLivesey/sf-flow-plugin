@@ -18,6 +18,7 @@ import type { FlowLintResult } from '../types/flow-lint.js';
 import type { FlowLintRule } from '../types/flow-lint.js';
 import type { FlowMetricsResult } from '../types/flow-metrics.js';
 import { flowCheckSarifLocations } from './flow-check-sarif.js';
+import { flowCheckSourceFile } from './flow-check-source-file.js';
 import { qualifiedFlowName } from './flow-state.js';
 
 export const FLOW_CHECK_KINDS: FlowCheckKind[] = ['lint', 'dependencies', 'subflows', 'versions', 'metrics'];
@@ -242,7 +243,7 @@ export function formatFlowCheckSarif(result: FlowCheckResult): string {
             ruleId: `${item.check}/${item.code}`,
             level: item.severity,
             message: { text: item.message },
-            locations: flowCheckSarifLocations(item, result.sourceFile),
+            locations: flowCheckSarifLocations(item, flowCheckSourceFile(item) ?? result.sourceFile),
           })),
         },
       ],

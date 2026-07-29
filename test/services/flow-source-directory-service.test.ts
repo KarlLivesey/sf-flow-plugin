@@ -4,11 +4,22 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
 import { expect } from 'chai';
 
 import { checkFlowSourceDirectory } from '../../src/services/flow-source-analysis-service.js';
-import { inspectDirectLocalSubflows, traverseLocalSubflows } from '../../src/services/flow-source-directory-service.js';
+import {
+  inspectDirectLocalSubflows,
+  loadFlowSourceDirectory,
+  traverseLocalSubflows,
+} from '../../src/services/flow-source-directory-service.js';
 import type { FlowSource } from '../../src/types/flow-source.js';
+import { formatFlowCheckSarif } from '../../src/utils/flow-check-analysis.js';
+import { flowCheckSourceFile } from '../../src/utils/flow-check-source-file.js';
 
 function source(apiName: string, subflowNames: string[] = [], namespace: string | null = null): FlowSource {
   const qualifiedName = namespace === null ? apiName : `${namespace}__${apiName}`;
@@ -112,5 +123,48 @@ describe('local Flow source directory breadth-first traversal', (): void => {
     expect(result.flows[0]?.metrics).to.include({ recursive: true, maxDepth: 4 });
     expect(result.flows[0]?.metrics?.flows.map((flow) => flow.apiName)).to.deep.equal(['Root', 'Child']);
     expect(result.flows[0]?.metrics?.warnings).to.deep.equal([]);
+  });
+});
+
+describe('local Flow source directory SARIF locations', (): void => {
+  it('attaches subflow findings to the caller source file in SARIF output', (): void => {
+    const root = source('Root', ['Missing']);
+    const result = checkFlowSourceDirectory(
+      { directory: '/flows', sources: [root] },
+      {
+        checks: ['subflows'],
+        excluded: [],
+        lintFindings: [],
+        recursive: true,
+        maxDepth: 4,
+      }
+    );
+
+    expect(result.findings[0] === undefined ? undefined : flowCheckSourceFile(result.findings[0])).to.equal(
+      root.sourceFile
+    );
+    expect(formatFlowCheckSarif(result)).to.contain(pathToFileURL(root.sourceFile).toString());
+  });
+});
+
+describe('local Flow source directory discovery', (): void => {
+  it('fails as soon as the directory contains more than 2,000 Flow files', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'sf-flow-directory-limit-'));
+    try {
+      await Promise.all(
+        Array.from({ length: 2001 }, async (_, index) =>
+          writeFile(join(directory, `Flow_${String(index).padStart(4, '0')}.flow-meta.xml`), '', 'utf8')
+        )
+      );
+      try {
+        await loadFlowSourceDirectory(directory);
+        expect.fail('Expected FlowSourceInvalid.');
+      } catch (error: unknown) {
+        expect(error).to.have.property('name', 'FlowSourceInvalid');
+        expect(error).to.have.property('message').that.includes('more than 2000');
+      }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });

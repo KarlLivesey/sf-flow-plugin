@@ -4,8 +4,9 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+import type { Dirent } from 'node:fs';
 import { readdir, realpath, stat } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { flowSourceInvalid } from '../errors/flow-errors.js';
 import type { FlowSubflowSummary, FlowTraversalWarning } from '../types/flow-inspection.js';
@@ -18,16 +19,46 @@ const MAX_SOURCE_FILES = 2000;
 const SOURCE_CONCURRENCY = 8;
 const FLOW_SOURCE_SUFFIX = '.flow-meta.xml';
 
-async function sourceFiles(directory: string): Promise<string[]> {
-  const entries = await readdir(directory, { recursive: true, withFileTypes: true });
-  const files = entries
-    .filter((entry) => entry.isFile() && entry.name.endsWith(FLOW_SOURCE_SUFFIX))
-    .map((entry) => resolve(entry.parentPath, entry.name))
-    .sort();
-  if (files.length > MAX_SOURCE_FILES) {
-    throw flowSourceInvalid(`Flow source directory contains more than ${MAX_SOURCE_FILES} Flow files.`);
+interface SourceFileWalk {
+  pending: string[];
+  files: string[];
+}
+
+async function directoryEntries(directory: string): Promise<Dirent[]> {
+  try {
+    return await readdir(directory, { withFileTypes: true });
+  } catch (error: unknown) {
+    throw flowSourceInvalid(`Flow source directory "${directory}" could not be read.`, error);
   }
-  return files;
+}
+
+function collectDirectoryEntries(state: SourceFileWalk, directory: string, entries: Dirent[]): void {
+  entries.sort((left, right) => left.name.localeCompare(right.name));
+  for (const entry of entries) {
+    const entryPath = join(directory, entry.name);
+    if (entry.isFile() && entry.name.endsWith(FLOW_SOURCE_SUFFIX)) {
+      state.files.push(entryPath);
+      if (state.files.length > MAX_SOURCE_FILES) {
+        throw flowSourceInvalid(`Flow source directory contains more than ${MAX_SOURCE_FILES} Flow files.`);
+      }
+    } else if (entry.isDirectory()) {
+      state.pending.push(entryPath);
+    }
+  }
+}
+
+async function sourceFiles(directory: string): Promise<string[]> {
+  const state: SourceFileWalk = { pending: [directory], files: [] };
+  while (state.pending.length > 0) {
+    const current = state.pending.pop();
+    if (current === undefined) {
+      break;
+    }
+    // Sequential reads let the walker stop without scheduling the remainder of a large tree.
+    // eslint-disable-next-line no-await-in-loop
+    collectDirectoryEntries(state, current, await directoryEntries(current));
+  }
+  return state.files.sort();
 }
 
 async function resolvedDirectory(directory: string): Promise<string> {

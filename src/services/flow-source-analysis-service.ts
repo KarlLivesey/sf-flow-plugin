@@ -4,7 +4,7 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { flowCheckFailed } from '../errors/flow-errors.js';
+import { flowCheckFailed, flowCodeAnalyzerFailed } from '../errors/flow-errors.js';
 import type { FlowCheckKind, FlowCheckResult } from '../types/flow-check.js';
 import type {
   FlowDescribeResult,
@@ -16,6 +16,7 @@ import type { FlowLintDirectoryResult, FlowLintFinding, FlowLintResult } from '.
 import type { FlowSource } from '../types/flow-source.js';
 import { filterFlowDescriptionSections } from '../utils/flow-description-sections.js';
 import { flowContracts, lintCheckFindings } from '../utils/flow-check-analysis.js';
+import { assignFlowCheckSourceFile } from '../utils/flow-check-source-file.js';
 import { type FlowProgressReporter, noFlowProgress } from '../utils/flow-progress.js';
 import { renderDescribedFlowGraph } from './flow-graph-service.js';
 import type { FlowSourceDirectory } from './flow-source-directory-service.js';
@@ -83,6 +84,16 @@ export function lintFlowSourceDirectory(
   findings: FlowLintFinding[],
   progress: FlowProgressReporter = noFlowProgress
 ): FlowLintDirectoryResult {
+  const sourceFiles = new Set(directory.sources.map((source) => source.sourceFile));
+  const unassigned = findings.find((finding) => {
+    const file = primaryFile(finding);
+    return file === undefined || !sourceFiles.has(file);
+  });
+  if (unassigned !== undefined) {
+    throw flowCodeAnalyzerFailed(
+      `Salesforce Code Analyzer finding "${unassigned.rule}" could not be assigned to a Flow source file.`
+    );
+  }
   const flows = directory.sources.map((source) =>
     lintFlowSource(
       source,
@@ -183,22 +194,23 @@ export function checkFlowSource(
 
 function directorySubflowFindings(
   source: FlowSource,
-  directory: FlowSourceDirectory,
-  traversal: Pick<DirectoryCheckSelection, 'recursive' | 'maxDepth'>
+  warnings: ReturnType<typeof inspectDirectLocalSubflows>
 ): FlowCheckResult['findings'] {
-  const warnings = traversal.recursive
-    ? traverseLocalSubflows(source, directory.sources, traversal.maxDepth).warnings
-    : inspectDirectLocalSubflows(source, directory.sources);
-  return warnings.map((warning) => ({
-    apiName: source.apiName,
-    namespace: source.namespace,
-    version: null,
-    check: 'subflows',
-    code: warning.kind,
-    severity: 'error',
-    message: `${warning.kind}: ${warning.path.join(' -> ')}`,
-    path: warning.path.join(' -> '),
-  }));
+  return warnings.map((warning) =>
+    assignFlowCheckSourceFile(
+      {
+        apiName: source.apiName,
+        namespace: source.namespace,
+        version: null,
+        check: 'subflows',
+        code: warning.kind,
+        severity: 'error',
+        message: `${warning.kind}: ${warning.path.join(' -> ')}`,
+        path: warning.path.join(' -> '),
+      },
+      source.sourceFile
+    )
+  );
 }
 
 interface DirectoryCheckSelection {
@@ -227,16 +239,16 @@ function directoryCheckEntry(
     },
     progress
   );
+  const traversal = selection.recursive
+    ? traverseLocalSubflows(source, directory.sources, selection.maxDepth)
+    : { sources: [source], warnings: inspectDirectLocalSubflows(source, directory.sources) };
   const subflowFindings = selection.checks.includes('subflows')
-    ? directorySubflowFindings(source, directory, selection)
+    ? directorySubflowFindings(source, traversal.warnings)
     : [];
   const flow = result.flows[0];
   if (flow === undefined) {
     throw flowCheckFailed(`Local Flow check did not produce an entry for "${source.apiName}".`);
   }
-  const traversal = selection.recursive
-    ? traverseLocalSubflows(source, directory.sources, selection.maxDepth)
-    : { sources: [source], warnings: inspectDirectLocalSubflows(source, directory.sources) };
   const findings = [...result.findings, ...subflowFindings];
   return {
     ...flow,

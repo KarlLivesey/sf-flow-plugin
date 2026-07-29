@@ -10,6 +10,7 @@ import { expect } from 'chai';
 
 import {
   checkFlowSource,
+  lintFlowSourceDirectory,
   describeFlowSource,
   graphFlowSource,
   lintFlowSource,
@@ -75,6 +76,25 @@ describe('local Flow source analysis', (): void => {
     expect(result.targetOrg).to.equal(null);
     expect(result.sourceFile).to.equal(fixture);
     expect(result.findings).to.deep.equal([finding]);
+  });
+});
+
+describe('local Flow source directory finding assignment', (): void => {
+  it('rejects Analyzer findings that cannot be assigned to a directory source file', async (): Promise<void> => {
+    const source = await loadFlowSource(fixture);
+    const finding = {
+      fingerprint: 'b'.repeat(64),
+      rule: 'MissingDescription',
+      severity: 'warning' as const,
+      message: 'Add a description.',
+      element: null,
+      path: 'line 4:1',
+      locations: [],
+    };
+
+    expect(() => lintFlowSourceDirectory({ directory: resolve('test'), sources: [source] }, [finding]))
+      .to.throw()
+      .with.property('name', 'FlowCodeAnalyzerFailed');
   });
 });
 
