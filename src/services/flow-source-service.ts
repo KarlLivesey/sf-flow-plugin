@@ -24,7 +24,6 @@ import { containsForbiddenXmlDeclaration, decodeFlowSource } from '../utils/flow
 
 const FLOW_SOURCE_SUFFIX = '.flow-meta.xml';
 const FLOW_METADATA_NAMESPACE = 'http://soap.sforce.com/2006/04/metadata';
-const MAX_FLOW_SOURCE_BYTES = 20 * 1024 * 1024;
 
 const flowMetadataSchema = zod
   .object({
@@ -136,9 +135,6 @@ function validateSourceFileStat(sourceFile: string, fileStat: Stats): void {
   if (!fileStat.isFile()) {
     throw flowSourceInvalid(`Flow source path "${sourceFile}" is not a regular file.`);
   }
-  if (fileStat.size > MAX_FLOW_SOURCE_BYTES) {
-    throw flowSourceInvalid(`Flow source file "${sourceFile}" exceeds the 20 MiB safety limit.`);
-  }
 }
 
 function snapshotFor(sourceFile: string, fileStat: Stats): FlowSourceSnapshot {
@@ -167,12 +163,6 @@ function sourceChanged(sourceFile: string): ReturnType<typeof flowSourceInvalid>
   return flowSourceInvalid(`Flow source file "${sourceFile}" changed while it was being analysed.`);
 }
 
-function validateReadSize(sourceFile: string, bytesRead: number): void {
-  if (bytesRead > MAX_FLOW_SOURCE_BYTES) {
-    throw flowSourceInvalid(`Flow source file "${sourceFile}" exceeds the 20 MiB safety limit.`);
-  }
-}
-
 async function resolveSourceFile(file: string): Promise<string> {
   const requested = resolve(file);
   try {
@@ -192,7 +182,6 @@ async function readOpenedSource(
   const before = await fileHandle.stat();
   validateSourceFileStat(sourceFile, before);
   const buffer = await fileHandle.readFile();
-  validateReadSize(sourceFile, buffer.byteLength);
   const after = await fileHandle.stat();
   const beforeSnapshot = snapshotFor(sourceFile, before);
   const afterSnapshot = snapshotFor(sourceFile, after);

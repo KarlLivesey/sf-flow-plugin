@@ -4,10 +4,9 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { promisify } from 'node:util';
 
 import { z } from 'zod';
 
@@ -23,8 +22,6 @@ import {
 
 const CODE_ANALYZER_PLUGIN = '@salesforce/plugin-code-analyzer';
 const INSTALLED_PLUGIN_TYPES = new Set(['core', 'user', 'link']);
-const MAX_PROCESS_OUTPUT_BYTES = 5 * 1024 * 1024;
-const execFileAsync = promisify(execFile);
 
 const analyzerLocationSchema = z.object({
   file: z.string().min(1),
@@ -80,13 +77,28 @@ class SfCodeAnalyzerProcessRunner implements CodeAnalyzerProcessRunner {
   public constructor(private readonly executable = 'sf') {}
 
   public async run(args: ReadonlyArray<string>, cwd: string): Promise<{ stdout: string }> {
-    const result = await execFileAsync(this.executable, [...args], {
-      cwd,
-      encoding: 'utf8',
-      maxBuffer: MAX_PROCESS_OUTPUT_BYTES,
-      windowsHide: true,
+    return new Promise((resolvePromise, rejectPromise) => {
+      const child = spawn(this.executable, [...args], {
+        cwd,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
+      const stdoutChunks: Buffer[] = [];
+      const stderrChunks: Buffer[] = [];
+
+      child.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
+      child.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
+      child.once('error', rejectPromise);
+      child.once('close', (exitCode, signal) => {
+        if (exitCode === 0) {
+          resolvePromise({ stdout: Buffer.concat(stdoutChunks).toString('utf8') });
+          return;
+        }
+        const reason = signal === null ? `exit code ${exitCode ?? 'unknown'}` : `signal ${signal}`;
+        const stderr = Buffer.concat(stderrChunks).toString('utf8').trim();
+        rejectPromise(new Error(`Salesforce CLI process failed with ${reason}.${stderr === '' ? '' : ` ${stderr}`}`));
+      });
     });
-    return { stdout: result.stdout };
   }
 }
 

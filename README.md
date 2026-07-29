@@ -95,7 +95,7 @@ sf flow lint \
 
 The filename supplies the Flow identity. For example, `managed__Order_Processing.flow-meta.xml` is reported as the
 qualified Flow `managed__Order_Processing`. Source metadata is parsed as strict XML, must use the Salesforce Metadata
-API namespace and is limited to 20 MiB.
+API namespace.
 
 One source file cannot provide org state or referenced subflow metadata. Source mode therefore rejects target-org,
 version, namespace, recursive and depth flags. Local lint delegates to Salesforce Code Analyzer's official Flow
