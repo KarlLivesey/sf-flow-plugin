@@ -17,6 +17,7 @@ import { FlowDescribeService } from '../../../src/services/flow-describe-service
 import { FlowGraphService } from '../../../src/services/flow-graph-service.js';
 import { FlowLintService } from '../../../src/services/flow-lint-service.js';
 import { SalesforceCodeAnalyzerFlowService } from '../../../src/services/salesforce-code-analyzer-flow-service.js';
+import { validateFlowSourceFlags } from '../../../src/utils/flow-source-command.js';
 import { commandTestContext as $$ } from '../../helpers/command-test-context.js';
 import { expectErrorName } from '../../helpers/fake-flow-gateway.js';
 
@@ -79,5 +80,16 @@ describe('local Flow source inspection commands', (): void => {
       FlowLint.run(['--source-file', fixture, '--target-org', 'example', '--json']),
       'FlowSourceInvalid'
     );
+  });
+
+  it('rejects unsupported source flags appended by flags-dir preparse expansion', (): void => {
+    expect(() => {
+      validateFlowSourceFlags(
+        ['--source-file', fixture, '--flags-dir', '/tmp/flags', '--target-org', 'from-flags-dir'],
+        ['target-org']
+      );
+    })
+      .to.throw()
+      .with.property('name', 'FlowSourceInvalid');
   });
 });
