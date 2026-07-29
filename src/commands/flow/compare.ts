@@ -62,6 +62,34 @@ export function parseComparisonVersionSelector(input: string): FlowComparisonVer
   return Number(input);
 }
 
+function comparisonFlagProvided(
+  argv: ReadonlyArray<string>,
+  flag: string,
+  aliases: ReadonlyArray<string> = []
+): boolean {
+  return argv.some((argument) =>
+    [`--${flag}`, ...aliases].some((name) => argument === name || argument.startsWith(`${name}=`))
+  );
+}
+
+export function validateLocalFileComparisonFlags(argv: ReadonlyArray<string>): void {
+  if (!comparisonFlagProvided(argv, 'from-file') || !comparisonFlagProvided(argv, 'to-file')) {
+    return;
+  }
+  const unsupported = [
+    ['target-org', ['-o']],
+    ['from-org', []],
+    ['to-org', []],
+    ['api-version', []],
+  ] as const;
+  const provided = unsupported
+    .filter(([flag, aliases]) => comparisonFlagProvided(argv, flag, aliases))
+    .map(([flag]) => `--${flag}`);
+  if (provided.length > 0) {
+    throw flowComparisonFailed(`Two local Flow files cannot be combined with ${provided.join(', ')}.`);
+  }
+}
+
 function createRequest(
   flags: CompareFlagValues,
   contexts: ComparisonContexts,
@@ -250,6 +278,7 @@ export default class FlowCompare extends SfCommand<FlowCompareResult> {
   }
 
   public async parseFlags(): Promise<CompareFlagValues> {
+    validateLocalFileComparisonFlags(this.argv);
     const { flags } = await this.parse(FlowCompare);
     return flags;
   }

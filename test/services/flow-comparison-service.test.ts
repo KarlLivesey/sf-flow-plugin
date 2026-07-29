@@ -4,14 +4,64 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { expect } from 'chai';
 
 import { FlowComparisonService } from '../../src/services/flow-comparison-service.js';
-import type { FlowCompareRequest } from '../../src/types/flow-analysis.js';
+import { loadFlowSource } from '../../src/services/flow-source-service.js';
+import type { FlowCompareRequest, JsonObject } from '../../src/types/flow-analysis.js';
+import { renderFlowMetadataXml } from '../../src/utils/flow-metadata-xml.js';
+import { noFlowProgress } from '../../src/utils/flow-progress.js';
 import { expectErrorName, FakeFlowGateway, flowDefinition, flowVersion } from '../helpers/fake-flow-gateway.js';
 
 const definitionId = '300000000000001';
 const versions = [flowVersion(definitionId, 1, 'Active'), flowVersion(definitionId, 2, 'Draft')];
+const canonicalDefinitionId = '300000000000201';
+const canonicalVersion = flowVersion(canonicalDefinitionId, 1, 'Draft');
+const canonicalMetadata: JsonObject = {
+  actionCalls: [
+    {
+      actionName: 'ExampleAction',
+      actionType: 'apex',
+      inputParameters: [{ name: 'input', value: { stringValue: 'value' } }],
+      isWaitUntilCompleted: true,
+      label: 'Call action',
+      locationX: 300,
+      locationY: 400,
+      name: 'Call_Action',
+    },
+  ],
+  apiVersion: 65,
+  label: 'Canonical Flow',
+  processType: 'AutoLaunchedFlow',
+  recordCreates: [
+    {
+      doesUpsert: true,
+      label: 'Create record',
+      locationX: 100,
+      locationY: 200,
+      name: 'Create_Record',
+    },
+  ],
+  screens: [
+    {
+      fields: [{ dataType: 'String', fieldType: 'InputField', name: 'Input_Field' }],
+      label: 'Input screen',
+      locationX: 500,
+      locationY: 600,
+      name: 'Input_Screen',
+    },
+  ],
+  start: {
+    inputs: [{ name: 'StartValue', value: { stringValue: 'Example' } }],
+    locationX: 0,
+    locationY: 0,
+  },
+  status: 'Draft',
+};
 
 function request(overrides: Partial<FlowCompareRequest> = {}): FlowCompareRequest {
   return {
@@ -38,6 +88,22 @@ function gateway(activeVersionId: string | null = versions[0]?.id ?? null): Fake
   const fake = new FakeFlowGateway([definition], versions);
   fake.metadata.set(versions[0]?.id ?? '', { status: 'Active', label: 'One' });
   fake.metadata.set(versions[1]?.id ?? '', { status: 'Draft', label: 'Two' });
+  return fake;
+}
+
+function canonicalGateway(): FakeFlowGateway {
+  const fake = new FakeFlowGateway(
+    [
+      flowDefinition({
+        id: canonicalDefinitionId,
+        apiName: 'Canonical_Flow',
+        activeVersionId: null,
+        latestVersionId: canonicalVersion.id,
+      }),
+    ],
+    [canonicalVersion]
+  );
+  fake.metadata.set(canonicalVersion.id, canonicalMetadata);
   return fake;
 }
 
@@ -68,6 +134,31 @@ describe('FlowComparisonService', (): void => {
 
   it('fails when an explicit version does not exist', async (): Promise<void> => {
     await expectErrorName(new FlowComparisonService(gateway()).compare(request({ from: 99 })), 'FlowVersionNotFound');
+  });
+});
+
+describe('FlowComparisonService source-to-org canonical comparison', (): void => {
+  it('does not report differences between exported source XML and the same Tooling metadata', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'flow-comparison-source-'));
+    const sourceFile = join(directory, 'Canonical_Flow.flow-meta.xml');
+    try {
+      await writeFile(sourceFile, renderFlowMetadataXml(canonicalMetadata, 'draft'), 'utf8');
+      const source = await loadFlowSource(sourceFile);
+      const result = await new FlowComparisonService(undefined, canonicalGateway()).compare(
+        request({
+          apiName: 'Canonical_Flow',
+          fromOrg: 'local source',
+          toOrg: 'admin@example.com',
+          from: 'active',
+          to: 'latest',
+        }),
+        noFlowProgress,
+        { from: source }
+      );
+      expect(result).to.include({ different: false, fromSourceFile: source.sourceFile, toVersion: 1 });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });
 

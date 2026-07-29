@@ -92,6 +92,36 @@ describe('local Flow source commands', (): void => {
   });
 });
 
+describe('local Flow source comparison validation', (): void => {
+  it('requires explicit API names to match every local Flow file', async (): Promise<void> => {
+    await expectErrorName(
+      FlowCompare.run(['--from-file', fixture, '--to-file', fixture, '--api-name', 'Other_Flow', '--json']),
+      'FlowComparisonFailed'
+    );
+  });
+
+  it('requires explicit namespaces to match every local Flow file', async (): Promise<void> => {
+    await expectErrorName(
+      FlowCompare.run(['--from-file', fixture, '--to-file', fixture, '--namespace', 'managed', '--json']),
+      'FlowComparisonFailed'
+    );
+  });
+
+  it('rejects org flags when both operands are local files', async (): Promise<void> => {
+    await expectErrorName(
+      FlowCompare.run(['--from-file', fixture, '--to-file', fixture, '--target-org', 'example', '--json']),
+      'FlowComparisonFailed'
+    );
+  });
+
+  it('rejects API versions when both operands are local files', async (): Promise<void> => {
+    await expectErrorName(
+      FlowCompare.run(['--from-file', fixture, '--to-file', fixture, '--api-version', '65.0', '--json']),
+      'FlowComparisonFailed'
+    );
+  });
+});
+
 describe('local Flow source inspection commands', (): void => {
   it('runs describe without calling an org-backed service', async (): Promise<void> => {
     const orgDescribe = $$.SANDBOX.stub(FlowDescribeService.prototype, 'describe');

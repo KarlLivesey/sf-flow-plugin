@@ -15,6 +15,7 @@ import type {
   JsonObject,
 } from '../types/flow-analysis.js';
 import type { FlowDefinitionGateway, FlowVersion } from '../types/flow.js';
+import { canonicalFlowComparisonMetadata } from '../utils/flow-comparison-canonical.js';
 import { compareFlowMetadata } from '../utils/flow-metadata-diff.js';
 import type { FlowProgressReporter } from '../utils/flow-progress.js';
 import { qualifiedFlowName, selectFlowDefinition } from '../utils/flow-state.js';
@@ -55,7 +56,16 @@ function operandName(operand: ComparisonOperand): string {
   return qualifiedFlowName(operand.apiName, operand.namespace);
 }
 
-function assertMatchingIdentity(from: ComparisonOperand, to: ComparisonOperand): void {
+function assertMatchingIdentity(request: FlowCompareRequest, from: ComparisonOperand, to: ComparisonOperand): void {
+  const expected = qualifiedFlowName(request.apiName, request.namespace ?? null);
+  const mismatched = [from, to].find((operand) => operandName(operand) !== expected);
+  if (mismatched !== undefined) {
+    throw flowComparisonFailed(
+      `The comparison expected Flow "${expected}" but resolved "${operandName(
+        mismatched
+      )}". The requested identity must match every local source operand.`
+    );
+  }
   if (operandName(from) !== operandName(to)) {
     throw flowComparisonFailed(
       `The comparison resolved different Flows: "${operandName(from)}" and "${operandName(
@@ -192,9 +202,13 @@ export async function compareFlowSources(context: SourceComparisonContext): Prom
           progress,
         })
       : sourceOperand(sources.to);
-  assertMatchingIdentity(from, to);
+  assertMatchingIdentity(request, from, to);
   progress('comparing-metadata', `${operandName(from)} → ${operandName(to)}`);
-  const changes = compareFlowMetadata(from.metadata, to.metadata, {
+  const [fromMetadata, toMetadata] = await Promise.all([
+    canonicalFlowComparisonMetadata(from.metadata),
+    canonicalFlowComparisonMetadata(to.metadata),
+  ]);
+  const changes = compareFlowMetadata(fromMetadata, toMetadata, {
     scopes: request.scopes,
     ignoreOrder: request.ignoreOrder,
   }).filter((change) => !ignoredPath(change.path, request.ignorePaths));
