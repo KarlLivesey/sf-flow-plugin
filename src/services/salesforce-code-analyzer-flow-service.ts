@@ -5,8 +5,7 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
@@ -15,6 +14,12 @@ import { z } from 'zod';
 import { flowCodeAnalyzerFailed, flowCodeAnalyzerUnavailable } from '../errors/flow-errors.js';
 import type { FlowLintFinding, FlowLintLocation } from '../types/flow-lint.js';
 import { createFlowLintFingerprint } from '../utils/flow-lint-fingerprint.js';
+import {
+  cleanupAnalyzerTemporaryDirectory,
+  defaultAnalyzerTemporaryDirectory,
+  requiredAnalyzerTemporaryDirectory,
+  type AnalyzerTemporaryDirectory,
+} from './analyzer-temporary-directory.js';
 
 const CODE_ANALYZER_PLUGIN = '@salesforce/plugin-code-analyzer';
 const INSTALLED_PLUGIN_TYPES = new Set(['core', 'user', 'link']);
@@ -179,10 +184,6 @@ async function readAnalyzerFindings(
     .sort(compareFindings);
 }
 
-async function removeAnalyzerTemporaryDirectory(directory: string): Promise<void> {
-  await rm(directory, { recursive: true, force: true });
-}
-
 function analyzerExecutionError(error: unknown): Error {
   return error instanceof Error && error.name.startsWith('FlowCodeAnalyzer')
     ? error
@@ -205,20 +206,19 @@ async function attemptAnalysis(context: {
   }
 }
 
-async function attemptCleanup(cleanup: (directory: string) => Promise<void>, directory: string): Promise<boolean> {
-  try {
-    await cleanup(directory);
-    return true;
-  } catch {
-    return false;
-  }
+function failedAnalysis(error: Error, cleaned: boolean, temporaryDirectory: string): Error {
+  return cleaned
+    ? error
+    : flowCodeAnalyzerFailed(
+        `${error.message} Temporary cleanup also failed; the retained directory is: ${temporaryDirectory}`
+      );
 }
 
 export class SalesforceCodeAnalyzerFlowService {
   public constructor(
     private readonly runner: CodeAnalyzerProcessRunner = new SfCodeAnalyzerProcessRunner(),
     private readonly cwd = process.cwd(),
-    private readonly removeTemporaryDirectory: (directory: string) => Promise<void> = removeAnalyzerTemporaryDirectory
+    private readonly temporaryDirectory: AnalyzerTemporaryDirectory = defaultAnalyzerTemporaryDirectory
   ) {}
 
   public async isInstalled(): Promise<boolean> {
@@ -239,12 +239,15 @@ export class SalesforceCodeAnalyzerFlowService {
   }
 
   public async analyse(request: FlowCodeAnalyzerRequest): Promise<FlowLintFinding[]> {
-    const temporaryDirectory = await mkdtemp(join(tmpdir(), 'sf-flow-code-analyzer-'));
+    const temporaryDirectory = await requiredAnalyzerTemporaryDirectory(() => this.temporaryDirectory.create());
     const outputFile = join(temporaryDirectory, 'flow-results.json');
     const analysis = await attemptAnalysis({ runner: this.runner, cwd: this.cwd, request, outputFile });
-    const cleaned = await attemptCleanup(this.removeTemporaryDirectory, temporaryDirectory);
+    const cleaned = await cleanupAnalyzerTemporaryDirectory(
+      (directory) => this.temporaryDirectory.remove(directory),
+      temporaryDirectory
+    );
     if (analysis.error !== undefined) {
-      throw analysis.error;
+      throw failedAnalysis(analysis.error, cleaned, temporaryDirectory);
     }
     if (!cleaned) {
       throw flowCodeAnalyzerFailed(

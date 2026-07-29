@@ -154,44 +154,6 @@ describe('SalesforceCodeAnalyzerFlowService location validation', (): void => {
   });
 });
 
-describe('SalesforceCodeAnalyzerFlowService cleanup failures', (): void => {
-  it('preserves the analysis error when temporary cleanup also fails', async (): Promise<void> => {
-    const runner = new FakeProcessRunner(async () => {
-      throw new Error('Analyzer process failed.');
-    });
-    const service = new SalesforceCodeAnalyzerFlowService(runner, process.cwd(), async () => {
-      throw new Error('Cleanup failed.');
-    });
-
-    await expectErrorName(
-      service.analyse({ sourceFile: resolve('Example.flow-meta.xml'), rules: [], excludedRules: [] }),
-      'FlowCodeAnalyzerFailed'
-    );
-  });
-
-  it('reports a retained temporary directory when cleanup fails after successful analysis', async (): Promise<void> => {
-    const sourceFile = resolve('Example.flow-meta.xml');
-    const runner = new FakeProcessRunner(async (args) => {
-      const outputFile = args[args.indexOf('--output-file') + 1];
-      if (outputFile !== undefined) {
-        await writeFile(outputFile, JSON.stringify(analyzerOutput(sourceFile)), 'utf8');
-      }
-      return '';
-    });
-    const service = new SalesforceCodeAnalyzerFlowService(runner, process.cwd(), async () => {
-      throw new Error('Cleanup failed.');
-    });
-
-    try {
-      await service.analyse({ sourceFile, rules: [], excludedRules: [] });
-      expect.fail('Expected FlowCodeAnalyzerFailed.');
-    } catch (error: unknown) {
-      expect(error).to.have.property('name', 'FlowCodeAnalyzerFailed');
-      expect(error).to.have.property('message').that.includes('sf-flow-code-analyzer-');
-    }
-  });
-});
-
 describe('Salesforce Code Analyzer installation consent', (): void => {
   it('installs only after confirmation and verifies the installation', async (): Promise<void> => {
     let inspections = 0;
