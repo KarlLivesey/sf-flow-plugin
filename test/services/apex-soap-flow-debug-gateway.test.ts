@@ -109,7 +109,9 @@ describe('ApexSoapFlowDebugGateway execution', (): void => {
     expect(fake.request.calledOnce).to.equal(true);
     expect(fake.refreshAuth.called).to.equal(false);
   });
+});
 
+describe('ApexSoapFlowDebugGateway permission failures', (): void => {
   it('maps SOAP permission faults reported inside an HTTP 500 message', async (): Promise<void> => {
     const fake = connection();
     fake.request.rejects(
@@ -117,11 +119,30 @@ describe('ApexSoapFlowDebugGateway execution', (): void => {
         name: 'ERROR_HTTP_500',
       })
     );
-    await expectErrorName(
-      new ApexSoapFlowDebugGateway(fake.connection).execute(request()),
-      'FlowDebugPermissionDenied'
-    );
+    const error = await new ApexSoapFlowDebugGateway(fake.connection)
+      .execute(request())
+      .catch((caught: unknown) => caught);
+    expect(error).to.have.property('name', 'FlowDebugPermissionDenied');
+    expect((error as Error & { cause?: unknown }).cause).to.equal(undefined);
+    expect(error).to.have.property('message').that.does.not.include('insufficient access rights');
     expect(fake.request.calledOnce).to.equal(true);
     expect(fake.refreshAuth.called).to.equal(false);
+  });
+
+  it('does not retain a permission fault returned by an invalid-session retry', async (): Promise<void> => {
+    const fake = connection();
+    fake.request.onFirstCall().rejects(Object.assign(new Error('INVALID_SESSION_ID'), { name: 'ERROR_HTTP_500' }));
+    fake.request
+      .onSecondCall()
+      .rejects(Object.assign(new Error('INSUFFICIENT_ACCESS: sensitive retry detail'), { name: 'ERROR_HTTP_500' }));
+
+    const error = await new ApexSoapFlowDebugGateway(fake.connection)
+      .execute(request())
+      .catch((caught: unknown) => caught);
+    expect(error).to.have.property('name', 'FlowDebugPermissionDenied');
+    expect((error as Error & { cause?: unknown }).cause).to.equal(undefined);
+    expect(error).to.have.property('message').that.does.not.include('sensitive retry detail');
+    expect(fake.request.calledTwice).to.equal(true);
+    expect(fake.refreshAuth.calledOnce).to.equal(true);
   });
 });

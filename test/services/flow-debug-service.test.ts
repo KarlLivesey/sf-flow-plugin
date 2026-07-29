@@ -118,6 +118,23 @@ describe('FlowDebugService Apex diagnostics', (): void => {
     expect(hidden.result.invocations[0]?.errors[0]?.message).not.to.include('Secret customer value');
     expect(shown.result.invocations[0]?.errors[0]?.message).to.include('Secret customer value');
   });
+
+  it('omits an empty compile diagnostic instead of rendering an empty suffix', async (): Promise<void> => {
+    const gateways = flowDebugGateways();
+    gateways.debug.transport.execution = {
+      compiled: false,
+      success: false,
+      line: 2,
+      column: 5,
+      compileProblem: ' \n\t ',
+      exceptionMessage: null,
+      exceptionStackTrace: null,
+    };
+    gateways.debug.transport.rawLog = '';
+
+    const artifact = await new FlowDebugService(gateways).debug(flowDebugRequest());
+    expect(artifact.result.invocations[0]?.errors[0]?.message).to.equal('Generated Apex could not be compiled.');
+  });
 });
 
 describe('FlowDebugService safety', (): void => {

@@ -9,6 +9,7 @@ import type { JsonObject, JsonValue } from '../types/flow-analysis.js';
 import type { FlowDebugArtifact, FlowDebugTransportResult } from '../types/flow-debug.js';
 import type { FlowInvocationError, FlowRollbackRequest, FlowRunResult } from '../types/flow-invocation.js';
 import type { FlowDefinition, FlowVersion } from '../types/flow.js';
+import { safeFlowDiagnostic } from './flow-diagnostic.js';
 import type { parseFlowDebugLog } from './flow-debug-log.js';
 
 export interface PreparedFlowDebug {
@@ -31,19 +32,6 @@ interface ResultContext {
   request: FlowRollbackRequest;
   prepared: PreparedFlowDebug;
   executed: ExecutedFlowDebug;
-}
-
-const MAX_DIAGNOSTIC_LENGTH = 500;
-
-function safeDiagnostic(value: string | null): string | null {
-  if (value === null) {
-    return null;
-  }
-  const normalised = value
-    .replaceAll(/[\r\n\t]+/gu, ' ')
-    .replaceAll(/\s{2,}/gu, ' ')
-    .trim();
-  return normalised.length <= MAX_DIAGNOSTIC_LENGTH ? normalised : `${normalised.slice(0, MAX_DIAGNOSTIC_LENGTH)}…`;
 }
 
 function logIdContext(context: ResultContext): string {
@@ -83,7 +71,7 @@ function executionError(context: ResultContext): ReturnType<typeof parseFlowDebu
   }
   const execution = context.executed.transport.execution;
   if (!execution.compiled) {
-    const diagnostic = safeDiagnostic(execution.compileProblem);
+    const diagnostic = safeFlowDiagnostic(execution.compileProblem);
     return {
       type: 'APEX_COMPILE_ERROR',
       message: `Generated Apex could not be compiled${diagnostic === null ? '.' : `: ${diagnostic}`}`,
@@ -92,7 +80,7 @@ function executionError(context: ResultContext): ReturnType<typeof parseFlowDebu
   if (execution.success) {
     return null;
   }
-  const diagnostic = context.request.showValues ? safeDiagnostic(execution.exceptionMessage) : null;
+  const diagnostic = context.request.showValues ? safeFlowDiagnostic(execution.exceptionMessage) : null;
   return {
     type: 'APEX_RUNTIME_ERROR',
     message:

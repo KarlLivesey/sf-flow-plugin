@@ -69,9 +69,9 @@ export class ApexSoapFlowDebugGateway {
       return Promise.resolve();
     } catch (error: unknown) {
       if (isPermissionFailure(error)) {
-        throw flowDebugPermissionDenied(apiName, error);
+        throw flowDebugPermissionDenied(apiName);
       }
-      throw flowDebugFailed(`Could not prepare Apex SOAP execution for Flow "${apiName}".`, error);
+      throw flowDebugFailed(`Could not prepare Apex SOAP execution for Flow "${apiName}".`);
     }
   }
 
@@ -110,7 +110,7 @@ export class ApexSoapFlowDebugGateway {
       };
     } catch (error: unknown) {
       if (isPermissionFailure(error)) {
-        throw flowDebugPermissionDenied(context.apiName, error);
+        throw flowDebugPermissionDenied(context.apiName);
       }
       if (error instanceof Error && error.name.startsWith('FlowDebug')) {
         throw error;
