@@ -53,12 +53,56 @@ describe('ApexSoapExecuteAnonymous', (): void => {
       apexSource: 'System.debug(1);',
       logLevel: 'basic',
     });
-    expect(result.execution).to.deep.equal({ compiled: true, success: false, line: 12, column: 3 });
+    expect(result.execution).to.deep.equal({
+      compiled: true,
+      success: false,
+      line: 12,
+      column: 3,
+      compileProblem: null,
+      exceptionMessage: null,
+      exceptionStackTrace: null,
+    });
     expect(result.rawLog).to.equal('returned log');
     const httpRequest = request.firstCall.args[0] as { url: string };
     expect(httpRequest.url).to.equal('https://example.my.salesforce.com/services/Soap/s/66.0/00D000000000001');
   });
+});
 
+describe('ApexSoapExecuteAnonymous failure responses', (): void => {
+  it('preserves nullable compile diagnostics when Salesforce omits the inline log', async (): Promise<void> => {
+    const soapResponse = response();
+    const envelope = soapResponse as {
+      'env:Envelope': {
+        'env:Header': object;
+        'env:Body': { executeAnonymousResponse: { result: Record<string, string | null> } };
+      };
+    };
+    envelope['env:Envelope']['env:Header'] = {};
+    envelope['env:Envelope']['env:Body'].executeAnonymousResponse.result = {
+      compiled: 'false',
+      success: 'false',
+      line: '2',
+      column: '5',
+      compileProblem: 'Unexpected token',
+      exceptionMessage: null,
+      exceptionStackTrace: null,
+    };
+    const result = await new ApexSoapExecuteAnonymous(connection(sinon.stub().resolves(soapResponse))).execute({
+      apexSource: 'invalid Apex',
+      logLevel: 'basic',
+    });
+
+    expect(result.execution).to.deep.include({
+      compiled: false,
+      success: false,
+      compileProblem: 'Unexpected token',
+      exceptionMessage: null,
+    });
+    expect(result.rawLog).to.equal('');
+  });
+});
+
+describe('ApexSoapExecuteAnonymous authentication recovery', (): void => {
   it('refreshes and retries only a known pre-execution invalid-session rejection', async (): Promise<void> => {
     const request = sinon.stub();
     request.onFirstCall().rejects(Object.assign(new Error('INVALID_SESSION_ID'), { name: 'ERROR_HTTP_500' }));

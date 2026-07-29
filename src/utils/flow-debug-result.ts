@@ -33,6 +33,19 @@ interface ResultContext {
   executed: ExecutedFlowDebug;
 }
 
+const MAX_DIAGNOSTIC_LENGTH = 500;
+
+function safeDiagnostic(value: string | null): string | null {
+  if (value === null) {
+    return null;
+  }
+  const normalised = value
+    .replaceAll(/[\r\n\t]+/gu, ' ')
+    .replaceAll(/\s{2,}/gu, ' ')
+    .trim();
+  return normalised.length <= MAX_DIAGNOSTIC_LENGTH ? normalised : `${normalised.slice(0, MAX_DIAGNOSTIC_LENGTH)}…`;
+}
+
 function logIdContext(context: ResultContext): string {
   const id = context.executed.transport.log.id;
   return id === null ? '' : ` ApexLog ID: ${id}.`;
@@ -68,12 +81,25 @@ function executionError(context: ResultContext): ReturnType<typeof parseFlowDebu
   if (context.executed.parsed.error !== null) {
     return context.executed.parsed.error;
   }
-  return context.executed.transport.execution.success
-    ? null
-    : {
-        type: null,
-        message: 'Salesforce terminated the debug transaction; inspect the Flow trace for details.',
-      };
+  const execution = context.executed.transport.execution;
+  if (!execution.compiled) {
+    const diagnostic = safeDiagnostic(execution.compileProblem);
+    return {
+      type: 'APEX_COMPILE_ERROR',
+      message: `Generated Apex could not be compiled${diagnostic === null ? '.' : `: ${diagnostic}`}`,
+    };
+  }
+  if (execution.success) {
+    return null;
+  }
+  const diagnostic = context.request.showValues ? safeDiagnostic(execution.exceptionMessage) : null;
+  return {
+    type: 'APEX_RUNTIME_ERROR',
+    message:
+      diagnostic === null
+        ? 'Salesforce terminated the debug transaction; inspect the Flow trace for details.'
+        : `Salesforce terminated the debug transaction: ${diagnostic}`,
+  };
 }
 
 function invocationErrors(context: ResultContext): FlowInvocationError[] {
@@ -85,7 +111,8 @@ export function createFlowDebugArtifact(context: ResultContext): FlowDebugArtifa
   assertCompleted(context);
   const { request, prepared, executed } = context;
   const { flow, input, production } = prepared;
-  const successful = executed.transport.execution.success && executed.parsed.error === null;
+  const successful =
+    executed.transport.execution.compiled && executed.transport.execution.success && executed.parsed.error === null;
   return {
     result: {
       apiName: flow.definition.apiName,
@@ -105,7 +132,7 @@ export function createFlowDebugArtifact(context: ResultContext): FlowDebugArtifa
           inputs: visibleValues(input, request.showValues),
           outputs: visibleValues(executed.parsed.outputs, request.showValues),
           errors: invocationErrors(context),
-          executed: true,
+          executed: executed.transport.execution.compiled,
         },
       ],
       targetOrg: request.targetOrg,

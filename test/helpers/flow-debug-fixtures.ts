@@ -41,7 +41,15 @@ export class FakeDebugGateway implements FlowDebugGateway {
   public production = false;
   public transport: FlowDebugTransportResult = {
     correlationId,
-    execution: { compiled: true, success: true, line: -1, column: -1 },
+    execution: {
+      compiled: true,
+      success: true,
+      line: -1,
+      column: -1,
+      compileProblem: null,
+      exceptionMessage: null,
+      exceptionStackTrace: null,
+    },
     log: {
       id: '07L000000000001',
       status: 'Success',

@@ -17,6 +17,14 @@ import {
   interviewId,
 } from '../helpers/flow-debug-fixtures.js';
 
+async function runtimeFailure(showValues: boolean): Promise<Awaited<ReturnType<FlowDebugService['debug']>>> {
+  const gateways = flowDebugGateways();
+  gateways.debug.transport.execution.success = false;
+  gateways.debug.transport.execution.exceptionMessage = 'Secret customer value';
+  gateways.debug.transport.rawLog = '';
+  return new FlowDebugService(gateways).debug(flowDebugRequest({ showValues }));
+}
+
 describe('FlowDebugService rollback execution', (): void => {
   it('validates one invocation, rolls back and returns its correlated trace', async (): Promise<void> => {
     const gateways = flowDebugGateways();
@@ -76,6 +84,39 @@ describe('FlowDebugService rollback outcomes', (): void => {
     const artifact = await new FlowDebugService(gateways).debug(flowDebugRequest());
     expect(artifact.result).to.include({ successful: false });
     expect(artifact.result.debug?.databaseChangesRolledBack).to.equal(null);
+  });
+});
+
+describe('FlowDebugService Apex diagnostics', (): void => {
+  it('reports a compile failure as not executed and preserves its inline log', async (): Promise<void> => {
+    const gateways = flowDebugGateways();
+    gateways.debug.transport.execution = {
+      compiled: false,
+      success: false,
+      line: 2,
+      column: 5,
+      compileProblem: 'Unexpected token\nat generated line 2',
+      exceptionMessage: null,
+      exceptionStackTrace: null,
+    };
+    gateways.debug.transport.rawLog = 'compile diagnostic log';
+    const artifact = await new FlowDebugService(gateways).debug(flowDebugRequest());
+
+    expect(artifact.result).to.include({ successful: false });
+    expect(artifact.result.invocations[0]).to.deep.include({ executed: false, success: false });
+    expect(artifact.result.invocations[0]?.errors[0]).to.deep.equal({
+      code: 'APEX_COMPILE_ERROR',
+      message: 'Generated Apex could not be compiled: Unexpected token at generated line 2',
+    });
+    expect(artifact.rawLog).to.equal('compile diagnostic log');
+  });
+
+  it('shows runtime exception text only when values were explicitly requested', async (): Promise<void> => {
+    const hidden = await runtimeFailure(false);
+    const shown = await runtimeFailure(true);
+
+    expect(hidden.result.invocations[0]?.errors[0]?.message).not.to.include('Secret customer value');
+    expect(shown.result.invocations[0]?.errors[0]?.message).to.include('Secret customer value');
   });
 });
 

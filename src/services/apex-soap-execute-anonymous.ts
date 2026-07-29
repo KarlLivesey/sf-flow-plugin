@@ -20,11 +20,19 @@ const booleanTextSchema = textSchema.transform((value, context) => {
   return z.NEVER;
 });
 const integerTextSchema = textSchema.transform(Number).pipe(z.number().int());
+const nullableDiagnosticSchema = z
+  .string()
+  .nullable()
+  .optional()
+  .transform((value) => value ?? null);
 const executionSchema: z.ZodType<FlowDebugApexResult> = z.object({
   compiled: booleanTextSchema,
   success: booleanTextSchema,
   line: integerTextSchema,
   column: integerTextSchema,
+  compileProblem: nullableDiagnosticSchema,
+  exceptionMessage: nullableDiagnosticSchema,
+  exceptionStackTrace: nullableDiagnosticSchema,
 });
 const authSchema = z.object({
   accessToken: z.string().min(1),
@@ -155,7 +163,7 @@ export class ApexSoapExecuteAnonymous {
     const fields = responseFields(response);
     return {
       execution: executionSchema.parse(fields.result),
-      rawLog: z.string().parse(fields.rawLog),
+      rawLog: z.string().optional().default('').parse(fields.rawLog),
       durationMilliseconds,
     };
   }

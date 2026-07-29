@@ -22,6 +22,9 @@ export interface FlowDebugApexResult {
   success: boolean;
   line: number;
   column: number;
+  compileProblem: string | null;
+  exceptionMessage: string | null;
+  exceptionStackTrace: string | null;
 }
 
 export interface FlowDebugLogRecord {
