@@ -21,7 +21,7 @@ export interface FlowRollbackRequest extends NamedFlowRequest {
   confirm: boolean;
   logLevel: FlowDebugLogLevel;
   showValues: boolean;
-  waitMilliseconds: number;
+  waitMilliseconds?: number;
   expectedActiveVersion?: FlowVersionNumber;
 }
 
@@ -62,6 +62,11 @@ export interface FlowRunDebug {
   error: FlowDebugError | null;
   debugLog: FlowDebugLogRecord | null;
   events: FlowDebugEvent[];
+}
+
+export interface FlowDebugResult extends Omit<FlowRunResult, 'debug' | 'invocations'> {
+  invocations: [FlowInvocation];
+  debug: FlowRunDebug;
 }
 
 export interface FlowActionError {

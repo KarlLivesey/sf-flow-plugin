@@ -42,7 +42,7 @@ interface ResolvedDebugFlow {
   metadata: JsonObject;
 }
 
-interface PreparedDebug extends PreparedFlowDebug {
+export interface PreparedDebug extends PreparedFlowDebug {
   flow: ResolvedDebugFlow;
   outputVariables: string[];
 }
@@ -55,7 +55,7 @@ interface ValidatedDebugInput {
 }
 
 const transportStages: Readonly<Record<FlowDebugTransportStage, FlowProgressStage>> = {
-  'configuring-debug': 'configuring-trace',
+  'configuring-debug': 'configuring-debug',
   'executing-apex': 'invoking-flow',
 };
 
@@ -209,6 +209,17 @@ export class FlowDebugService {
     }
   }
 
+  public async prepare(
+    request: FlowRollbackRequest,
+    progress: FlowProgressReporter = noFlowProgress
+  ): Promise<PreparedDebug> {
+    const flow = await this.resolveFlow(request, progress);
+    assertDebuggable(flow);
+    const validated = validateDebugInput(flow, request, progress);
+    const production = await this.preflight(request, flow, progress);
+    return { flow, ...validated, production };
+  }
+
   private async execute(
     prepared: PreparedDebug,
     request: FlowRollbackRequest,
@@ -222,7 +233,7 @@ export class FlowDebugService {
         input: prepared.input,
         outputVariables: prepared.outputVariables,
         logLevel: request.logLevel,
-        waitMilliseconds: request.waitMilliseconds,
+        ...(request.waitMilliseconds === undefined ? {} : { waitMilliseconds: request.waitMilliseconds }),
       },
       (stage, detail) => {
         progress(transportStages[stage], detail);
@@ -240,14 +251,6 @@ export class FlowDebugService {
       throw flowProductionConfirmationRequired(flow.apiName);
     }
     return production;
-  }
-
-  private async prepare(request: FlowRollbackRequest, progress: FlowProgressReporter): Promise<PreparedDebug> {
-    const flow = await this.resolveFlow(request, progress);
-    assertDebuggable(flow);
-    const validated = validateDebugInput(flow, request, progress);
-    const production = await this.preflight(request, flow, progress);
-    return { flow, ...validated, production };
   }
 
   private async preflight(

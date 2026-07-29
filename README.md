@@ -73,6 +73,7 @@ If `--target-org` is omitted, the command uses the Salesforce CLI `target-org` c
 | `sf flow check`          | Aggregate read-only Flow checks for CI.                                 |
 | `sf flow metrics`        | Report structural and optional Data Cloud runtime metrics.              |
 | `sf flow run`            | Invoke the active version of an autolaunched Flow.                      |
+| `sf flow benchmark`      | Measure rollback-isolated autolaunched Flow execution.                  |
 | `sf flow deactivate`     | Deactivate a Flow and verify the resulting state.                       |
 | `sf flow delete-version` | Safely plan or delete one explicitly numbered inactive version.         |
 | `sf flow audit`          | Report Flow definitions with version-state issues.                      |
@@ -794,6 +795,86 @@ sf flow check \
 The command fails on errors by default. Use `--fail-on warning` for a stricter CI gate, repeatable `--only` or
 `--exclude` flags to select checks, and SARIF output for code-scanning integrations.
 
+## `sf flow benchmark`
+
+```bash
+sf flow benchmark \
+  --api-name Calculate_Discount \
+  [--input NAME=VALUE ...] \
+  [--input-file FILE] \
+  [--iterations NUMBER] \
+  [--warmup NUMBER] \
+  [--concurrency NUMBER] \
+  [--wait MINUTES] \
+  [--percentile NUMBER ...] \
+  [--continue-on-error] \
+  [--include-failed] \
+  [--raw-log-dir DIRECTORY] \
+  [--exclude-warmup-logs] \
+  [--output-file FILE] \
+  [--log-level detailed|finest] \
+  [--dry-run] \
+  [--confirm] \
+  [--if-active-version NUMBER] \
+  [--namespace NAMESPACE] \
+  [--target-org ORG] \
+  [--api-version VERSION] \
+  [--json]
+```
+
+`sf flow benchmark` executes the active version of a directly invocable autolaunched Flow through rollback-isolated
+Execute Anonymous transactions. It performs 10 warm-up samples and 100 measured samples serially by default.
+`--input-file` accepts one JSON object or an array of varied input objects; arrays are assigned deterministically in
+round-robin order. The command does not impose workload, concurrency, input-file-size or input-count caps. Local
+memory, output volume and org/API load grow with the requested workload. Effective measured concurrency is the
+smaller of the requested concurrency and iteration count, and completed request slots are replenished immediately.
+
+Each Apex SOAP sample has a timeout controlled by `--wait` in positive whole minutes, defaulting to `2`. A timeout makes
+transaction completion and rollback unknown, is never retried and always stops new sample scheduling even when
+`--continue-on-error` is supplied. Concurrent samples already in progress are allowed to finish.
+
+Every completed sample reports client-observed Apex SOAP wall-clock time, Salesforce CPU time and rollback
+confirmation. Wall-clock time includes transfer of the request-scoped raw log returned with the SOAP response; raw-log
+file writes remain outside sample timing. The summary reports minimum, maximum, mean and nearest-rank p50, p90, p95
+and p99 values for measured wall-clock and CPU time, plus separate total and measured-phase wall-clock time. Measured
+throughput uses only measured-phase elapsed time, not warm-up time. Repeat `--percentile` to replace the default
+percentile set. Warm-up samples are excluded from statistics. The structured result records `logLevel`; use the same
+log level when comparing benchmarks because response size and latency vary with logging detail.
+
+The command stops scheduling new samples after the first failure by default; samples already in progress may finish.
+Use `--continue-on-error` to continue after failures whose rollback was confirmed and known pre-execution failures,
+such as generated Apex compilation failure, where the Flow never began. A timeout, malformed response or other
+failure after execution may have begun without confirmed rollback always stops new scheduling. Failed samples are
+excluded from statistics unless `--include-failed` is supplied and the relevant timing exists. Any failure gives the
+command a non-zero exit status. Transport failures retain the client-observed elapsed time when it is available.
+Failed samples include a stable error code and a bounded, sanitised message; runtime exception values and stack
+traces are not exposed.
+
+`--raw-log-dir` streams each complete raw log returned by Apex SOAP to a private staging directory. The directory is
+published only after the command has successfully produced a complete benchmark result and output transaction,
+including a valid result that contains failed samples and then exits non-zero. Warm-up logs are included unless
+`--exclude-warmup-logs` is supplied. Without `--raw-log-dir`, raw SOAP logs are discarded immediately after each
+sample is parsed. Retained logs pass through a bounded writer queue; disk backpressure can delay replacement sample
+scheduling and therefore reduce measured throughput, but file writes are excluded from each sample's reported SOAP
+wall-clock time. Logs can be processed by Apex log analysers and flame-graph tooling. They are unredacted and can
+contain sensitive Flow data; new files use owner-only permissions on POSIX systems.
+
+`--dry-run` validates the Flow, every varied input, production context, SOAP
+authentication, active-version guard and output destinations without executing samples or creating a raw-log
+directory. Production execution requires `--confirm`. This preflight cannot conclusively prove Execute Anonymous
+permission without executing Apex.
+
+Each sample establishes an Apex savepoint and verifies the correlation, completion and rollback markers in the log
+returned by its own SOAP response. Rollback affects database work in the current transaction only: it cannot reverse
+callouts, email, asynchronous work or effects committed by another transaction, and establishing a savepoint can
+prevent callouts from running. The command does not create trace configuration, query `ApexLog` or retry ambiguous
+timeouts and server failures.
+
+The active version is revalidated immediately before and after measured sampling. A change invalidates the benchmark
+instead of reporting mixed-version statistics. Invocation by Flow API name and version checks are separate Salesforce
+requests, so a narrow point-in-time race cannot be eliminated. Salesforce org, API and Apex limits remain
+authoritative.
+
 ## `sf flow run`
 
 ```bash
@@ -925,6 +1006,32 @@ Rollback mode supports the active version of an autolaunched Flow without a reco
 Flow Builder endpoints and does not simulate record-triggered, scheduled, screen, wait-element, arbitrary-version or
 run-as-user debugging. Salesforce CLI's existing `sf flow run test` and `sf flow get test` commands remain the Flow
 test runner.
+
+## `sf flow debug`
+
+```bash
+sf flow debug \
+  --api-name Calculate_Discount \
+  [--input NAME=VALUE ...] \
+  [--input-file FILE] \
+  [--log-level basic|detailed|finest] \
+  [--show-values] \
+  [--raw-log-file FILE] \
+  [--output-file FILE] \
+  [--wait MINUTES] \
+  [--dry-run] \
+  [--confirm] \
+  [--fail-on-flow-error] \
+  [--if-active-version NUMBER] \
+  [--namespace NAMESPACE] \
+  [--target-org ORG] \
+  [--api-version VERSION] \
+  [--json]
+```
+
+`sf flow debug` is the clearer equivalent of `sf flow run --rollback`; it selects rollback debugging automatically
+and uses the same implementation and safeguards. `sf flow run --rollback` remains available. The rollback limitations,
+request-scoped SOAP log handling, dry-run contract and output security guidance documented above apply identically.
 
 ## `sf flow deactivate`
 
@@ -1132,6 +1239,7 @@ These checks are point-in-time preflights, not an atomic guarantee. Permissions 
 | `FlowInvocationFailed`                | Salesforce could not execute or report the Flow invocation.                     |
 | `FlowInvocationPermissionDenied`      | The authenticated user cannot invoke the Flow action.                           |
 | `FlowProductionConfirmationRequired`  | Production Flow execution requires explicit confirmation.                       |
+| `FlowBenchmarkFailed`                 | Flow benchmark execution, log validation or output failed.                      |
 | `FlowDebugFailed`                     | Rollback execution or returned-log validation failed.                           |
 | `FlowDebugPermissionDenied`           | The user lacks anonymous Apex or Flow execution access.                         |
 | `FlowDebugRollbackFailed`             | The returned log did not confirm the expected database rollback.                |

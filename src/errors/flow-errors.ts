@@ -256,7 +256,12 @@ export {
   flowMetricsFailed,
 } from './flow-release-errors.js';
 
-export { flowDebugFailed, flowDebugPermissionDenied, flowDebugRollbackFailed } from './flow-debug-errors.js';
+export {
+  flowBenchmarkFailed,
+  flowDebugFailed,
+  flowDebugPermissionDenied,
+  flowDebugRollbackFailed,
+} from './flow-debug-errors.js';
 
 export function flowInputInvalid(message: string, cause?: unknown): SfError {
   return createFlowError({
