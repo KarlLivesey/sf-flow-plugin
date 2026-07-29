@@ -107,7 +107,7 @@ describe('flow run rollback command', (): void => {
       waitMilliseconds: 120_000,
     });
     expect(actual).to.equal(debugResult);
-    expect(commandUx.log.firstCall.args[0]).to.equal('Database rollback confirmed by the correlated log.');
+    expect(commandUx.log.firstCall.args[0]).to.equal('Database rollback confirmed by the returned debug log.');
   });
 
   it('warns when the correlated log cannot confirm rollback', async (): Promise<void> => {
@@ -117,7 +117,21 @@ describe('flow run rollback command', (): void => {
       rawLog: 'correlated log',
     });
     await FlowRun.run([]);
-    expect(commandUx.warn.lastCall.args[0]).to.include('inspect ApexLog 07L000000000001');
+    expect(commandUx.warn.lastCall.args[0]).to.include('inspect the raw log');
+  });
+});
+
+describe('flow run rollback timeout', (): void => {
+  it('accepts rollback waits above the former ten-minute plugin ceiling', async (): Promise<void> => {
+    $$.SANDBOX.stub(FlowRun.prototype, 'parseFlags').resolves({ ...flags(), rollback: true, wait: 11 });
+    const debug = $$.SANDBOX.stub(FlowDebugService.prototype, 'debug').resolves({
+      result: rollbackRunResult(true),
+      rawLog: 'correlated log',
+    });
+
+    await FlowRun.run(['--json']);
+
+    expect(debug.firstCall.args[0]).to.include({ waitMilliseconds: 660_000 });
   });
 });
 

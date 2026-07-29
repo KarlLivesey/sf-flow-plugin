@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$ref": "#/definitions/FlowRunResult",
+  "$ref": "#/definitions/FlowDebugResult",
   "definitions": {
-    "FlowRunResult": {
+    "FlowDebugResult": {
       "type": "object",
       "properties": {
         "apiName": {
@@ -32,14 +32,16 @@
         "successful": {
           "type": ["boolean", "null"]
         },
+        "targetOrg": {
+          "type": "string"
+        },
         "invocations": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/FlowInvocation"
-          }
-        },
-        "targetOrg": {
-          "type": "string"
+          },
+          "minItems": 1,
+          "maxItems": 1
         },
         "debug": {
           "$ref": "#/definitions/FlowRunDebug"
@@ -47,16 +49,17 @@
       },
       "required": [
         "apiName",
-        "namespace",
+        "debug",
         "definitionId",
-        "version",
-        "processType",
-        "production",
         "dryRun",
         "durationMilliseconds",
-        "successful",
         "invocations",
-        "targetOrg"
+        "namespace",
+        "processType",
+        "production",
+        "successful",
+        "targetOrg",
+        "version"
       ],
       "additionalProperties": false
     },

@@ -42,8 +42,7 @@ export type FlowErrorCode =
   | 'FlowInvocationFailed'
   | 'FlowInvocationPermissionDenied'
   | 'FlowProductionConfirmationRequired'
+  | 'FlowBenchmarkFailed'
   | 'FlowDebugFailed'
   | 'FlowDebugPermissionDenied'
-  | 'FlowDebugLogNotFound'
-  | 'FlowDebugCleanupFailed'
   | 'FlowDebugRollbackFailed';

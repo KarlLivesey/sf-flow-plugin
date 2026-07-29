@@ -13,6 +13,7 @@ const messages = Messages.loadMessages('sf-flow-plugin', 'flow.progress');
 export type FlowProgressAction =
   | 'activate'
   | 'audit'
+  | 'benchmark'
   | 'bundle'
   | 'compare'
   | 'check'
@@ -50,9 +51,7 @@ export type FlowProgressStage =
   | 'validating-inputs'
   | 'checking-org'
   | 'invoking-flow'
-  | 'configuring-trace'
-  | 'retrieving-debug-log'
-  | 'restoring-trace';
+  | 'configuring-debug';
 
 export type FlowProgressReporter = (stage: FlowProgressStage, detail?: string) => void;
 
@@ -61,6 +60,7 @@ export const noFlowProgress: FlowProgressReporter = () => undefined;
 const actionMessages: Record<FlowProgressAction, string> = {
   activate: messages.getMessage('actions.activate'),
   audit: messages.getMessage('actions.audit'),
+  benchmark: messages.getMessage('actions.benchmark'),
   bundle: messages.getMessage('actions.bundle'),
   compare: messages.getMessage('actions.compare'),
   check: messages.getMessage('actions.check'),
@@ -99,9 +99,7 @@ const stageMessages: Record<FlowProgressStage, string> = {
   'validating-inputs': messages.getMessage('stages.validating-inputs'),
   'checking-org': messages.getMessage('stages.checking-org'),
   'invoking-flow': messages.getMessage('stages.invoking-flow'),
-  'configuring-trace': messages.getMessage('stages.configuring-trace'),
-  'retrieving-debug-log': messages.getMessage('stages.retrieving-debug-log'),
-  'restoring-trace': messages.getMessage('stages.restoring-trace'),
+  'configuring-debug': messages.getMessage('stages.configuring-debug'),
 };
 
 interface FlowProgressWork<Result> {

@@ -257,9 +257,8 @@ export {
 } from './flow-release-errors.js';
 
 export {
-  flowDebugCleanupFailed,
+  flowBenchmarkFailed,
   flowDebugFailed,
-  flowDebugLogNotFound,
   flowDebugPermissionDenied,
   flowDebugRollbackFailed,
 } from './flow-debug-errors.js';
