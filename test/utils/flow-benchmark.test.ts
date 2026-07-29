@@ -9,10 +9,6 @@ import { expect } from 'chai';
 import { parseApexCpuTime } from '../../src/utils/flow-benchmark-log.js';
 import {
   assertBenchmarkWorkload,
-  MAX_BENCHMARK_CONCURRENCY,
-  MAX_BENCHMARK_INPUTS,
-  MAX_BENCHMARK_ITERATIONS,
-  MAX_BENCHMARK_WARMUP,
   parseBenchmarkWaitMinutes,
   parseNonnegativeBenchmarkInteger,
   parsePositiveBenchmarkInteger,
@@ -59,29 +55,15 @@ describe('Flow benchmark integer flags', (): void => {
 });
 
 describe('Flow benchmark workload limits', (): void => {
-  it('accepts the product safety boundaries', (): void => {
+  it('does not impose workload, concurrency or input-count caps', (): void => {
     expect(() => {
       assertBenchmarkWorkload({
-        iterations: MAX_BENCHMARK_ITERATIONS,
-        warmup: MAX_BENCHMARK_WARMUP,
-        concurrency: MAX_BENCHMARK_CONCURRENCY,
-        inputCount: MAX_BENCHMARK_INPUTS,
+        iterations: 1_000_000,
+        warmup: 100_000,
+        concurrency: 1000,
+        inputCount: 100_000,
       });
     }).not.to.throw();
-  });
-
-  it('rejects workload values above each product safety boundary', (): void => {
-    const workloads = [
-      { iterations: MAX_BENCHMARK_ITERATIONS + 1, warmup: 0, concurrency: 1, inputCount: 1 },
-      { iterations: 1, warmup: MAX_BENCHMARK_WARMUP + 1, concurrency: 1, inputCount: 1 },
-      { iterations: 1, warmup: 0, concurrency: MAX_BENCHMARK_CONCURRENCY + 1, inputCount: 1 },
-      { iterations: 1, warmup: 0, concurrency: 1, inputCount: MAX_BENCHMARK_INPUTS + 1 },
-    ];
-    for (const workload of workloads) {
-      expect(() => {
-        assertBenchmarkWorkload(workload);
-      }).to.throw('plugin safety limit');
-    }
   });
 });
 

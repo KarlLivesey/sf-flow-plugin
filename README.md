@@ -825,9 +825,8 @@ sf flow benchmark \
 `sf flow benchmark` executes the active version of a directly invocable autolaunched Flow through rollback-isolated
 Execute Anonymous transactions. It performs 10 warm-up samples and 100 measured samples serially by default.
 `--input-file` accepts one JSON object or an array of varied input objects; arrays are assigned deterministically in
-round-robin order. Plugin safety limits permit 10,000 measured samples, 1,000 warm-up samples, 11,000 combined
-samples, concurrency 100, a 10 MiB input file and 10,000 input objects. These are product safety policies rather than
-Salesforce limits; out-of-range values are rejected rather than clamped. Effective measured concurrency is the
+round-robin order. The command does not impose workload, concurrency, input-file-size or input-count caps. Local
+memory, output volume and org/API load grow with the requested workload. Effective measured concurrency is the
 smaller of the requested concurrency and iteration count, and completed request slots are replenished immediately.
 
 Each Apex SOAP sample has a timeout controlled by `--wait` from 1 to 10 minutes, defaulting to `2`. A timeout makes

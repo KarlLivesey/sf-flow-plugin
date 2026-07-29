@@ -6,13 +6,6 @@
  */
 import { flowInputInvalid } from '../errors/flow-errors.js';
 
-export const MAX_BENCHMARK_ITERATIONS = 10_000;
-export const MAX_BENCHMARK_WARMUP = 1000;
-export const MAX_BENCHMARK_SAMPLES = 11_000;
-export const MAX_BENCHMARK_CONCURRENCY = 100;
-export const MAX_BENCHMARK_INPUTS = 10_000;
-export const MAX_BENCHMARK_INPUT_FILE_BYTES = 10 * 1024 * 1024;
-
 export function parsePositiveBenchmarkInteger(input: string): number {
   const value = Number(input);
   if (!/^[1-9]\d*$/u.test(input) || !Number.isSafeInteger(value)) {
@@ -66,18 +59,6 @@ export function assertBenchmarkWorkload(workload: {
   }
   if (!Number.isSafeInteger(workload.iterations + workload.warmup)) {
     throw flowInputInvalid('Flow benchmark measured and warm-up samples must have a safe combined count.');
-  }
-  const limits = [
-    ['measured samples', workload.iterations, MAX_BENCHMARK_ITERATIONS],
-    ['warm-up samples', workload.warmup, MAX_BENCHMARK_WARMUP],
-    ['concurrency', workload.concurrency, MAX_BENCHMARK_CONCURRENCY],
-    ['input objects', workload.inputCount, MAX_BENCHMARK_INPUTS],
-    ['combined samples', workload.iterations + workload.warmup, MAX_BENCHMARK_SAMPLES],
-  ] as const;
-  for (const [label, value, maximum] of limits) {
-    if (value > maximum) {
-      throw flowInputInvalid(`Flow benchmark ${label} exceed the plugin safety limit of ${maximum}.`);
-    }
   }
 }
 

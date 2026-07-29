@@ -12,10 +12,9 @@ Measured samples report individual client-observed SOAP wall-clock time, includi
 Salesforce CPU time. The summary reports minimum, maximum, mean, requested percentiles, total benchmark wall-clock
 time and throughput. Input arrays are assigned deterministically in round-robin order.
 
-Concurrency defaults to one and is sustained by replenishing each completed request slot immediately. Plugin safety
-limits permit up to 10,000 measured samples, 1,000 warm-up samples, 11,000 combined samples, concurrency 100, a
-10 MiB input file and 10,000 input objects. These are product safety policies, not Salesforce limits. Values outside
-them are rejected rather than clamped.
+Concurrency defaults to one and is sustained by replenishing each completed request slot immediately. The command
+does not impose workload, concurrency, input-file-size or input-count caps. Local memory, output volume and org/API
+load grow with the requested workload.
 
 The command stops scheduling new samples after a failure by default. Concurrent samples already in progress are
 allowed to finish. Use `--continue-on-error` to continue after failures whose rollback was confirmed. Failed samples
@@ -39,19 +38,19 @@ Flow input using `NAME=VALUE` syntax. Repeat to provide multiple fields for one 
 
 # flags.input-file.summary
 
-JSON file of at most 10 MiB containing one input object or up to 10,000 varied input objects assigned round-robin.
+JSON file containing one input object or an array of varied input objects assigned round-robin.
 
 # flags.iterations.summary
 
-Number of measured samples from 1 to 10,000. Defaults to 100.
+Positive number of measured samples. Defaults to 100.
 
 # flags.warmup.summary
 
-Number of warm-up samples from 0 to 1,000, excluded from statistics. Defaults to 10; use 0 to disable. The combined sample limit is 11,000.
+Non-negative number of warm-up samples excluded from statistics. Defaults to 10; use 0 to disable.
 
 # flags.concurrency.summary
 
-Samples to run concurrently from 1 to 100. Defaults to 1.
+Positive number of samples to run concurrently. Defaults to 1.
 
 # flags.wait.summary
 

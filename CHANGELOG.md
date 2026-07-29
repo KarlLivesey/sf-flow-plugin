@@ -31,10 +31,9 @@ All notable user-visible changes to this project will be documented in this file
   owner-only permissions on POSIX systems.
 - Rollback affects database changes in the current transaction only. It cannot reverse callouts, email, asynchronous
   work or separately committed transactions; production execution therefore requires `--confirm`.
-- Benchmark product safety limits allow 10,000 measured samples, 1,000 warm-up samples, 11,000 combined samples,
-  concurrency 100, a 10 MiB input file and 10,000 varied inputs. Out-of-range workloads are rejected before org
-  execution. Returned logs are streamed to private staging only when requested and published after successful
-  completion.
+- Benchmark workload, concurrency, input-file-size and input-count are not capped by the plugin. Numeric workload
+  flags must still be safe integers with the required positive or non-negative sign. Returned logs are streamed to
+  private staging only when requested and published after successful completion.
 
 ### Changed
 

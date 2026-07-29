@@ -72,7 +72,7 @@ describe('flow benchmark command', (): void => {
     expect(FlowBenchmark.flags.iterations.default).to.equal(100);
     expect(FlowBenchmark.flags.warmup.default).to.equal(10);
     expect(FlowBenchmark.flags.concurrency.default).to.equal(1);
-    expect(FlowBenchmark.flags.concurrency.summary).to.include('1 to 100');
+    expect(FlowBenchmark.flags.concurrency.summary).to.include('Positive number');
     expect(FlowBenchmark.flags.percentile.default).to.deep.equal([50, 90, 95, 99]);
     expect(FlowBenchmark.flags['log-level'].options).to.deep.equal(['detailed', 'finest']);
     expect(FlowBenchmark.flags.wait.default).to.equal(2);
