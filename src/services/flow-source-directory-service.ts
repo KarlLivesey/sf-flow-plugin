@@ -4,7 +4,7 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import type { Dirent } from 'node:fs';
+import type { Dirent, Stats } from 'node:fs';
 import { readdir, realpath, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
@@ -16,6 +16,7 @@ import { qualifiedFlowName } from '../utils/flow-state.js';
 import { loadFlowSource } from './flow-source-service.js';
 
 const MAX_SOURCE_FILES = 2000;
+const MAX_SOURCE_BYTES = 256 * 1024 * 1024;
 const SOURCE_CONCURRENCY = 8;
 const FLOW_SOURCE_SUFFIX = '.flow-meta.xml';
 
@@ -77,6 +78,65 @@ async function resolvedDirectory(directory: string): Promise<string> {
   }
 }
 
+interface SourceFileSnapshot {
+  file: string;
+  size: number;
+  modifiedMilliseconds: number;
+  changedMilliseconds: number;
+  inode: number;
+}
+
+async function sourceFileStat(file: string): Promise<Stats> {
+  try {
+    return await stat(file);
+  } catch {
+    throw flowSourceInvalid(`Flow source file "${file}" changed or became unavailable during directory analysis.`);
+  }
+}
+
+function sourceFileSnapshot(file: string, fileStat: Stats): SourceFileSnapshot {
+  if (!fileStat.isFile()) {
+    throw flowSourceInvalid(`Flow source path "${file}" is no longer a regular file.`);
+  }
+  return {
+    file,
+    size: fileStat.size,
+    modifiedMilliseconds: fileStat.mtimeMs,
+    changedMilliseconds: fileStat.ctimeMs,
+    inode: fileStat.ino,
+  };
+}
+
+function assertSourceByteBudget(snapshots: ReadonlyArray<SourceFileSnapshot>): void {
+  const totalBytes = snapshots.reduce((total, snapshot) => total + snapshot.size, 0);
+  if (!Number.isSafeInteger(totalBytes) || totalBytes > MAX_SOURCE_BYTES) {
+    throw flowSourceInvalid('Flow source directory exceeds the 256 MiB aggregate source-file safety limit.');
+  }
+}
+
+function matchesSnapshot(snapshot: SourceFileSnapshot, current: SourceFileSnapshot): boolean {
+  return (
+    snapshot.size === current.size &&
+    snapshot.modifiedMilliseconds === current.modifiedMilliseconds &&
+    snapshot.changedMilliseconds === current.changedMilliseconds &&
+    snapshot.inode === current.inode
+  );
+}
+
+export async function verifyFlowSourceSnapshot(snapshot: SourceFileSnapshot): Promise<void> {
+  const current = sourceFileSnapshot(snapshot.file, await sourceFileStat(snapshot.file));
+  if (!matchesSnapshot(snapshot, current)) {
+    throw flowSourceInvalid(`Flow source file "${snapshot.file}" changed during directory analysis.`);
+  }
+}
+
+async function loadStableFlowSource(snapshot: SourceFileSnapshot): Promise<FlowSource> {
+  await verifyFlowSourceSnapshot(snapshot);
+  const source = await loadFlowSource(snapshot.file);
+  await verifyFlowSourceSnapshot(snapshot);
+  return source;
+}
+
 function assertUniqueIdentities(sources: ReadonlyArray<FlowSource>): void {
   const identities = new Set<string>();
   for (const source of sources) {
@@ -99,7 +159,11 @@ export async function loadFlowSourceDirectory(directory: string): Promise<FlowSo
   if (files.length === 0) {
     throw flowSourceInvalid(`Flow source directory "${resolved}" does not contain any ${FLOW_SOURCE_SUFFIX} files.`);
   }
-  const sources = await boundedMap(files, SOURCE_CONCURRENCY, loadFlowSource);
+  const snapshots = await boundedMap(files, SOURCE_CONCURRENCY, async (file) =>
+    sourceFileSnapshot(file, await sourceFileStat(file))
+  );
+  assertSourceByteBudget(snapshots);
+  const sources = await boundedMap(snapshots, SOURCE_CONCURRENCY, loadStableFlowSource);
   assertUniqueIdentities(sources);
   return { directory: resolved, sources };
 }

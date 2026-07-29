@@ -4,7 +4,7 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, stat, truncate, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -16,6 +16,7 @@ import {
   inspectDirectLocalSubflows,
   loadFlowSourceDirectory,
   traverseLocalSubflows,
+  verifyFlowSourceSnapshot,
 } from '../../src/services/flow-source-directory-service.js';
 import type { FlowSource } from '../../src/types/flow-source.js';
 import { formatFlowCheckSarif } from '../../src/utils/flow-check-analysis.js';
@@ -48,6 +49,12 @@ function source(apiName: string, subflowNames: string[] = [], namespace: string 
       connectors: [],
     },
   };
+}
+
+async function expectSourceInvalid(promise: Promise<unknown>, messagePart: string): Promise<void> {
+  const error = await promise.catch((caught: unknown) => caught);
+  expect(error).to.have.property('name', 'FlowSourceInvalid');
+  expect(error).to.have.property('message').that.includes(messagePart);
 }
 
 describe('local Flow source directory traversal', (): void => {
@@ -163,6 +170,46 @@ describe('local Flow source directory discovery', (): void => {
         expect(error).to.have.property('name', 'FlowSourceInvalid');
         expect(error).to.have.property('message').that.includes('more than 2000');
       }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('local Flow source directory byte safety', (): void => {
+  it('rejects more than 256 MiB of source before parsing any Flow', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'sf-flow-directory-bytes-'));
+    try {
+      await Promise.all(
+        Array.from({ length: 13 }, async (_, index) => {
+          const file = join(directory, `Flow_${String(index).padStart(2, '0')}.flow-meta.xml`);
+          await writeFile(file, '', 'utf8');
+          await truncate(file, 20 * 1024 * 1024);
+        })
+      );
+      await expectSourceInvalid(loadFlowSourceDirectory(directory), '256 MiB aggregate');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a source file that changes after discovery', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'sf-flow-directory-change-'));
+    const file = join(directory, 'Changed.flow-meta.xml');
+    try {
+      await writeFile(file, 'before', 'utf8');
+      const original = await stat(file);
+      await writeFile(file, 'after discovery', 'utf8');
+      await expectSourceInvalid(
+        verifyFlowSourceSnapshot({
+          file,
+          size: original.size,
+          modifiedMilliseconds: original.mtimeMs,
+          changedMilliseconds: original.ctimeMs,
+          inode: original.ino,
+        }),
+        'changed during directory analysis'
+      );
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
