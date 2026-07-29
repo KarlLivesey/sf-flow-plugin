@@ -38,6 +38,7 @@ export function createFlowBenchmarkResult(context: BenchmarkResultContext): Flow
     warmup: request.warmup,
     requestedConcurrency: request.concurrency,
     effectiveConcurrency: Math.min(request.concurrency, request.iterations),
+    sampleTimeoutMilliseconds: request.sampleTimeoutMilliseconds,
     completedSamples: samples.length,
     failedSamples,
     includedSamples: included.length,

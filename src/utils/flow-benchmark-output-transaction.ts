@@ -39,27 +39,24 @@ async function pathExists(file: string): Promise<boolean> {
   }
 }
 
-async function stageStructuredOutput(
-  outputFile: string,
-  artifact: FlowBenchmarkArtifact
-): Promise<StructuredOutputStage> {
+async function createStructuredOutputStage(outputFile: string): Promise<StructuredOutputStage> {
   await mkdir(dirname(outputFile), { recursive: true });
   const stageDirectory = await mkdtemp(join(dirname(outputFile), '.sf-flow-benchmark-output-'));
-  const stagedFile = join(stageDirectory, 'result.json');
-  try {
-    await writeFlowReport(stagedFile, JSON.stringify(artifact.result, null, 2), 0o600);
-    return {
-      backupFile: join(stageDirectory, 'previous-output'),
-      outputFile,
-      stagedFile,
-      stageDirectory,
-      committed: false,
-      previousOutput: false,
-    };
-  } catch (error: unknown) {
-    await rm(stageDirectory, { recursive: true, force: true });
-    throw error;
-  }
+  return {
+    backupFile: join(stageDirectory, 'previous-output'),
+    outputFile,
+    stagedFile: join(stageDirectory, 'result.json'),
+    stageDirectory,
+    committed: false,
+    previousOutput: false,
+  };
+}
+
+async function writeStructuredOutputStage(
+  stage: StructuredOutputStage,
+  artifact: FlowBenchmarkArtifact
+): Promise<void> {
+  await writeFlowReport(stage.stagedFile, JSON.stringify(artifact.result, null, 2), 0o600);
 }
 
 async function backupStructuredOutput(stage: StructuredOutputStage): Promise<StructuredOutputStage> {
@@ -200,7 +197,8 @@ export async function persistFlowBenchmark(
   let structuredStage: StructuredOutputStage | null = null;
   try {
     if (destination.outputFile !== undefined) {
-      structuredStage = await stageStructuredOutput(destination.outputFile, artifact);
+      structuredStage = await createStructuredOutputStage(destination.outputFile);
+      await writeStructuredOutputStage(structuredStage, artifact);
       structuredStage = await backupStructuredOutput(structuredStage);
       structuredStage = await commitStructuredOutput(structuredStage);
     }

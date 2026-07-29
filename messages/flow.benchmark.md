@@ -12,13 +12,14 @@ Measured samples report individual client-observed SOAP wall-clock time, includi
 Salesforce CPU time. The summary reports minimum, maximum, mean, requested percentiles, total benchmark wall-clock
 time and throughput. Input arrays are assigned deterministically in round-robin order.
 
-Concurrency defaults to one. The command imposes no maximum workload, concurrency, input-file-size, input-count or
-combined sample limit. The effective measured concurrency is the smaller of the requested concurrency and iteration
-count. Salesforce remains authoritative for its org, API and Apex limits.
+Concurrency defaults to one and is sustained by replenishing each completed request slot immediately. The command
+imposes no arbitrary maximum workload, concurrency, input-file-size or input-count. Local memory and output grow with
+the requested workload, and Salesforce remains authoritative for its org, API and Apex limits.
 
 The command stops scheduling new samples after a failure by default. Concurrent samples already in progress are
 allowed to finish. Use `--continue-on-error` to run all samples. Failed samples are reported but excluded from
-statistics unless `--include-failed` is supplied and timing data exists.
+statistics unless `--include-failed` is supplied and timing data exists. A SOAP timeout always stops new scheduling,
+even with `--continue-on-error`, because the timed-out Salesforce transaction and its rollback status are unknown.
 
 Rollback affects database changes in the current transaction only. It cannot reverse callouts, email, asynchronous
 work or separately committed transactions. Production execution requires `--confirm`.
@@ -50,6 +51,10 @@ Number of warm-up samples excluded from statistics. Defaults to 10; use 0 to dis
 # flags.concurrency.summary
 
 Samples to run concurrently. Defaults to 1.
+
+# flags.wait.summary
+
+Per-sample Apex SOAP timeout in minutes. Defaults to 2. A timeout stops new samples because transaction completion and rollback are unknown.
 
 # flags.percentile.summary
 

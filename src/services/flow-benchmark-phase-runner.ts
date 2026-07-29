@@ -5,6 +5,7 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import type { JsonObject } from '../types/flow-analysis.js';
+import { flowBenchmarkFailed } from '../errors/flow-errors.js';
 import type { FlowBenchmarkGateway, FlowBenchmarkPhase, FlowBenchmarkRequest } from '../types/flow-benchmark.js';
 import { FlowBenchmarkExecutionError } from '../utils/flow-benchmark-error.js';
 import { writeFlowBenchmarkRawLogs, type FlowBenchmarkRawLog } from '../utils/flow-benchmark-files.js';
@@ -55,17 +56,43 @@ function plannedSample(context: FlowBenchmarkPhaseRunnerContext, index: number):
 
 export class FlowBenchmarkPhaseRunner {
   private readonly completed: CompletedBenchmarkSample[] = [];
+  private readonly active = new Set<Promise<void>>();
   private nextIndex = 0;
   private stopped = false;
+  private failure: unknown;
 
   public constructor(private readonly context: FlowBenchmarkPhaseRunnerContext) {}
 
   public async run(): Promise<FlowBenchmarkPhaseResult> {
-    return this.runNextWave(0);
+    const started = performance.now();
+    this.fillAvailableSlots();
+    await this.drainActive();
+    const elapsedMilliseconds = performance.now() - started;
+    this.throwWorkerFailure();
+    await this.retainRawLogs(this.completed);
+    return { completed: this.orderedCompleted(), stopped: this.stopped, elapsedMilliseconds };
   }
 
-  private claim(batchEnd: number): PlannedBenchmarkSample | null {
-    if (this.stopped || this.nextIndex >= batchEnd) {
+  private async drainActive(): Promise<void> {
+    while (this.active.size > 0) {
+      // Each settlement frees a slot which is replenished immediately.
+      // eslint-disable-next-line no-await-in-loop
+      await Promise.race(this.active);
+      this.fillAvailableSlots();
+    }
+  }
+
+  private throwWorkerFailure(): void {
+    if (this.failure !== undefined) {
+      if (this.failure instanceof Error) {
+        throw this.failure;
+      }
+      throw flowBenchmarkFailed('A Flow benchmark worker failed.', this.failure);
+    }
+  }
+
+  private claim(): PlannedBenchmarkSample | null {
+    if (this.stopped || this.nextIndex >= this.context.count) {
       return null;
     }
     const index = this.nextIndex;
@@ -102,6 +129,8 @@ export class FlowBenchmarkPhaseRunner {
             ? error.safeMessage
             : 'The benchmark sample failed before Salesforce returned a validated result.',
         rawLog: error instanceof FlowBenchmarkExecutionError ? error.rawLog : null,
+        rollbackConfirmed: error instanceof FlowBenchmarkExecutionError ? error.rollbackConfirmed : false,
+        stopScheduling: error instanceof FlowBenchmarkExecutionError ? error.stopScheduling : false,
       });
     }
   }
@@ -127,39 +156,31 @@ export class FlowBenchmarkPhaseRunner {
     }
   }
 
-  private async runNextWave(elapsedMilliseconds: number): Promise<FlowBenchmarkPhaseResult> {
-    if (this.stopped || this.nextIndex >= this.context.count) {
-      return { completed: this.orderedCompleted(), stopped: this.stopped, elapsedMilliseconds };
+  private fillAvailableSlots(): void {
+    const concurrency = Math.min(this.context.request.concurrency, this.context.count);
+    while (!this.stopped && this.nextIndex < this.context.count && this.active.size < concurrency) {
+      const planned = this.claim();
+      if (planned !== null) {
+        this.start(planned);
+      }
     }
-    const waveEnd = Math.min(this.context.count, this.nextIndex + this.context.request.concurrency);
-    const started = performance.now();
-    const completed = await this.runWave(waveEnd);
-    const measuredMilliseconds = performance.now() - started;
-    await this.retainRawLogs(completed);
-    return this.runNextWave(elapsedMilliseconds + measuredMilliseconds);
   }
 
-  private async runWave(waveEnd: number): Promise<CompletedBenchmarkSample[]> {
-    const firstCompletedIndex = this.completed.length;
-    const workerCount = Math.min(this.context.request.concurrency, waveEnd - this.nextIndex);
-    const settled = await Promise.allSettled(Array.from({ length: workerCount }, async () => this.worker(waveEnd)));
-    const failure = settled.find((result): result is PromiseRejectedResult => result.status === 'rejected');
-    if (failure !== undefined) {
-      this.stopped = true;
-      throw failure.reason;
-    }
-    return this.completed.slice(firstCompletedIndex);
-  }
-
-  private async worker(waveEnd: number): Promise<void> {
-    const planned = this.claim(waveEnd);
-    if (planned === null) {
-      return;
-    }
-    const completed = await this.execute(planned);
-    this.completed.push(completed);
-    if (!completed.sample.successful && !this.context.request.continueOnError) {
-      this.stopped = true;
-    }
+  private start(planned: PlannedBenchmarkSample): void {
+    const active = this.execute(planned)
+      .then((completed) => {
+        this.completed.push(completed);
+        if (completed.stopScheduling || (!completed.sample.successful && !this.context.request.continueOnError)) {
+          this.stopped = true;
+        }
+      })
+      .catch((error: unknown) => {
+        this.failure ??= error;
+        this.stopped = true;
+      })
+      .finally(() => {
+        this.active.delete(active);
+      });
+    this.active.add(active);
   }
 }

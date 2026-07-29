@@ -14,7 +14,26 @@ import type { FlowDebugExecutionRequest } from '../types/flow-debug.js';
 import { createBoundedFlowDebugApex } from '../utils/flow-debug-apex.js';
 import { FlowBenchmarkExecutionError } from '../utils/flow-benchmark-error.js';
 import { ApexSoapExecuteAnonymous, type ApexSoapExecuteResult } from './apex-soap-execute-anonymous.js';
-import { isPermissionFailure } from './flow-debug-transport-support.js';
+import { isPermissionFailure, transportCodes } from './flow-debug-transport-support.js';
+
+const TIMEOUT_CODES = new Set([
+  'ABORT_ERR',
+  'ERR_HTTP_REQUEST_TIMEOUT',
+  'ESOCKETTIMEDOUT',
+  'ETIMEDOUT',
+  'UND_ERR_BODY_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
+]);
+
+function isTimeoutFailure(error: unknown): boolean {
+  return (
+    transportCodes(error).some((code) => TIMEOUT_CODES.has(code)) ||
+    (error instanceof Error &&
+      (error.name === 'AbortError' ||
+        error.name === 'TimeoutError' ||
+        /\b(?:timed?\s*out|timeout)\b/iu.test(error.message)))
+  );
+}
 
 function safeErrorCode(error: unknown): string {
   if (isPermissionFailure(error)) {
@@ -50,6 +69,16 @@ function benchmarkFailure(error: unknown, started: number): never {
   if (error instanceof FlowBenchmarkExecutionError) {
     throw error;
   }
+  if (isTimeoutFailure(error)) {
+    throw new FlowBenchmarkExecutionError({
+      errorCode: 'FlowBenchmarkSampleTimeout',
+      executionDurationMilliseconds: performance.now() - started,
+      safeMessage:
+        'The benchmark sample exceeded its SOAP timeout; Salesforce transaction completion and rollback are unknown.',
+      stopScheduling: true,
+      rollbackConfirmed: null,
+    });
+  }
   throw new FlowBenchmarkExecutionError({
     errorCode: safeErrorCode(error),
     executionDurationMilliseconds: performance.now() - started,
@@ -64,7 +93,13 @@ async function executeSample(
   const started = performance.now();
   try {
     return transportSample(
-      await soap.execute({ apexSource: context.apexSource, logLevel: context.request.logLevel }),
+      await soap.execute({
+        apexSource: context.apexSource,
+        logLevel: context.request.logLevel,
+        ...(context.request.waitMilliseconds === undefined
+          ? {}
+          : { timeoutMilliseconds: context.request.waitMilliseconds }),
+      }),
       context.correlationId,
       startedAt
     );

@@ -7,6 +7,7 @@
 import type { JsonObject } from '../types/flow-analysis.js';
 import type { FlowBenchmarkPhase, FlowBenchmarkSample, FlowBenchmarkTransportSample } from '../types/flow-benchmark.js';
 import { FlowBenchmarkExecutionError } from './flow-benchmark-error.js';
+import { safeFlowDiagnostic } from './flow-diagnostic.js';
 import { parseFlowDebugLog } from './flow-debug-log.js';
 import { parseApexCpuTime } from './flow-benchmark-log.js';
 
@@ -20,6 +21,7 @@ export interface PlannedBenchmarkSample {
 export interface CompletedBenchmarkSample {
   sample: FlowBenchmarkSample;
   rawLog: string | null;
+  stopScheduling: boolean;
 }
 
 interface FailedSampleContext {
@@ -27,24 +29,13 @@ interface FailedSampleContext {
   errorCode: string;
   errorMessage: string;
   rawLog?: string | null;
+  rollbackConfirmed?: boolean | null;
+  stopScheduling?: boolean;
 }
 
-const MAX_DIAGNOSTIC_LENGTH = 500;
-
 function safeCompileMessage(diagnostic: string | null): string {
-  if (diagnostic === null) {
-    return 'Generated Apex could not be compiled.';
-  }
-  const normalised = diagnostic
-    .replaceAll(/[\r\n\t]+/gu, ' ')
-    .replaceAll(/\s{2,}/gu, ' ')
-    .trim();
-  if (normalised.length === 0) {
-    return 'Generated Apex could not be compiled.';
-  }
-  const bounded =
-    normalised.length <= MAX_DIAGNOSTIC_LENGTH ? normalised : `${normalised.slice(0, MAX_DIAGNOSTIC_LENGTH)}…`;
-  return `Generated Apex could not be compiled: ${bounded}`;
+  const safe = safeFlowDiagnostic(diagnostic);
+  return safe === null ? 'Generated Apex could not be compiled.' : `Generated Apex could not be compiled: ${safe}`;
 }
 
 export function safeBenchmarkErrorCode(error: unknown): string {
@@ -64,13 +55,14 @@ export function failedBenchmarkSample(
       phase: planned.phase,
       inputIndex: planned.inputIndex,
       successful: false,
-      rollbackConfirmed: false,
+      rollbackConfirmed: context.rollbackConfirmed === undefined ? false : context.rollbackConfirmed,
       wallClockMilliseconds: context.wallClockMilliseconds,
       cpuTimeMilliseconds: null,
       errorCode: context.errorCode,
       errorMessage: context.errorMessage,
     },
     rawLog: context.rawLog ?? null,
+    stopScheduling: context.stopScheduling ?? false,
   };
 }
 
@@ -120,6 +112,7 @@ function runtimeSample(
             : 'Salesforce terminated the benchmark transaction; runtime details were redacted.'),
       },
       rawLog: transport.rawLog,
+      stopScheduling: false,
     };
   } catch {
     const failed = failedBenchmarkSample(planned, {

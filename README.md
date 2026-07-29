@@ -805,6 +805,7 @@ sf flow benchmark \
   [--iterations NUMBER] \
   [--warmup NUMBER] \
   [--concurrency NUMBER] \
+  [--wait MINUTES] \
   [--percentile NUMBER ...] \
   [--continue-on-error] \
   [--include-failed] \
@@ -824,8 +825,13 @@ sf flow benchmark \
 `sf flow benchmark` executes the active version of a directly invocable autolaunched Flow through rollback-isolated
 Execute Anonymous transactions. It performs 10 warm-up samples and 100 measured samples serially by default.
 `--input-file` accepts one JSON object or an array of varied input objects; arrays are assigned deterministically in
-round-robin order. The command imposes no maximum workload, concurrency, input-file-size, input-count or combined
-sample limit. Effective measured concurrency is the smaller of the requested concurrency and iteration count.
+round-robin order. The command imposes no arbitrary maximum workload, concurrency, input-file-size or input-count.
+Local memory and output grow with the requested workload. Effective measured concurrency is the smaller of the
+requested concurrency and iteration count, and completed request slots are replenished immediately.
+
+Each Apex SOAP sample has a timeout controlled by `--wait` in minutes, defaulting to `2`. A timeout makes transaction
+completion and rollback unknown, is never retried and always stops new sample scheduling even when
+`--continue-on-error` is supplied. Concurrent samples already in progress are allowed to finish.
 
 Every completed sample reports client-observed Apex SOAP wall-clock time, Salesforce CPU time and rollback
 confirmation. Wall-clock time includes transfer of the request-scoped raw log returned with the SOAP response; raw-log

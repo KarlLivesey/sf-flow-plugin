@@ -71,6 +71,7 @@ export function flowBenchmarkRequest(overrides: Partial<FlowBenchmarkRequest> = 
     iterations: 4,
     warmup: 1,
     concurrency: 1,
+    sampleTimeoutMilliseconds: 120_000,
     percentiles: [50, 90, 95, 99],
     continueOnError: false,
     includeFailed: false,

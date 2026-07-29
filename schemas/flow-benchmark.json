@@ -44,6 +44,9 @@
         "effectiveConcurrency": {
           "type": "number"
         },
+        "sampleTimeoutMilliseconds": {
+          "type": "number"
+        },
         "completedSamples": {
           "type": "number"
         },
@@ -103,6 +106,7 @@
         "warmup",
         "requestedConcurrency",
         "effectiveConcurrency",
+        "sampleTimeoutMilliseconds",
         "completedSamples",
         "failedSamples",
         "includedSamples",
@@ -176,7 +180,7 @@
           "type": "boolean"
         },
         "rollbackConfirmed": {
-          "type": "boolean"
+          "type": ["boolean", "null"]
         },
         "wallClockMilliseconds": {
           "type": ["number", "null"]

@@ -18,6 +18,7 @@ const request = {
   input: { percentage: 10 },
   outputVariables: ['discount'],
   logLevel: 'detailed' as const,
+  waitMilliseconds: 120_000,
 };
 
 describe('ApexSoapFlowBenchmarkGateway success', (): void => {
@@ -43,8 +44,7 @@ describe('ApexSoapFlowBenchmarkGateway success', (): void => {
     const sample = await new ApexSoapFlowBenchmarkGateway({} as Connection).execute(request);
 
     expect(execute.calledOnce).to.equal(true);
-    expect(execute.firstCall.args[0]).to.include({ logLevel: 'detailed' });
-    expect(execute.firstCall.args[0]).not.to.have.property('timeoutMilliseconds');
+    expect(execute.firstCall.args[0]).to.include({ logLevel: 'detailed', timeoutMilliseconds: 120_000 });
     expect(sample).to.deep.include({ wallClockMilliseconds: 42.5 });
     expect(sample.transport.log).to.include({
       id: null,
@@ -61,7 +61,7 @@ describe('ApexSoapFlowBenchmarkGateway failures', (): void => {
   });
 
   it('does not retry an ambiguous SOAP failure', async (): Promise<void> => {
-    const execute = sinon.stub(ApexSoapExecuteAnonymous.prototype, 'execute').rejects(new Error('socket timeout'));
+    const execute = sinon.stub(ApexSoapExecuteAnonymous.prototype, 'execute').rejects(new Error('socket closed'));
 
     const error = await new ApexSoapFlowBenchmarkGateway({} as Connection)
       .execute(request)
@@ -70,6 +70,24 @@ describe('ApexSoapFlowBenchmarkGateway failures', (): void => {
     expect(error).to.be.instanceOf(FlowBenchmarkExecutionError);
     expect(error).to.include({ errorCode: 'FlowBenchmarkFailed' });
     expect((error as FlowBenchmarkExecutionError).executionDurationMilliseconds).to.be.a('number');
+    expect(execute.calledOnce).to.equal(true);
+  });
+
+  it('classifies a client timeout as terminal with unknown rollback state', async (): Promise<void> => {
+    const execute = sinon
+      .stub(ApexSoapExecuteAnonymous.prototype, 'execute')
+      .rejects(Object.assign(new Error('request timed out'), { code: 'ETIMEDOUT' }));
+
+    const error = await new ApexSoapFlowBenchmarkGateway({} as Connection)
+      .execute(request)
+      .catch((caught: unknown) => caught);
+
+    expect(error).to.be.instanceOf(FlowBenchmarkExecutionError);
+    expect(error).to.include({
+      errorCode: 'FlowBenchmarkSampleTimeout',
+      stopScheduling: true,
+      rollbackConfirmed: null,
+    });
     expect(execute.calledOnce).to.equal(true);
   });
 });

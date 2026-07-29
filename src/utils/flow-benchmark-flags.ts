@@ -39,6 +39,9 @@ export function assertBenchmarkWorkload(workload: {
       throw flowInputInvalid(`Flow benchmark ${label} must be a safe integer no less than ${minimum}.`);
     }
   }
+  if (!Number.isSafeInteger(workload.iterations + workload.warmup)) {
+    throw flowInputInvalid('Flow benchmark measured and warm-up samples must have a safe combined count.');
+  }
 }
 
 export function parseBenchmarkPercentile(input: string): number {

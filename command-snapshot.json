@@ -63,6 +63,7 @@
       "percentile",
       "raw-log-dir",
       "target-org",
+      "wait",
       "warmup"
     ],
     "plugin": "sf-flow-plugin"

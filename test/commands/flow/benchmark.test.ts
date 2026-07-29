@@ -27,6 +27,7 @@ const result: FlowBenchmarkResult = {
   warmup: 1,
   requestedConcurrency: 2,
   effectiveConcurrency: 2,
+  sampleTimeoutMilliseconds: 120_000,
   completedSamples: 5,
   failedSamples: 0,
   includedSamples: 4,
@@ -47,6 +48,7 @@ function flags(): BenchmarkFlagValues {
     iterations: 4,
     warmup: 1,
     concurrency: 2,
+    wait: 3,
     percentile: [99, 50, 50],
     'continue-on-error': true,
     'include-failed': true,
@@ -70,7 +72,7 @@ describe('flow benchmark command', (): void => {
     expect(FlowBenchmark.flags.concurrency.summary).not.to.include('maximum 100');
     expect(FlowBenchmark.flags.percentile.default).to.deep.equal([50, 90, 95, 99]);
     expect(FlowBenchmark.flags['log-level'].options).to.deep.equal(['detailed', 'finest']);
-    expect(FlowBenchmark.flags).not.to.have.property('wait');
+    expect(FlowBenchmark.flags.wait.default).to.equal(2);
   });
 
   it('normalises percentiles and passes the complete contract to the service', async (): Promise<void> => {
@@ -89,6 +91,7 @@ describe('flow benchmark command', (): void => {
       iterations: 4,
       warmup: 1,
       concurrency: 2,
+      sampleTimeoutMilliseconds: 180_000,
       percentiles: [50, 99],
       continueOnError: true,
       includeFailed: true,

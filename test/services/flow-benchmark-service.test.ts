@@ -13,6 +13,7 @@ import { expect } from 'chai';
 
 import { FlowBenchmarkService } from '../../src/services/flow-benchmark-service.js';
 import type { FlowBenchmarkArtifact } from '../../src/types/flow-benchmark.js';
+import { FlowBenchmarkExecutionError } from '../../src/utils/flow-benchmark-error.js';
 import { flowBenchmarkGateways, flowBenchmarkRequest } from '../helpers/flow-benchmark-fixtures.js';
 
 function expectSuccessfulMeasurements(artifact: FlowBenchmarkArtifact): void {
@@ -177,7 +178,7 @@ describe('FlowBenchmarkService failed measurements', (): void => {
 });
 
 describe('FlowBenchmarkService concurrent ordering', (): void => {
-  it('returns warm-up samples in planned order after a concurrent wave stops on failure', async (): Promise<void> => {
+  it('returns every claimed warm-up sample in planned order after a concurrent failure', async (): Promise<void> => {
     const gateways = flowBenchmarkGateways();
     gateways.benchmark.failAt = 1;
     gateways.benchmark.onExecute = async (sample): Promise<void> => {
@@ -186,9 +187,55 @@ describe('FlowBenchmarkService concurrent ordering', (): void => {
     const artifact = await new FlowBenchmarkService(gateways).benchmark(
       flowBenchmarkRequest({ iterations: 1, warmup: 4, concurrency: 2 })
     );
-    expect(artifact.result.samples.map((sample) => sample.sample)).to.deep.equal([1, 2]);
-    expect(artifact.result.samples.map((sample) => sample.phase)).to.deep.equal(['warmup', 'warmup']);
-    expect(gateways.benchmark.executed).to.have.length(2);
+    expect(artifact.result.samples.map((sample) => sample.sample)).to.deep.equal([1, 2, 3, 4]);
+    expect(artifact.result.samples.every((sample) => sample.phase === 'warmup')).to.equal(true);
+    expect(gateways.benchmark.executed).to.have.length(4);
+  });
+
+  it('replenishes a completed concurrency slot without waiting for slower samples', async (): Promise<void> => {
+    const gateways = flowBenchmarkGateways();
+    let firstFinished = false;
+    let thirdStartedBeforeFirstFinished = false;
+    gateways.benchmark.onExecute = async (sample): Promise<void> => {
+      if (sample === 1) {
+        await wait(25);
+        firstFinished = true;
+      } else if (sample === 3) {
+        thirdStartedBeforeFirstFinished = !firstFinished;
+      }
+    };
+
+    const artifact = await new FlowBenchmarkService(gateways).benchmark(
+      flowBenchmarkRequest({ iterations: 4, warmup: 0, concurrency: 2 })
+    );
+    expect(thirdStartedBeforeFirstFinished).to.equal(true);
+    expect(artifact.result.samples.map((sample) => sample.sample)).to.deep.equal([1, 2, 3, 4]);
+  });
+});
+
+describe('FlowBenchmarkService timeout scheduling', (): void => {
+  it('stops after a timeout even when continue-on-error is enabled', async (): Promise<void> => {
+    const gateways = flowBenchmarkGateways();
+    gateways.benchmark.onExecute = (): Promise<void> =>
+      Promise.reject(
+        new FlowBenchmarkExecutionError({
+          errorCode: 'FlowBenchmarkSampleTimeout',
+          executionDurationMilliseconds: 120_000,
+          safeMessage: 'The benchmark sample timed out.',
+          stopScheduling: true,
+          rollbackConfirmed: null,
+        })
+      );
+
+    const artifact = await new FlowBenchmarkService(gateways).benchmark(
+      flowBenchmarkRequest({ iterations: 3, warmup: 0, concurrency: 1, continueOnError: true })
+    );
+    expect(gateways.benchmark.executed).to.have.length(1);
+    expect(artifact.result.samples[0]).to.deep.include({
+      successful: false,
+      rollbackConfirmed: null,
+      errorCode: 'FlowBenchmarkSampleTimeout',
+    });
   });
 });
 

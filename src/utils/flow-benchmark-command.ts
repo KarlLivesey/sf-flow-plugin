@@ -20,6 +20,7 @@ export interface BenchmarkFlagValues {
   iterations: number;
   warmup: number;
   concurrency: number;
+  wait: number;
   percentile: number[];
   'continue-on-error': boolean;
   'include-failed': boolean;
@@ -45,6 +46,7 @@ export async function createFlowBenchmarkRequest(
     iterations: flags.iterations,
     warmup: flags.warmup,
     concurrency: flags.concurrency,
+    sampleTimeoutMilliseconds: flags.wait * 60_000,
     percentiles: [...new Set(flags.percentile)].sort((left, right) => left - right),
     continueOnError: flags['continue-on-error'],
     includeFailed: flags['include-failed'],

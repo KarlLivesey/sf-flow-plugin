@@ -4,7 +4,8 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { access, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { chmodSync } from 'node:fs';
+import { access, chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -35,6 +36,7 @@ const result: FlowBenchmarkArtifact['result'] = {
   warmup: 1,
   requestedConcurrency: 1,
   effectiveConcurrency: 1,
+  sampleTimeoutMilliseconds: 120_000,
   completedSamples: 2,
   failedSamples: 0,
   includedSamples: 1,
@@ -87,6 +89,31 @@ async function createRollbackFixture(): Promise<{
   const stage = await createFlowBenchmarkLogStage(rawLogDir);
   await mkdir(rawLogDir);
   return { directory, destinations, outputFile, stage };
+}
+
+function invalidBenchmarkResult(directory: string): FlowBenchmarkArtifact['result'] {
+  const circular: unknown[] = [];
+  circular.push(circular);
+  const invalidResult = { ...result };
+  Object.defineProperty(invalidResult, 'samples', {
+    enumerable: true,
+    get: (): unknown[] => {
+      chmodSync(directory, 0o500);
+      return circular;
+    },
+  });
+  return invalidResult;
+}
+
+async function retainedWriteFailure(directory: string): Promise<unknown> {
+  try {
+    return await persistFlowBenchmark(
+      { outputFile: join(directory, 'result.json'), rawLogDir: undefined, excludeWarmupLogs: false },
+      { result: invalidBenchmarkResult(directory), rawLogStage: null }
+    ).catch((caught: unknown) => caught);
+  } finally {
+    await chmod(directory, 0o700);
+  }
 }
 
 describe('Flow benchmark files', (): void => {
@@ -173,5 +200,20 @@ describe('Flow benchmark output transaction', (): void => {
       Promise.resolve(true)
     );
     expect(retained).to.deep.equal(['/staging/structured', '/staging/raw']);
+  });
+});
+
+describe('Flow benchmark staged-write recovery', (): void => {
+  it('preserves a staged-write failure and reports its retained stage when cleanup also fails', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'sf-flow-benchmark-write-failure-'));
+    const error = await retainedWriteFailure(directory);
+    try {
+      expect(error).to.have.property('name', 'FlowBenchmarkFailed');
+      expect(error).to.have.property('message').that.includes('recovery was incomplete');
+      expect((error as Error & { cause?: Error }).cause?.message).to.include('circular');
+      expect((await readdir(directory)).some((entry) => entry.startsWith('.sf-flow-benchmark-output-'))).to.equal(true);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });

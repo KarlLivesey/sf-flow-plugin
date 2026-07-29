@@ -21,12 +21,14 @@ All notable user-visible changes to this project will be documented in this file
   statistics for per-sample wall-clock and Salesforce CPU time, total wall-clock time and measured throughput.
 - Added optional raw debug-log retention, production confirmation, active-version concurrency guards, failure policy
   controls and a non-executing dry-run preflight.
+- Added a per-sample SOAP timeout. Timed-out transactions have unknown rollback status, are never retried and stop new
+  benchmark scheduling.
 
 ### Safety and compatibility
 
-- Benchmark execution uses the shared Apex SOAP transport with one request-scoped debug log per sample and verifies
-  the completion and rollback markers for every sample. Raw logs are written with owner-only permissions on POSIX
-  systems.
+- Benchmark execution sustains requested concurrency through the shared Apex SOAP transport and verifies completion
+  and rollback markers for every completed sample. Raw logs are drained after request timing with bounded writes and
+  owner-only permissions on POSIX systems.
 - Rollback affects database changes in the current transaction only. It cannot reverse callouts, email, asynchronous
   work or separately committed transactions; production execution therefore requires `--confirm`.
 - Benchmark workloads accept any positive iteration and concurrency values and non-negative warm-up values. Returned

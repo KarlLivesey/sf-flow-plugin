@@ -62,6 +62,17 @@ describe('Flow benchmark integer flags', (): void => {
       });
     }).not.to.throw();
   });
+
+  it('rejects only a combined sample count that cannot be represented safely', (): void => {
+    expect(() => {
+      assertBenchmarkWorkload({
+        iterations: Number.MAX_SAFE_INTEGER,
+        warmup: 1,
+        concurrency: 1,
+        inputCount: 1,
+      });
+    }).to.throw('safe combined count');
+  });
 });
 
 describe('Flow benchmark SOAP failure samples', (): void => {
@@ -102,6 +113,39 @@ describe('Flow benchmark SOAP failure samples', (): void => {
     expect(completed.sample.errorMessage).to.match(/^Generated Apex could not be compiled: Unexpected x+…$/u);
     expect(completed.sample.errorMessage).not.to.include('\n');
     expect(completed.rawLog).to.equal('compile failure log');
+  });
+});
+
+describe('Flow benchmark empty compile diagnostics', (): void => {
+  it('treats a whitespace-only compile diagnostic as absent', (): void => {
+    const completed = completedBenchmarkSample(
+      { sample: 1, phase: 'measured', inputIndex: 0, input: {} },
+      {
+        wallClockMilliseconds: 12,
+        transport: {
+          correlationId: 'correlation',
+          execution: {
+            compiled: false,
+            success: false,
+            line: 2,
+            column: 3,
+            compileProblem: ' \n\t ',
+            exceptionMessage: null,
+            exceptionStackTrace: null,
+          },
+          rawLog: '',
+          log: {
+            id: null,
+            status: 'Failed',
+            operation: 'executeAnonymous',
+            startTime: '2026-07-29T12:00:00.000Z',
+            durationMilliseconds: 12,
+            logLength: 0,
+          },
+        },
+      }
+    );
+    expect(completed.sample.errorMessage).to.equal('Generated Apex could not be compiled.');
   });
 });
 

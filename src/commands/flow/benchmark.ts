@@ -73,6 +73,11 @@ export default class FlowBenchmark extends SfCommand<FlowBenchmarkResult> {
       parse: (input: string): Promise<number> => Promise.resolve(parsePositiveBenchmarkInteger(input)),
       summary: messages.getMessage('flags.concurrency.summary'),
     })(),
+    wait: Flags.custom<number>({
+      default: 2,
+      parse: (input: string): Promise<number> => Promise.resolve(parsePositiveBenchmarkInteger(input)),
+      summary: messages.getMessage('flags.wait.summary'),
+    })(),
     percentile: Flags.custom<number>({
       default: [50, 90, 95, 99],
       multiple: true,
@@ -174,6 +179,7 @@ export default class FlowBenchmark extends SfCommand<FlowBenchmarkResult> {
         {
           iterations: `${result.completedSamples}/${result.iterations + result.warmup}`,
           concurrency: `${result.effectiveConcurrency} effective (${result.requestedConcurrency} requested)`,
+          timeout: result.sampleTimeoutMilliseconds,
           failures: result.failedSamples,
           totalWallClock: result.totalWallClockMilliseconds,
           measuredWallClock: result.measuredWallClockMilliseconds,
@@ -184,6 +190,7 @@ export default class FlowBenchmark extends SfCommand<FlowBenchmarkResult> {
       columns: [
         { key: 'iterations', name: 'Completed samples' },
         { key: 'concurrency', name: 'Concurrency' },
+        { key: 'timeout', name: 'Sample timeout (ms)' },
         { key: 'failures', name: 'Failures' },
         { key: 'totalWallClock', name: 'Total wall-clock (ms)' },
         { key: 'measuredWallClock', name: 'Measured wall-clock (ms)' },

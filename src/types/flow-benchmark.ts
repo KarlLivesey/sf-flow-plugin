@@ -15,6 +15,7 @@ export interface FlowBenchmarkRequest extends NamedFlowRequest {
   iterations: number;
   warmup: number;
   concurrency: number;
+  sampleTimeoutMilliseconds: number;
   percentiles: number[];
   continueOnError: boolean;
   includeFailed: boolean;
@@ -53,7 +54,7 @@ export interface FlowBenchmarkSample {
   phase: FlowBenchmarkPhase;
   inputIndex: number;
   successful: boolean;
-  rollbackConfirmed: boolean;
+  rollbackConfirmed: boolean | null;
   wallClockMilliseconds: number | null;
   cpuTimeMilliseconds: number | null;
   errorCode: string | null;
@@ -74,6 +75,7 @@ export interface FlowBenchmarkResult {
   warmup: number;
   requestedConcurrency: number;
   effectiveConcurrency: number;
+  sampleTimeoutMilliseconds: number;
   completedSamples: number;
   failedSamples: number;
   includedSamples: number;

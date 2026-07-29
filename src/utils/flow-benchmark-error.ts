@@ -9,6 +9,8 @@ interface FlowBenchmarkExecutionErrorOptions {
   executionDurationMilliseconds: number | null;
   safeMessage?: string;
   rawLog?: string | null;
+  stopScheduling?: boolean;
+  rollbackConfirmed?: boolean | null;
 }
 
 export class FlowBenchmarkExecutionError extends Error {
@@ -16,6 +18,8 @@ export class FlowBenchmarkExecutionError extends Error {
   public readonly executionDurationMilliseconds: number | null;
   public readonly safeMessage: string;
   public readonly rawLog: string | null;
+  public readonly stopScheduling: boolean;
+  public readonly rollbackConfirmed: boolean | null;
 
   public constructor(options: FlowBenchmarkExecutionErrorOptions) {
     const safeMessage = options.safeMessage ?? 'The Apex SOAP benchmark request failed.';
@@ -25,5 +29,7 @@ export class FlowBenchmarkExecutionError extends Error {
     this.executionDurationMilliseconds = options.executionDurationMilliseconds;
     this.safeMessage = safeMessage;
     this.rawLog = options.rawLog ?? null;
+    this.stopScheduling = options.stopScheduling ?? false;
+    this.rollbackConfirmed = options.rollbackConfirmed === undefined ? false : options.rollbackConfirmed;
   }
 }

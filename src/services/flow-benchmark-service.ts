@@ -62,6 +62,7 @@ function rollbackRequest(request: FlowBenchmarkRequest, input: JsonObject): Flow
     confirm: request.confirm,
     logLevel: request.logLevel,
     showValues: false,
+    waitMilliseconds: request.sampleTimeoutMilliseconds,
     ...(request.namespace === undefined ? {} : { namespace: request.namespace }),
     ...(request.expectedActiveVersion === undefined ? {} : { expectedActiveVersion: request.expectedActiveVersion }),
   };
@@ -156,7 +157,7 @@ async function runPhases(
     phase: 'warmup',
     count: context.request.warmup,
   }).run();
-  if (warmup.stopped && !context.request.continueOnError) {
+  if (warmup.stopped) {
     return { completed: orderedSamples(warmup.completed), measuredWallClockMilliseconds: 0 };
   }
   await assertActiveVersionUnchanged(definition, context.prepared, 'before');
