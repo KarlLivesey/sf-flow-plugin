@@ -2,6 +2,13 @@
 
 All notable user-visible changes to this project will be documented in this file.
 
+## 1.5.1 - 2026-08-01
+
+### Changed
+
+- Corrected Salesforce Code Analyzer setup guidance so local Flow lint no longer claims Python 3.10 is required and
+  instead defers dependency requirements to the installed Analyzer plugin.
+
 ## 1.5.0 - 2026-07-29
 
 ### Added

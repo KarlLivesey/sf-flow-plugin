@@ -229,7 +229,8 @@ describe('Salesforce Code Analyzer non-interactive installation', (): void => {
       expect(error).to.have.property('name', 'FlowCodeAnalyzerUnavailable');
       expect(error)
         .to.have.nested.property('actions[0]')
-        .that.contains('sf plugins install @salesforce/plugin-code-analyzer');
+        .that.contains('sf plugins install @salesforce/plugin-code-analyzer')
+        .and.does.not.contain('Python');
     }
 
     expect(prompted).to.equal(false);
