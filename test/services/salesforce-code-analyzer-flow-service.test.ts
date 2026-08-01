@@ -230,7 +230,7 @@ describe('Salesforce Code Analyzer non-interactive installation', (): void => {
       expect(error)
         .to.have.nested.property('actions[0]')
         .that.contains('sf plugins install @salesforce/plugin-code-analyzer')
-        .and.does.not.contain('Python');
+        .and.contains('ensure any dependencies it requires are available');
     }
 
     expect(prompted).to.equal(false);
