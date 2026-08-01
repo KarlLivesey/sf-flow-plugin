@@ -15,7 +15,7 @@
     "@oclif/plugin-command-snapshot": "^5.2.3",
     "@salesforce/cli-plugins-testkit": "^5.3.20",
     "@salesforce/dev-scripts": "^11.0.4",
-    "@salesforce/plugin-command-reference": "^3.1.122",
+    "@salesforce/plugin-command-reference": "^3.1.128",
     "@types/node": "~22.20.1",
     "@types/xml2js": "^0.4.14",
     "c8": "^10.1.3",
