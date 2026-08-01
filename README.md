@@ -14,7 +14,7 @@ The package is implemented in strict TypeScript using the current Salesforce ext
 - A current Salesforce CLI installation.
 - An authenticated Salesforce org whose user can read Flow Tooling API records, except for local `--source-file`
   analysis.
-- Salesforce Code Analyzer and Python 3.10 or later when local source analysis includes lint.
+- Salesforce Code Analyzer and any dependencies it requires when local source analysis includes lint.
 - Tooling API update or deletion access for commands that mutate `FlowDefinition` or `Flow` records.
 - Access to the selected active autolaunched Flow and its referenced data when using `sf flow run`.
 
@@ -124,7 +124,7 @@ names, severities, tags and source locations, and does not run this plugin's sep
 
 If `@salesforce/plugin-code-analyzer` is missing, an interactive command offers to install the official plugin. JSON,
 non-interactive and `--no-prompt` runs instead fail with the exact
-`sf plugins install @salesforce/plugin-code-analyzer` command. Python 3.10 or later must also be available. Local
+`sf plugins install @salesforce/plugin-code-analyzer` command. Any dependencies required by the plugin must also be available. Local
 `flow check` supports Flow Scanner lint and structural metrics, defaulting to lint, while dependency, subflow and
 version-state checks remain org-only.
 
