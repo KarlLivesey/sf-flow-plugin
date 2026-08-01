@@ -11,7 +11,7 @@ export function flowCodeAnalyzerUnavailable(): SfError {
     name: 'FlowCodeAnalyzerUnavailable',
     message: 'Salesforce Code Analyzer is required to lint a local Flow source file.',
     actions: [
-      'Install it with "sf plugins install @salesforce/plugin-code-analyzer", ensure Python 3.10 or later is available, then run the command again.',
+      'Install it with "sf plugins install @salesforce/plugin-code-analyzer", ensure any dependencies it requires are available, then run the command again.',
     ],
   });
 }
@@ -21,7 +21,7 @@ export function flowCodeAnalyzerFailed(message: string): SfError {
     name: 'FlowCodeAnalyzerFailed',
     message,
     actions: [
-      'Confirm Salesforce Code Analyzer and Python 3.10 or later are available, then run "sf code-analyzer run --rule-selector flow" directly for diagnostic output.',
+      'Confirm Salesforce Code Analyzer and any dependencies it requires are available, then run "sf code-analyzer run --rule-selector flow" directly for diagnostic output.',
     ],
   });
 }
