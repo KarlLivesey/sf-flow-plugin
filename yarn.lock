@@ -1023,9 +1023,9 @@
     fastq "^1.6.0"
 
 "@oclif/core@^4", "@oclif/core@^4.11.11", "@oclif/core@^4.11.4", "@oclif/core@^4.11.7":
-  version "4.13.0"
-  resolved "https://registry.npmjs.org/@oclif/core/-/core-4.13.0.tgz"
-  integrity sha512-j3NKgXE3qd0gvSYsCqDLb3VhW5KEg030VQhMnv5c0qNzPp6jBmF7cCDIQG4ROZIOqEfGbUoDDMAAzaC30vV99g==
+  version "4.13.3"
+  resolved "https://registry.yarnpkg.com/@oclif/core/-/core-4.13.3.tgz#856aa8c48d65e711574dca2955eb0b29d86c1a74"
+  integrity sha512-wBp2igI2KVwq2ZmpnfmGtOROo7aXZIr3OEtAS16g1wHFBqyEuswL+9K50NJWJvlpAmxd+4dVj/ycawXESU3wQQ==
   dependencies:
     ansi-escapes "^4.3.2"
     ansis "^3.17.0"
@@ -1046,10 +1046,10 @@
     wordwrap "^1.0.0"
     wrap-ansi "^7.0.0"
 
-"@oclif/plugin-command-snapshot@^5.2.3":
-  version "5.3.32"
-  resolved "https://registry.npmjs.org/@oclif/plugin-command-snapshot/-/plugin-command-snapshot-5.3.32.tgz"
-  integrity sha512-oFvYUDxDHp0d5sg9SsEjHbT1LXdXuuKBdNhyMv37da9HjUU+RtxI0xb7vR465IUC3ftKThIvXZFcCduWOUPiqA==
+"@oclif/plugin-command-snapshot@^5.3.34":
+  version "5.3.34"
+  resolved "https://registry.yarnpkg.com/@oclif/plugin-command-snapshot/-/plugin-command-snapshot-5.3.34.tgz#bc072b4da67cdd7a8c33b22368dc3cbb8df3e75d"
+  integrity sha512-CGIzTASwghLeCL3bn2liBkAA9Ij5U3OE9+c83WEnCxjgbFYoDIsurYvTxeP68tSqVU4mA34H5HjOpS/lDehutQ==
   dependencies:
     "@oclif/core" "^4"
     ansis "^3.17.0"
@@ -1158,7 +1158,7 @@
     strip-ansi "6.0.1"
     ts-retry-promise "^0.8.1"
 
-"@salesforce/core@^8.2.7", "@salesforce/core@^8.23.1", "@salesforce/core@^8.31.2", "@salesforce/core@^8.31.4", "@salesforce/core@^8.32.4":
+"@salesforce/core@^8.2.7", "@salesforce/core@^8.23.1", "@salesforce/core@^8.31.2", "@salesforce/core@^8.31.4", "@salesforce/core@^8.32.6":
   version "8.32.6"
   resolved "https://registry.npmjs.org/@salesforce/core/-/core-8.32.6.tgz"
   integrity sha512-ZR973WoqCgi6cR58WhgokbHVZOaADNKHiuM1FAwS5pTLQnC91xYi04i2e/gpAX2AUf7Ya6zjbusYtZNpSyKKAQ==
@@ -1227,15 +1227,15 @@
   dependencies:
     "@salesforce/ts-types" "^2.0.12"
 
-"@salesforce/plugin-command-reference@^3.1.122":
-  version "3.1.125"
-  resolved "https://registry.npmjs.org/@salesforce/plugin-command-reference/-/plugin-command-reference-3.1.125.tgz"
-  integrity sha512-Mh9qWKdnZKUQ07e+BtJhITi1X5QexdqOOf5YSQchlX+VNDj5UEzG+AZwb9Fnts+w7YNapkjKCWRB4GybznYpHg==
+"@salesforce/plugin-command-reference@^3.1.131":
+  version "3.1.131"
+  resolved "https://registry.yarnpkg.com/@salesforce/plugin-command-reference/-/plugin-command-reference-3.1.131.tgz#642bc96a550540e1cec0b44b76d53d0b40360ea9"
+  integrity sha512-CGNwVXCnsZa+X70apV0HUUOyQSf8w1jyG3GhPBv3Gh0X+Dppartlc3tsmkkYO1s9VbYgsTv0nTaaScsMVeFxcA==
   dependencies:
     "@oclif/core" "^4"
-    "@salesforce/core" "^8.32.4"
+    "@salesforce/core" "^8.32.6"
     "@salesforce/kit" "^3.2.6"
-    "@salesforce/sf-plugins-core" "^12.2.26"
+    "@salesforce/sf-plugins-core" "^12.2.28"
     "@salesforce/ts-types" "^2.0.11"
     chalk "^5.6.2"
     debug "^4.4.3"
@@ -1246,7 +1246,7 @@
   resolved "https://registry.npmjs.org/@salesforce/prettier-config/-/prettier-config-0.0.3.tgz"
   integrity sha512-hYOhoPTCSYMDYn+U1rlEk16PoBeAJPkrdg4/UtAzupM1mRRJOwEPMG1d7U8DxJFKuXW3DMEYWr2MwAIBDaHmFg==
 
-"@salesforce/sf-plugins-core@^12", "@salesforce/sf-plugins-core@^12.2.26":
+"@salesforce/sf-plugins-core@^12", "@salesforce/sf-plugins-core@^12.2.28":
   version "12.2.28"
   resolved "https://registry.npmjs.org/@salesforce/sf-plugins-core/-/sf-plugins-core-12.2.28.tgz"
   integrity sha512-amfPBfdlgYoM9LCQewtoLWOe29kY7urLnYH1a5G7QLWN74tJeXEkvc1OyM18n+f2MHmpK0/ICAg5Wq276HwxHQ==
@@ -3427,12 +3427,12 @@ file-entry-cache@^6.0.1:
   dependencies:
     flat-cache "^3.0.4"
 
-filelist@1.0.5, filelist@^1.0.4:
-  version "1.0.5"
-  resolved "https://registry.npmjs.org/filelist/-/filelist-1.0.5.tgz"
-  integrity sha512-ct/ckWBV/9Dg3MlvCXsLcSUyoWwv9mCKqlhLNB2DAuXR/NZolSXlQqP5dyy6guWlPXBhodZyZ5lGPQcbQDxrEQ==
+filelist@1.0.6, filelist@^1.0.4:
+  version "1.0.6"
+  resolved "https://registry.yarnpkg.com/filelist/-/filelist-1.0.6.tgz#1e8870942a7c636c862f7c49b9394937b6a995a3"
+  integrity sha512-5giy2PkLYY1cP39p17Ech+2xlpTRL9HLspOfEgm0L6CwBXBTgsK5ou0JtzYuepxkaQ/tvhCFIJ5uXo0OrM2DxA==
   dependencies:
-    minimatch "^10.2.1"
+    minimatch "^5.0.1"
 
 fill-range@^7.1.1:
   version "7.1.1"
@@ -5169,7 +5169,7 @@ minimatch@9.0.3:
   dependencies:
     brace-expansion "^2.0.1"
 
-minimatch@^10.2.1, minimatch@^10.2.2, minimatch@^10.2.5:
+minimatch@^10.2.2, minimatch@^10.2.5:
   version "10.2.5"
   resolved "https://registry.npmjs.org/minimatch/-/minimatch-10.2.5.tgz"
   integrity sha512-MULkVLfKGYDFYejP07QOurDLLQpcjk7Fw+7jXS2R2czRQzR56yHRveU5NDJEOviH+hETZKSkIk5c+T23GjFUMg==
@@ -7118,15 +7118,10 @@ typedoc@^0.26.5:
     shiki "^1.16.2"
     yaml "^2.5.1"
 
-"typescript@^4.6.4 || ^5.2.2", typescript@^5.5.4, typescript@^5.9.3:
+"typescript@^4.6.4 || ^5.2.2", typescript@^5.5.4, typescript@^5.9.3, typescript@~5.9.3:
   version "5.9.3"
   resolved "https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz"
   integrity sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==
-
-typescript@~5.6.3:
-  version "5.6.3"
-  resolved "https://registry.npmjs.org/typescript/-/typescript-5.6.3.tgz"
-  integrity sha512-hjcS1mhfuyi4WW8IWtjP7brDrG2cuDZukyrYrSauoXGNgx0S7zceP07adYkJycEr56BOUTNPzbInooiN3fn1qw==
 
 uc.micro@^2.0.0, uc.micro@^2.1.0:
   version "2.1.0"
