@@ -2,6 +2,19 @@
 
 All notable user-visible changes to this project will be documented in this file.
 
+## 1.5.2 - 2026-08-07
+
+### Added
+
+- Added automatic patch releases for narrowly validated npm Dependabot updates after they pass the full quality gate,
+  with immediate processing for updates matched to high or critical vulnerability alerts and nightly processing
+  otherwise.
+
+### Changed
+
+- Grouped future nightly npm patch and minor updates, and separately grouped npm security updates, into focused
+  Dependabot pull requests; automated dependency releases are documented in the changelog.
+
 ## 1.5.1 - 2026-08-01
 
 ### Changed

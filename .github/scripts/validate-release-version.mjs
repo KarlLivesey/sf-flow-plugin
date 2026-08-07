@@ -1,10 +1,21 @@
 import { readFile } from 'node:fs/promises';
 
 const releasePrefix = 'release/';
-const [baseBranch, headBranch] = process.argv.slice(2);
+const dependabotAuthors = new Set(['app/dependabot', 'dependabot[bot]']);
+const [baseBranch, headBranch, pullRequestAuthor] = process.argv.slice(2);
 
 if (!baseBranch || !headBranch) {
   throw new Error('Expected the pull request base and head branch names.');
+}
+
+const isDependabotPullRequest =
+  baseBranch === 'main' &&
+  dependabotAuthors.has(pullRequestAuthor) &&
+  (headBranch.startsWith('dependabot-') || headBranch.startsWith('dependabot/'));
+
+if (isDependabotPullRequest) {
+  console.log(`Accepted Dependabot dependency branch ${headBranch} targeting main.`);
+  process.exit(0);
 }
 
 const releaseBranch =

@@ -85,6 +85,15 @@ When the release is ready, open a pull request from `release/1.3.0` into `main`.
 publication; do not create or push the release tag manually. Use the appropriate semantic version in place of `1.3.0`.
 Semantic prerelease versions publish under their prerelease identifier rather than the `latest` npm dist-tag.
 
+Npm patch and minor updates created by Dependabot follow a narrower automated path. Only bot-authored pull requests
+that target `main` and change `package.json` and/or `yarn.lock` are eligible. The automation tests the exact dependency
+update merged with the current `main`, merges the Dependabot pull request, creates the next patch release and changelog
+entry, tests that release, and then invokes the same trusted-publishing workflow described above. Updates matched to an
+open high or critical Dependabot vulnerability alert are processed as soon as their pull-request test succeeds; all
+other successful updates are queued nightly. Version updates and security updates are grouped separately per npm
+manifest. Any failed check, unexpected file, non-Dependabot commit, concurrent `main` change or publication mismatch
+stops the automation.
+
 ## Adding a command
 
 Generate the Salesforce command structure before implementing it:
