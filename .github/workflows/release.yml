@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 concurrency:
   group: release-main
@@ -60,13 +61,15 @@ jobs:
 
           appendFileSync(process.env.GITHUB_OUTPUT, `base-branch=${releasePullRequest.base.ref}\n`);
           appendFileSync(process.env.GITHUB_OUTPUT, `head-branch=${releasePullRequest.head.ref}\n`);
+          appendFileSync(process.env.GITHUB_OUTPUT, `pull-request-author=${releasePullRequest.user.login}\n`);
           NODE
 
       - name: Validate the release branch and package version
         env:
           BASE_BRANCH: ${{ steps.pull-request.outputs.base-branch }}
           HEAD_BRANCH: ${{ steps.pull-request.outputs.head-branch }}
-        run: node .github/scripts/validate-release-version.mjs "$BASE_BRANCH" "$HEAD_BRANCH"
+          PULL_REQUEST_AUTHOR: ${{ steps.pull-request.outputs.pull-request-author }}
+        run: node .github/scripts/validate-release-version.mjs "$BASE_BRANCH" "$HEAD_BRANCH" "$PULL_REQUEST_AUTHOR"
 
       - name: Resolve release metadata
         id: release

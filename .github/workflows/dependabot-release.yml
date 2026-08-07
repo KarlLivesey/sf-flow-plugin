@@ -1,0 +1,447 @@
+name: Dependabot patch release
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_run:
+    workflows:
+      - tests
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      pull-request:
+        description: Open Dependabot pull-request number to process
+        required: true
+        type: string
+
+concurrency:
+  group: dependabot-patch-release
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  security-events: read
+
+jobs:
+  classify:
+    name: classify security severity
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      urgent: ${{ steps.severity.outputs.urgent }}
+    steps:
+      - name: Match the pull request to an open high or critical alert
+        id: severity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          echo 'urgent=false' >> "$GITHUB_OUTPUT"
+          if [[ ! "$PULL_REQUEST_NUMBER" =~ ^[0-9]+$ ]]; then
+            exit 0
+          fi
+
+          pull_request_file="${RUNNER_TEMP}/dependabot-pull-request.json"
+          alerts_file="${RUNNER_TEMP}/urgent-dependabot-alerts.json"
+          gh api "/repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}" > "$pull_request_file"
+
+          set +e
+          gh api \
+            --paginate \
+            --slurp \
+            "/repos/${REPOSITORY}/dependabot/alerts?state=open&severity=high%2Ccritical&ecosystem=npm&per_page=100" \
+            > "$alerts_file"
+          alerts_exit=$?
+          set -e
+          if (( alerts_exit != 0 )); then
+            echo 'Security-alert metadata was unavailable; the pull request will use the nightly path.'
+            exit 0
+          fi
+
+          PULL_REQUEST_FILE="$pull_request_file" ALERTS_FILE="$alerts_file" node <<'NODE'
+          const { appendFileSync, readFileSync } = require('node:fs');
+
+          const pullRequest = JSON.parse(readFileSync(process.env.PULL_REQUEST_FILE, 'utf8'));
+          if (pullRequest.user?.login !== 'dependabot[bot]') {
+            process.exit(0);
+          }
+
+          const dependencyNames = new Set(
+            [...(pullRequest.body ?? '').matchAll(/dependency-name:\s*(?:"([^"]+)"|'([^']+)'|([^\s]+))/gu)].map(
+              (match) => match[1] ?? match[2] ?? match[3]
+            )
+          );
+          const alerts = JSON.parse(readFileSync(process.env.ALERTS_FILE, 'utf8')).flat();
+          const matchesUrgentAlert = alerts.some((alert) =>
+            dependencyNames.has(alert.dependency?.package?.name)
+          );
+
+          if (matchesUrgentAlert) {
+            appendFileSync(process.env.GITHUB_OUTPUT, 'urgent=true\n');
+          }
+          NODE
+
+  queue-nightly:
+    name: queue tested updates
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch each tested Dependabot pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          pull_requests_file="${RUNNER_TEMP}/tested-dependabot-pull-requests.json"
+          gh pr list \
+            --repo "$REPOSITORY" \
+            --state open \
+            --base main \
+            --limit 100 \
+            --json number,author,isDraft,statusCheckRollup \
+            > "$pull_requests_file"
+
+          queue_file="${RUNNER_TEMP}/queued-dependabot-pull-requests.txt"
+          PULL_REQUESTS_FILE="$pull_requests_file" QUEUE_FILE="$queue_file" node <<'NODE'
+          const { readFileSync, writeFileSync } = require('node:fs');
+          const pullRequests = JSON.parse(readFileSync(process.env.PULL_REQUESTS_FILE, 'utf8'));
+          const queuedPullRequests = [];
+          for (const pullRequest of pullRequests) {
+            const qualityPassed = pullRequest.statusCheckRollup.some(
+              (check) => check.name === 'quality' && check.status === 'COMPLETED' && check.conclusion === 'SUCCESS'
+            );
+            if (pullRequest.author?.login === 'app/dependabot' && !pullRequest.isDraft && qualityPassed) {
+              queuedPullRequests.push(pullRequest.number);
+            }
+          }
+          writeFileSync(process.env.QUEUE_FILE, queuedPullRequests.join('\n'));
+          NODE
+          while IFS= read -r pull_request_number; do
+            [[ -n "$pull_request_number" ]] || continue
+            gh workflow run dependabot-release.yml \
+              --repo "$REPOSITORY" \
+              --ref main \
+              --field "pull-request=${pull_request_number}"
+          done < "$queue_file"
+
+  release:
+    name: merge and publish
+    needs:
+      - classify
+    if: >-
+      always() &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && needs.classify.outputs.urgent == 'true'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve and validate the Dependabot pull request
+        id: dependabot
+        env:
+          DISPATCH_PULL_REQUEST: ${{ inputs['pull-request'] }}
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          WORKFLOW_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_PULL_REQUEST: ${{ github.event.workflow_run.pull_requests[0].number }}
+        shell: bash
+        run: |
+          pull_request_number="$WORKFLOW_PULL_REQUEST"
+          if [[ "$EVENT_NAME" == 'workflow_dispatch' ]]; then
+            pull_request_number="$DISPATCH_PULL_REQUEST"
+          fi
+
+          if [[ ! "$pull_request_number" =~ ^[0-9]+$ ]]; then
+            echo 'No Dependabot pull request was associated with the successful test run.' >&2
+            exit 1
+          fi
+
+          pull_request_file="${RUNNER_TEMP}/dependabot-pull-request.json"
+          pull_request_files="${RUNNER_TEMP}/dependabot-pull-request-files.json"
+          pull_request_commits="${RUNNER_TEMP}/dependabot-pull-request-commits.json"
+          gh api "/repos/${REPOSITORY}/pulls/${pull_request_number}" > "$pull_request_file"
+          gh api --paginate --slurp "/repos/${REPOSITORY}/pulls/${pull_request_number}/files" > "$pull_request_files"
+          gh api --paginate --slurp "/repos/${REPOSITORY}/pulls/${pull_request_number}/commits" > "$pull_request_commits"
+
+          PULL_REQUEST_FILE="$pull_request_file" \
+          PULL_REQUEST_FILES="$pull_request_files" \
+          PULL_REQUEST_COMMITS="$pull_request_commits" \
+          PULL_REQUEST_NUMBER="$pull_request_number" \
+          node <<'NODE'
+          const { appendFileSync, readFileSync } = require('node:fs');
+
+          const pullRequest = JSON.parse(readFileSync(process.env.PULL_REQUEST_FILE, 'utf8'));
+          const files = JSON.parse(readFileSync(process.env.PULL_REQUEST_FILES, 'utf8')).flat();
+          const commits = JSON.parse(readFileSync(process.env.PULL_REQUEST_COMMITS, 'utf8')).flat();
+          const allowedFiles = new Set(['package.json', 'yarn.lock']);
+
+          if (pullRequest.user?.login !== 'dependabot[bot]') {
+            throw new Error(`PR #${process.env.PULL_REQUEST_NUMBER} is not authored by dependabot[bot].`);
+          }
+
+          if (pullRequest.state !== 'open') {
+            appendFileSync(process.env.GITHUB_OUTPUT, 'eligible=false\n');
+            console.log(`PR #${process.env.PULL_REQUEST_NUMBER} is no longer open; nothing remains to process.`);
+            process.exit(0);
+          }
+
+          if (pullRequest.base?.ref !== 'main' || pullRequest.draft) {
+            throw new Error(`PR #${process.env.PULL_REQUEST_NUMBER} must be a non-draft PR targeting main.`);
+          }
+
+          if (process.env.WORKFLOW_HEAD_SHA && pullRequest.head?.sha !== process.env.WORKFLOW_HEAD_SHA) {
+            throw new Error(`PR #${process.env.PULL_REQUEST_NUMBER} changed after its successful test run.`);
+          }
+
+          const invalidFiles = files.map(({ filename }) => filename).filter((filename) => !allowedFiles.has(filename));
+          if (invalidFiles.length > 0) {
+            throw new Error(`Dependabot PR changes unsupported files: ${invalidFiles.join(', ')}`);
+          }
+
+          if (files.length === 0 || commits.length === 0) {
+            throw new Error(`PR #${process.env.PULL_REQUEST_NUMBER} does not contain a dependency update.`);
+          }
+
+          const invalidCommit = commits.find((commit) => commit.author?.login !== 'dependabot[bot]');
+          if (invalidCommit) {
+            throw new Error(`Commit ${invalidCommit.sha} was not authored by dependabot[bot].`);
+          }
+
+          appendFileSync(process.env.GITHUB_OUTPUT, `number=${pullRequest.number}\n`);
+          appendFileSync(process.env.GITHUB_OUTPUT, `head-sha=${pullRequest.head.sha}\n`);
+          appendFileSync(process.env.GITHUB_OUTPUT, `title=${pullRequest.title.replaceAll(/[\\r\\n]+/gu, ' ')}\n`);
+          appendFileSync(process.env.GITHUB_OUTPUT, 'eligible=true\n');
+          NODE
+
+      - name: Check out the current main branch
+        if: steps.dependabot.outputs.eligible == 'true'
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Create a current-main test candidate
+        if: steps.dependabot.outputs.eligible == 'true'
+        id: candidate
+        env:
+          DEPENDABOT_HEAD_SHA: ${{ steps.dependabot.outputs.head-sha }}
+          DEPENDABOT_PR_NUMBER: ${{ steps.dependabot.outputs.number }}
+        shell: bash
+        run: |
+          base_commit="$(git rev-parse HEAD)"
+          candidate_branch="automation/dependabot-${DEPENDABOT_PR_NUMBER}-${DEPENDABOT_HEAD_SHA:0:12}"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git fetch origin "pull/${DEPENDABOT_PR_NUMBER}/head:refs/remotes/origin/dependabot-${DEPENDABOT_PR_NUMBER}"
+          fetched_head="$(git rev-parse "refs/remotes/origin/dependabot-${DEPENDABOT_PR_NUMBER}")"
+          if [[ "$fetched_head" != "$DEPENDABOT_HEAD_SHA" ]]; then
+            echo "Dependabot PR #${DEPENDABOT_PR_NUMBER} changed from ${DEPENDABOT_HEAD_SHA} to ${fetched_head}." >&2
+            exit 1
+          fi
+          git switch --create "$candidate_branch"
+          git merge --no-ff --no-edit "refs/remotes/origin/dependabot-${DEPENDABOT_PR_NUMBER}"
+          git push origin "$candidate_branch"
+          echo "base-commit=$base_commit" >> "$GITHUB_OUTPUT"
+          echo "branch=$candidate_branch" >> "$GITHUB_OUTPUT"
+
+      - name: Test the dependency update against current main
+        if: steps.dependabot.outputs.eligible == 'true'
+        env:
+          CANDIDATE_BRANCH: ${{ steps.candidate.outputs.branch }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          dispatched_after="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh workflow run test.yml --ref "$CANDIDATE_BRANCH"
+
+          run_id=''
+          for _ in {1..30}; do
+            run_id="$(
+              gh run list \
+                --workflow test.yml \
+                --branch "$CANDIDATE_BRANCH" \
+                --event workflow_dispatch \
+                --limit 10 \
+                --json databaseId,createdAt \
+                --jq ".[] | select(.createdAt >= \"${dispatched_after}\") | .databaseId" |
+                head -n 1
+            )"
+            if [[ -n "$run_id" ]]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [[ -z "$run_id" ]]; then
+            echo 'The candidate quality workflow did not start.' >&2
+            exit 1
+          fi
+          gh run watch "$run_id" --exit-status --interval 15
+
+      - name: Merge the tested Dependabot pull request
+        if: steps.dependabot.outputs.eligible == 'true'
+        env:
+          EXPECTED_MAIN: ${{ steps.candidate.outputs.base-commit }}
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST_NUMBER: ${{ steps.dependabot.outputs.number }}
+          EXPECTED_HEAD: ${{ steps.dependabot.outputs.head-sha }}
+        shell: bash
+        run: |
+          current_main="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [[ "$current_main" != "$EXPECTED_MAIN" ]]; then
+            echo "main changed from ${EXPECTED_MAIN} to ${current_main} while the candidate was tested." >&2
+            exit 1
+          fi
+          current_head="$(gh pr view "$PULL_REQUEST_NUMBER" --json headRefOid --jq .headRefOid)"
+          if [[ "$current_head" != "$EXPECTED_HEAD" ]]; then
+            echo "Dependabot PR #${PULL_REQUEST_NUMBER} changed after candidate testing." >&2
+            exit 1
+          fi
+          gh pr merge "$PULL_REQUEST_NUMBER" --squash --delete-branch
+
+      - name: Remove the temporary test candidate
+        if: always() && steps.dependabot.outputs.eligible == 'true' && steps.candidate.outputs.branch != ''
+        env:
+          CANDIDATE_BRANCH: ${{ steps.candidate.outputs.branch }}
+        run: git push origin --delete "$CANDIDATE_BRANCH" || true
+
+      - name: Prepare the patch release
+        if: steps.dependabot.outputs.eligible == 'true'
+        id: release
+        env:
+          DEPENDABOT_PR_NUMBER: ${{ steps.dependabot.outputs.number }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          git fetch origin main
+          git switch --detach origin/main
+
+          package_name="$(node -p "require('./package.json').name")"
+          package_version="$(node -p "require('./package.json').version")"
+          published_version="$(npm view "$package_name" version --json --registry=https://registry.npmjs.org | node -e 'let source = ""; process.stdin.on("data", (chunk) => { source += chunk; }); process.stdin.on("end", () => process.stdout.write(JSON.parse(source)));')"
+          if [[ "$package_version" != "$published_version" ]]; then
+            echo "main contains ${package_name}@${package_version}, but npm latest is ${published_version}." >&2
+            exit 1
+          fi
+
+          RELEASE_DATE="$(date -u +%Y-%m-%d)" node .github/scripts/prepare-dependabot-release.mjs
+          release_branch="$(grep '^branch=' "$GITHUB_OUTPUT" | tail -n 1 | cut -d= -f2-)"
+          release_version="$(grep '^version=' "$GITHUB_OUTPUT" | tail -n 1 | cut -d= -f2-)"
+
+          if git ls-remote --exit-code --heads origin "$release_branch" >/dev/null 2>&1; then
+            echo "Release branch ${release_branch} already exists." >&2
+            exit 1
+          fi
+          if npm view "${package_name}@${release_version}" version --json --registry=https://registry.npmjs.org >/dev/null 2>&1; then
+            echo "${package_name}@${release_version} is already published." >&2
+            exit 1
+          fi
+
+          git switch --create "$release_branch"
+          git add package.json CHANGELOG.md
+          git commit --message "chore: release ${release_version}"
+          git push --set-upstream origin "$release_branch"
+
+      - name: Open the patch release pull request
+        if: steps.dependabot.outputs.eligible == 'true'
+        id: release-pull-request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_BRANCH: ${{ steps.release.outputs.branch }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        shell: bash
+        run: |
+          pull_request_url="$(
+            gh pr create \
+              --base main \
+              --head "$RELEASE_BRANCH" \
+              --title "release: ${RELEASE_VERSION}" \
+              --body "Automated patch release for a tested Dependabot dependency update."
+          )"
+          pull_request_number="$(gh pr view "$pull_request_url" --json number --jq .number)"
+          echo "number=$pull_request_number" >> "$GITHUB_OUTPUT"
+          echo "url=$pull_request_url" >> "$GITHUB_OUTPUT"
+
+      - name: Test the patch release
+        if: steps.dependabot.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_BRANCH: ${{ steps.release.outputs.branch }}
+        shell: bash
+        run: |
+          node .github/scripts/validate-release-version.mjs main "$RELEASE_BRANCH"
+          dispatched_after="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh workflow run test.yml --ref "$RELEASE_BRANCH"
+
+          run_id=''
+          for _ in {1..30}; do
+            run_id="$(
+              gh run list \
+                --workflow test.yml \
+                --branch "$RELEASE_BRANCH" \
+                --event workflow_dispatch \
+                --limit 10 \
+                --json databaseId,createdAt \
+                --jq ".[] | select(.createdAt >= \"${dispatched_after}\") | .databaseId" |
+                head -n 1
+            )"
+            if [[ -n "$run_id" ]]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [[ -z "$run_id" ]]; then
+            echo 'The release quality workflow did not start.' >&2
+            exit 1
+          fi
+          gh run watch "$run_id" --exit-status --interval 15
+
+      - name: Merge the tested patch release
+        if: steps.dependabot.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST_NUMBER: ${{ steps.release-pull-request.outputs.number }}
+        run: gh pr merge "$PULL_REQUEST_NUMBER" --merge
+
+      - name: Publish the patch release
+        if: steps.dependabot.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        shell: bash
+        run: |
+          git fetch origin main
+          merged_commit="$(git rev-parse origin/main)"
+          gh workflow run release.yml --ref main
+
+          run_id=''
+          for _ in {1..30}; do
+            run_id="$(
+              gh run list \
+                --workflow release.yml \
+                --branch main \
+                --event workflow_dispatch \
+                --commit "$merged_commit" \
+                --limit 1 \
+                --json databaseId \
+                --jq '.[0].databaseId // empty'
+            )"
+            if [[ -n "$run_id" ]]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [[ -z "$run_id" ]]; then
+            echo "The ${RELEASE_VERSION} publication workflow did not start." >&2
+            exit 1
+          fi
+          gh run watch "$run_id" --exit-status --interval 15

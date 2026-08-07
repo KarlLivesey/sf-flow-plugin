@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Check out the proposed merge
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Use Node.js 24
         uses: actions/setup-node@v6
@@ -27,4 +29,27 @@ jobs:
         env:
           BASE_BRANCH: ${{ github.base_ref }}
           HEAD_BRANCH: ${{ github.head_ref }}
-        run: node .github/scripts/validate-release-version.mjs "$BASE_BRANCH" "$HEAD_BRANCH"
+          PULL_REQUEST_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: node .github/scripts/validate-release-version.mjs "$BASE_BRANCH" "$HEAD_BRANCH" "$PULL_REQUEST_AUTHOR"
+
+      - name: Validate Dependabot file scope
+        if: github.event.pull_request.user.login == 'dependabot[bot]'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          invalid_file=false
+          while IFS= read -r changed_file; do
+            case "$changed_file" in
+              package.json | yarn.lock) ;;
+              *)
+                echo "Dependabot npm pull requests cannot change ${changed_file}." >&2
+                invalid_file=true
+                ;;
+            esac
+          done < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+
+          if [[ "$invalid_file" == 'true' ]]; then
+            exit 1
+          fi

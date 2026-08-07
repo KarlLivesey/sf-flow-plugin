@@ -3,12 +3,25 @@ updates:
   - package-ecosystem: 'npm'
     directory: '/'
     schedule:
-      interval: 'weekly'
-      day: 'saturday'
+      interval: 'daily'
+      time: '01:00'
+      timezone: 'Europe/London'
     versioning-strategy: 'increase'
     labels:
       - 'dependencies'
     open-pull-requests-limit: 5
+    groups:
+      npm-security-updates:
+        applies-to: 'security-updates'
+        patterns:
+          - '*'
+      npm-dependencies:
+        applies-to: 'version-updates'
+        patterns:
+          - '*'
+        update-types:
+          - 'minor'
+          - 'patch'
     pull-request-branch-name:
       separator: '-'
     commit-message:
