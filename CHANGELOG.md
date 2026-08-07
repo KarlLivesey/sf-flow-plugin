@@ -2,6 +2,12 @@
 
 All notable user-visible changes to this project will be documented in this file.
 
+## 1.5.3 - 2026-08-07
+
+### Changed
+
+- Applied tested dependency updates from Dependabot PR #37.
+
 ## 1.5.2 - 2026-08-07
 
 ### Added
