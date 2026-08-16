@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 
 const releasePrefix = 'release/';
-const dependabotAuthors = new Set(['app/dependabot', 'dependabot[bot]']);
+// GitHub exposes the Dependabot actor differently across REST, GraphQL and gh CLI versions.
+const dependabotAuthors = new Set(['app/dependabot', 'dependabot', 'dependabot[bot]']);
 const [baseBranch, headBranch, pullRequestAuthor] = process.argv.slice(2);
 
 if (!baseBranch || !headBranch) {

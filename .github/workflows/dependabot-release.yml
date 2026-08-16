@@ -112,20 +112,35 @@ jobs:
           queue_file="${RUNNER_TEMP}/queued-dependabot-pull-requests.txt"
           PULL_REQUESTS_FILE="$pull_requests_file" QUEUE_FILE="$queue_file" node <<'NODE'
           const { readFileSync, writeFileSync } = require('node:fs');
+          const dependabotAuthors = new Set(['app/dependabot', 'dependabot', 'dependabot[bot]']);
           const pullRequests = JSON.parse(readFileSync(process.env.PULL_REQUESTS_FILE, 'utf8'));
           const queuedPullRequests = [];
           for (const pullRequest of pullRequests) {
-            const qualityPassed = pullRequest.statusCheckRollup.some(
+            const qualityPassed = (pullRequest.statusCheckRollup ?? []).some(
               (check) => check.name === 'quality' && check.status === 'COMPLETED' && check.conclusion === 'SUCCESS'
             );
-            if (pullRequest.author?.login === 'app/dependabot' && !pullRequest.isDraft && qualityPassed) {
+            const author = pullRequest.author?.login;
+            if (dependabotAuthors.has(author) && !pullRequest.isDraft && qualityPassed) {
               queuedPullRequests.push(pullRequest.number);
+              console.log(`Queued tested Dependabot PR #${pullRequest.number} (author: ${author}).`);
+            } else {
+              console.log(
+                `Skipped PR #${pullRequest.number}: author=${author ?? 'unknown'}, draft=${Boolean(
+                  pullRequest.isDraft
+                )}, qualityPassed=${qualityPassed}.`
+              );
             }
           }
           writeFileSync(process.env.QUEUE_FILE, queuedPullRequests.join('\n'));
           NODE
+          if [[ ! -s "$queue_file" ]]; then
+            echo 'No tested Dependabot pull requests are ready to process.'
+            exit 0
+          fi
+
           while IFS= read -r pull_request_number; do
             [[ -n "$pull_request_number" ]] || continue
+            echo "Dispatching Dependabot PR #${pull_request_number}."
             gh workflow run dependabot-release.yml \
               --repo "$REPOSITORY" \
               --ref main \
