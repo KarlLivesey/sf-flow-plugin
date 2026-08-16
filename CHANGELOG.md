@@ -2,6 +2,13 @@
 
 All notable user-visible changes to this project will be documented in this file.
 
+## 1.5.4 - 2026-08-16
+
+### Fixed
+
+- Corrected nightly Dependabot release queuing to recognise every GitHub representation of the Dependabot actor and
+  added explicit diagnostics for queued and skipped pull requests.
+
 ## 1.5.3 - 2026-08-07
 
 ### Changed
