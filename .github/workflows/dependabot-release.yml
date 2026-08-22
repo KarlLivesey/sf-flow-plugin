@@ -131,14 +131,15 @@ jobs:
               );
             }
           }
-          writeFileSync(process.env.QUEUE_FILE, queuedPullRequests.join('\n'));
+          const queueContents = queuedPullRequests.length === 0 ? '' : `${queuedPullRequests.join('\n')}\n`;
+          writeFileSync(process.env.QUEUE_FILE, queueContents);
           NODE
           if [[ ! -s "$queue_file" ]]; then
             echo 'No tested Dependabot pull requests are ready to process.'
             exit 0
           fi
 
-          while IFS= read -r pull_request_number; do
+          while IFS= read -r pull_request_number || [[ -n "$pull_request_number" ]]; do
             [[ -n "$pull_request_number" ]] || continue
             echo "Dispatching Dependabot PR #${pull_request_number}."
             gh workflow run dependabot-release.yml \
