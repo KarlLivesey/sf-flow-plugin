@@ -12,7 +12,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@oclif/plugin-command-snapshot": "^5.3.35",
+    "@oclif/plugin-command-snapshot": "^5.4.0",
     "@salesforce/cli-plugins-testkit": "^5.3.66",
     "@salesforce/dev-scripts": "^11.0.4",
     "@salesforce/plugin-command-reference": "^3.1.132",
@@ -20,7 +20,7 @@
     "@types/xml2js": "^0.4.14",
     "c8": "^10.1.3",
     "eslint-plugin-sf-plugin": "^1.18.8",
-    "oclif": "^4.23.30",
+    "oclif": "^4.24.0",
     "ts-node": "^10.9.2",
     "typescript": "~5.9.3"
   },
