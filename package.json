@@ -9,7 +9,7 @@
     "@salesforce/sf-plugins-core": "^12",
     "filelist": "1.0.6",
     "xml2js": "^0.6.2",
-    "zod": "^4.4.3"
+    "zod": "^4.5.1"
   },
   "devDependencies": {
     "@oclif/plugin-command-snapshot": "^5.4.0",
