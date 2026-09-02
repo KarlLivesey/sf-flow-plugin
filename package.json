@@ -1,7 +1,7 @@
 {
   "name": "sf-flow-plugin",
   "description": "Salesforce CLI commands for managing Flow versions",
-  "version": "1.5.9",
+  "version": "1.5.10",
   "dependencies": {
     "@js-temporal/polyfill": "^0.5.1",
     "@oclif/core": "^4",
