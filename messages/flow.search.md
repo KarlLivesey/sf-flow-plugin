@@ -14,10 +14,10 @@ Search local XML or selected org versions. Matching is case-insensitive by defau
 
 Literal value to find in Flow metadata.
 
-# flags.case-sensitive.summary
+# flags.kind.summary
 
 Restrict matches to a kind of metadata reference.
 
-# flags.option3.summary
+# flags.case-sensitive.summary
 
 Match letter case exactly.

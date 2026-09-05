@@ -29,7 +29,7 @@ export default class FlowSearch extends SfCommand<FlowSearchResult> {
     kind: Flags.custom<FlowSearchKind>({
       default: 'text',
       options: ['text', 'object', 'field', 'apex', 'subflow'],
-      summary: messages.getMessage('flags.case-sensitive.summary'),
+      summary: messages.getMessage('flags.kind.summary'),
     })(),
     'case-sensitive': Flags.boolean({ default: false, summary: messages.getMessage('flags.case-sensitive.summary') }),
   };

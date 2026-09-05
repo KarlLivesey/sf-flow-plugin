@@ -29,6 +29,13 @@ async function writeDiscoveryFile(file: string): Promise<void> {
   );
 }
 
+describe('Flow search flag help', (): void => {
+  it('distinguishes reference-kind filtering from case sensitivity', (): void => {
+    expect(FlowSearch.flags.kind.summary).to.equal('Restrict matches to a kind of metadata reference.');
+    expect(FlowSearch.flags['case-sensitive'].summary).to.equal('Match letter case exactly.');
+  });
+});
+
 describe('Local Flow discovery commands', (): void => {
   let directory: string;
   let file: string;
