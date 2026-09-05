@@ -11,6 +11,11 @@ Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('sf-flow-plugin', 'flow.progress');
 
 export type FlowProgressAction =
+  | 'search'
+  | 'resources'
+  | 'explain'
+  | 'snapshot'
+  | 'drift'
   | 'activate'
   | 'audit'
   | 'benchmark'
@@ -58,6 +63,11 @@ export type FlowProgressReporter = (stage: FlowProgressStage, detail?: string) =
 export const noFlowProgress: FlowProgressReporter = () => undefined;
 
 const actionMessages: Record<FlowProgressAction, string> = {
+  search: messages.getMessage('actions.search'),
+  resources: messages.getMessage('actions.resources'),
+  explain: messages.getMessage('actions.explain'),
+  snapshot: messages.getMessage('actions.snapshot'),
+  drift: messages.getMessage('actions.drift'),
   activate: messages.getMessage('actions.activate'),
   audit: messages.getMessage('actions.audit'),
   benchmark: messages.getMessage('actions.benchmark'),

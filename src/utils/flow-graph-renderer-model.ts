@@ -4,6 +4,7 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+import type { FlowGraphHighlight } from '../types/flow-inspection.js';
 import type {
   FlowDescription,
   FlowElementSummary,
@@ -22,6 +23,7 @@ import type {
 } from '../types/flow-inspection.js';
 
 export interface FlowGraphRenderOptions {
+  highlights?: FlowGraphHighlight[];
   includeVariables: boolean;
   includeFormulas: boolean;
   direction: FlowGraphResolvedDirection;

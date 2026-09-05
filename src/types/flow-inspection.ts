@@ -132,6 +132,7 @@ export interface FlowExportResult {
 }
 
 export interface FlowGraphRequest extends FlowTraversalRequest {
+  highlights?: FlowGraphHighlight[];
   format: FlowGraphFormat;
   includeVariables: boolean;
   includeFormulas: boolean;
@@ -149,6 +150,7 @@ export interface FlowGraphRequest extends FlowTraversalRequest {
 export type FlowGraphRenderRequest = Pick<
   FlowGraphRequest,
   | 'curve'
+  | 'highlights'
   | 'direction'
   | 'elk'
   | 'format'
@@ -239,6 +241,7 @@ export interface FlowTraversalWarning {
 }
 
 export interface FlowTraversalResult {
+  sourceDirectory?: string;
   apiName: string;
   namespace: string | null;
   requestedVersion: FlowComparisonVersionSelector | null;
@@ -257,6 +260,7 @@ export interface FlowDescribeResult extends FlowTraversalResult {
 }
 
 export interface FlowGraphResult extends FlowTraversalResult {
+  highlights?: FlowGraphHighlight[];
   format: FlowGraphFormat;
   includeVariables: boolean;
   includeFormulas: boolean;
@@ -275,4 +279,10 @@ export interface FlowGraphResult extends FlowTraversalResult {
   labelWidth: number;
   style: FlowGraphStyle;
   graph: string;
+}
+
+export interface FlowGraphHighlight {
+  flow: string;
+  element: string;
+  kind: 'added' | 'removed' | 'changed';
 }

@@ -6,6 +6,7 @@
  */
 import type { FlowDescription, FlowGraphFormat } from '../types/flow-inspection.js';
 import { renderDot } from './flow-graph-dot.js';
+import { styleGraphChanges } from './flow-graph-changes.js';
 import { renderMermaid } from './flow-graph-mermaid.js';
 import type { FlowGraphRenderOptions } from './flow-graph-renderer-model.js';
 
@@ -14,5 +15,8 @@ export function renderFlowGraph(
   format: FlowGraphFormat,
   options: FlowGraphRenderOptions
 ): string {
-  return format === 'dot' ? renderDot(flows, options) : renderMermaid(flows, options);
+  const graph = format === 'dot' ? renderDot(flows, options) : renderMermaid(flows, options);
+  return options.highlights === undefined
+    ? graph
+    : styleGraphChanges(graph, { flows, highlights: options.highlights }, format);
 }

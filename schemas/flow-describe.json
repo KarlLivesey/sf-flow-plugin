@@ -5,6 +5,9 @@
     "FlowDescribeResult": {
       "type": "object",
       "properties": {
+        "sourceDirectory": {
+          "type": "string"
+        },
         "apiName": {
           "type": "string"
         },

@@ -153,3 +153,23 @@ Invoking Flow
 # stages.configuring-debug
 
 Configuring request-scoped debug logging
+
+# actions.search
+
+Searching Flow metadata
+
+# actions.resources
+
+Inspecting Flow resources
+
+# actions.explain
+
+Explaining Flow element
+
+# actions.snapshot
+
+Saving Flow snapshot
+
+# actions.drift
+
+Checking Flow drift

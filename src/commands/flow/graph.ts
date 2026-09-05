@@ -7,8 +7,11 @@
 import { Messages } from '@salesforce/core';
 import type { Org } from '@salesforce/core';
 import { SfCommand } from '@salesforce/sf-plugins-core';
+import { flowInspectionFailed } from '../../errors/flow-errors.js';
 
 import { FlowGraphService } from '../../services/flow-graph-service.js';
+import { graphLocalDirectory } from '../../services/flow-local-graph-service.js';
+import { highlightFlowGraph } from '../../services/flow-graph-change-service.js';
 import { graphFlowSource } from '../../services/flow-source-analysis-service.js';
 import { loadFlowSource } from '../../services/flow-source-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
@@ -48,6 +51,10 @@ const warningMessages: Record<FlowTraversalWarningKind, (path: string) => string
 };
 
 export interface GraphFlagValues {
+  'highlight-changes'?: boolean;
+  from?: FlowComparisonVersionSelector | undefined;
+  'from-file'?: string | undefined;
+  'source-dir'?: string | undefined;
   'api-name': string | undefined;
   'source-file': string | undefined;
   'target-org': Org | undefined;
@@ -113,6 +120,16 @@ function createRequest(flags: GraphFlagValues, context: ReturnType<typeof create
   };
 }
 
+function validateGraphComparisonInput(flags: GraphFlagValues): void {
+  const local = flags['source-file'] !== undefined || flags['source-dir'] !== undefined;
+  if (flags['highlight-changes'] === true && local && flags['from-file'] === undefined) {
+    throw flowInspectionFailed('Local graph highlighting requires --from-file.');
+  }
+  if (!local && flags['from-file'] !== undefined) {
+    throw flowInspectionFailed('--from-file requires a local --source-file or --source-dir.');
+  }
+}
+
 function validateFormat(flags: GraphFlagValues): void {
   validateGraphFormatOptions({
     format: flags.format,
@@ -151,13 +168,28 @@ export default class FlowGraph extends SfCommand<FlowGraphResult> {
   public async run(): Promise<FlowGraphResult> {
     const flags = await this.parseFlags();
     validateFormat(flags);
-    const result = await withFlowProgress(this.spinner, 'graph', async (progress) =>
-      flags['source-file'] === undefined
+    const original = await withFlowProgress(this.spinner, 'graph', async (progress) =>
+      flags['source-dir'] !== undefined
+        ? graphLocalDirectory(
+            {
+              directory: flags['source-dir'],
+              apiName: flags['api-name'] ?? '',
+              namespace: flags.namespace,
+              recursive: flags.recursive,
+              maxDepth: flags['max-depth'],
+            },
+            createSourceGraphRequest(flags),
+            progress
+          )
+        : flags['source-file'] === undefined
         ? graphOrg(flags, progress)
         : (progress('loading-source', flags['source-file']),
           loadFlowSource(flags['source-file']).then((source) =>
             graphFlowSource(source, createSourceGraphRequest(flags), progress)
           ))
+    );
+    const result = await withFlowProgress(this.spinner, 'graph', async (progress) =>
+      highlightFlowGraph(flags, original, progress)
     );
     await writeGraphOutput(flags['output-file'], result.graph);
     this.writeHumanOutput(result, flags['output-file']);
@@ -166,6 +198,8 @@ export default class FlowGraph extends SfCommand<FlowGraphResult> {
 
   public async parseFlags(): Promise<GraphFlagValues> {
     const { flags } = await this.parse(FlowGraph);
+    validateGraphComparisonInput(flags);
+    validateFlowSourceFlags(this.argv, ['target-org', 'api-version', 'flow-version', 'subflow-version'], 'source-dir');
     validateFlowSourceFlags(this.argv, [
       'target-org',
       'flow-version',

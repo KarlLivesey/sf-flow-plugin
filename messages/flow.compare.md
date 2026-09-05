@@ -108,3 +108,7 @@ Changes in Flow %s from version %s in %s to version %s in %s
 # info.summary
 
 Found %s structural change(s) in Flow %s.
+
+# flags.interface-only.summary
+
+Compare only public input/output variable contracts.
