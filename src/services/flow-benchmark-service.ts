@@ -9,6 +9,8 @@ import { resolve } from 'node:path';
 import { flowBenchmarkFailed, flowInputInvalid } from '../errors/flow-errors.js';
 import type { FlowMetadataGateway, JsonObject } from '../types/flow-analysis.js';
 import type { FlowBenchmarkArtifact, FlowBenchmarkGateway, FlowBenchmarkRequest } from '../types/flow-benchmark.js';
+import type { FlowBenchmarkControl } from '../types/flow-benchmark.js';
+import { FlowBenchmarkAccumulator } from '../utils/flow-benchmark-accumulator.js';
 import type { FlowDebugGateway } from '../types/flow-debug.js';
 import type { FlowRollbackRequest } from '../types/flow-invocation.js';
 import type { FlowDefinitionGateway } from '../types/flow.js';
@@ -45,6 +47,8 @@ const defaultLogStage: FlowBenchmarkLogStage = {
 };
 
 interface BenchmarkExecutionContext {
+  control?: FlowBenchmarkControl;
+  accumulator?: FlowBenchmarkAccumulator;
   request: FlowBenchmarkRequest;
   prepared: PreparedDebug;
   inputs: JsonObject[];
@@ -141,6 +145,7 @@ async function runPhases(
   definition: FlowDefinitionGateway
 ): Promise<BenchmarkPhases> {
   const shared = {
+    ...(context.control === undefined ? {} : { control: context.control }),
     benchmark,
     prepared: context.prepared,
     request: context.request,
@@ -203,10 +208,25 @@ export class FlowBenchmarkService {
 
   public async benchmark(
     request: FlowBenchmarkRequest,
-    progress: FlowProgressReporter = noFlowProgress
+    progress: FlowProgressReporter = noFlowProgress,
+    control: FlowBenchmarkControl = {}
   ): Promise<FlowBenchmarkArtifact> {
     const context = await this.prepare(request, progress);
-    return request.dryRun ? dryRunArtifact(context) : this.withRawLogStage(context);
+    control.onPrepared?.(dryRunArtifact(context).result);
+    const accumulator = new FlowBenchmarkAccumulator(request.includeFailed);
+    return request.dryRun
+      ? dryRunArtifact(context)
+      : this.withRawLogStage({
+          ...context,
+          accumulator,
+          control: {
+            ...control,
+            onSample: async (sample) => {
+              accumulator.add(sample);
+              await control.onSample?.(sample);
+            },
+          },
+        });
   }
 
   private async prepare(
@@ -255,6 +275,8 @@ export class FlowBenchmarkService {
       result: createFlowBenchmarkResult({
         request,
         prepared,
+        ...(context.accumulator === undefined ? {} : { accumulator: context.accumulator }),
+        interrupted: context.control?.signal?.aborted ?? false,
         samples: phases.completed.map((entry) => entry.sample),
         totalWallClockMilliseconds: performance.now() - started,
         measuredWallClockMilliseconds: phases.measuredWallClockMilliseconds,

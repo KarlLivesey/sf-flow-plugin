@@ -57,7 +57,7 @@ function isSameOrDescendant(parent: string, candidate: string): boolean {
   return location === '' || (location !== '..' && !location.startsWith(`..${sep}`) && !isAbsolute(location));
 }
 
-function assertSeparateDestinations(outputFile: string | undefined, rawLogDir: string | undefined): void {
+export function assertSeparateDestinations(outputFile: string | undefined, rawLogDir: string | undefined): void {
   if (outputFile === undefined || rawLogDir === undefined) {
     return;
   }

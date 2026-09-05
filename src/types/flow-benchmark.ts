@@ -4,11 +4,19 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+import type { BenchmarkComparison } from '../utils/flow-benchmark-comparison.js';
 import type { JsonObject } from './flow-analysis.js';
 import type { FlowDebugExecutionRequest, FlowDebugLogLevel, FlowDebugTransportResult } from './flow-debug.js';
 import type { FlowVersionNumber, NamedFlowRequest } from './flow.js';
 
 export type FlowBenchmarkPhase = 'warmup' | 'measured';
+
+export interface FlowBenchmarkControl {
+  onPrepared?: (result: FlowBenchmarkResult) => void;
+  signal?: AbortSignal;
+  retainSamples?: boolean;
+  onSample?: (sample: FlowBenchmarkSample) => Promise<void>;
+}
 
 export interface FlowBenchmarkRequest extends NamedFlowRequest {
   inputs: JsonObject[];
@@ -66,6 +74,11 @@ export interface FlowBenchmarkSample {
 }
 
 export interface FlowBenchmarkResult {
+  comparison?: BenchmarkComparison;
+  interrupted?: boolean;
+  samplesFile?: string;
+  inputFingerprint?: string;
+  includeFailed?: boolean;
   apiName: string;
   namespace: string | null;
   definitionId: string;

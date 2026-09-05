@@ -5,6 +5,21 @@
     "FlowBenchmarkResult": {
       "type": "object",
       "properties": {
+        "comparison": {
+          "$ref": "#/definitions/BenchmarkComparison"
+        },
+        "interrupted": {
+          "type": "boolean"
+        },
+        "samplesFile": {
+          "type": "string"
+        },
+        "inputFingerprint": {
+          "type": "string"
+        },
+        "includeFailed": {
+          "type": "boolean"
+        },
         "apiName": {
           "type": "string"
         },
@@ -116,6 +131,47 @@
         "wallClock",
         "cpuTime",
         "samples"
+      ],
+      "additionalProperties": false
+    },
+    "BenchmarkComparison": {
+      "type": "object",
+      "properties": {
+        "metric": {
+          "type": "string",
+          "enum": ["cpu", "wall-clock"]
+        },
+        "percentile": {
+          "type": "number"
+        },
+        "baselineVersion": {
+          "type": "number"
+        },
+        "baselineValue": {
+          "type": "number"
+        },
+        "currentValue": {
+          "type": ["number", "null"]
+        },
+        "regressionPercent": {
+          "type": ["number", "null"]
+        },
+        "maximumRegressionPercent": {
+          "type": ["number", "null"]
+        },
+        "exceeded": {
+          "type": ["boolean", "null"]
+        }
+      },
+      "required": [
+        "metric",
+        "percentile",
+        "baselineVersion",
+        "baselineValue",
+        "currentValue",
+        "regressionPercent",
+        "maximumRegressionPercent",
+        "exceeded"
       ],
       "additionalProperties": false
     },

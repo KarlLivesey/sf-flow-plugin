@@ -16,6 +16,18 @@ Concurrency defaults to one and is sustained by replenishing each completed requ
 does not impose workload, concurrency, input-file-size or input-count caps. Local memory, output volume and org/API
 load grow with the requested workload.
 
+Use `--samples-file FILE` to stream JSONL sample records in completion order. The final line contains a summary;
+`samples` is empty in that summary because records are in the stream. Exact percentiles retain numeric timings,
+so memory still grows with the measured sample count. Existing stream files are rejected. Partial streams survive
+errors; a missing summary line means the run did not finish. Dry runs validate the path but create no stream.
+Ctrl+C stops scheduling, settles in-flight samples and saves an interrupted result with a failing exit code.
+
+Use `--baseline FILE` to compare a successful previous JSON result, optionally with `--max-regression PERCENT` to
+fail CI. Comparison defaults to CPU p95; `--regression-metric wall-clock` and `--regression-percentile NUMBER` change
+the selection. Inputs, target org and measurement settings must match. Different Flow versions are allowed;
+different qualified Flow identities are not. Dry-run and incomplete-run comparison outcomes are unknown, not passes.
+New reports include a SHA-256 input fingerprint, not raw inputs; fingerprints are not anonymisation of guessable inputs.
+
 The command stops scheduling new samples after a failure by default. Concurrent samples already in progress are
 allowed to finish. Use `--continue-on-error` to continue after failures whose rollback was confirmed or known
 pre-execution failures where the Flow never began, such as generated Apex compilation failure. Failed samples are

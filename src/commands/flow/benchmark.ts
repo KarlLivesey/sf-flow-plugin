@@ -7,14 +7,10 @@
 import { Messages } from '@salesforce/core';
 import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
-import { ApexSoapFlowBenchmarkGateway } from '../../services/apex-soap-flow-benchmark-gateway.js';
-import { ApexSoapFlowDebugGateway } from '../../services/apex-soap-flow-debug-gateway.js';
-import { FlowBenchmarkService } from '../../services/flow-benchmark-service.js';
-import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
-import type { FlowBenchmarkResult } from '../../types/flow-benchmark.js';
+import type { FlowBenchmarkResult, FlowBenchmarkRequest } from '../../types/flow-benchmark.js';
 import type { FlowDebugLogLevel } from '../../types/flow-debug.js';
 import type { BenchmarkFlagValues } from '../../utils/flow-benchmark-command.js';
-import { createFlowBenchmarkRequest } from '../../utils/flow-benchmark-command.js';
+import { executeFlowBenchmark } from '../../utils/flow-benchmark-execution.js';
 import { createFlowCommandContext, validateNamedFlowFlags } from '../../utils/flow-command.js';
 import { prepareFlowBenchmarkDestinations, type FlowBenchmarkDestinations } from '../../utils/flow-benchmark-files.js';
 import { persistFlowBenchmark } from '../../utils/flow-benchmark-output-transaction.js';
@@ -26,6 +22,7 @@ import {
 } from '../../utils/flow-benchmark-flags.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
+import { benchmarkReportFlags } from '../../utils/flow-benchmark-command-flags.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('sf-flow-plugin', 'flow.benchmark');
@@ -38,6 +35,7 @@ export default class FlowBenchmark extends SfCommand<FlowBenchmarkResult> {
   public static override readonly examples = messages.getMessages('examples');
 
   public static override readonly flags = {
+    ...benchmarkReportFlags,
     'api-name': Flags.string({
       char: 'n',
       required: true,
@@ -130,6 +128,22 @@ export default class FlowBenchmark extends SfCommand<FlowBenchmarkResult> {
     }),
   };
 
+  private interruptListeners: NodeJS.SignalsListener[] = [];
+
+  public override async _run<R>(): Promise<R> {
+    const existing = new Set(process.listeners('SIGINT'));
+    // Salesforce's lifecycle hook is named _run; capture only the listener it installs synchronously.
+    // eslint-disable-next-line no-underscore-dangle
+    const pending = super._run<R>();
+    this.interruptListeners = process.listeners('SIGINT').filter((listener) => !existing.has(listener));
+    try {
+      return await pending;
+    } finally {
+      this.interruptListeners.forEach((listener) => {
+        process.removeListener('SIGINT', listener);
+      });
+    }
+  }
   public async run(): Promise<FlowBenchmarkResult> {
     const flags = await this.parseFlags();
     validateNamedFlowFlags(flags);
@@ -140,7 +154,11 @@ export default class FlowBenchmark extends SfCommand<FlowBenchmarkResult> {
       flags['exclude-warmup-logs']
     );
     const result = await this.execute(flags, context, destinations);
-    if (result.successful === false) {
+    if (
+      result.successful === false ||
+      result.comparison?.exceeded === true ||
+      (!result.dryRun && flags['max-regression'] !== undefined && result.comparison?.exceeded === null)
+    ) {
       process.exitCode = 1;
     }
     return result;
@@ -156,22 +174,24 @@ export default class FlowBenchmark extends SfCommand<FlowBenchmarkResult> {
     context: ReturnType<typeof createFlowCommandContext>,
     destinations: FlowBenchmarkDestinations
   ): Promise<FlowBenchmarkResult> {
-    const request = await createFlowBenchmarkRequest(flags, context, destinations);
-    this.warnExecution(request);
-    const definition = new ToolingFlowDefinitionGateway(context.connection);
     const artifact = await withFlowProgress(this.spinner, 'benchmark', async (progress) =>
-      new FlowBenchmarkService({
-        definition,
-        debug: new ApexSoapFlowDebugGateway(context.connection),
-        benchmark: new ApexSoapFlowBenchmarkGateway(context.connection),
-      }).benchmark(request, progress)
+      executeFlowBenchmark(
+        { flags, context, destinations, interruptListeners: this.interruptListeners },
+        progress,
+        (request) => {
+          this.warnExecution(request);
+        }
+      )
     );
+    if (artifact.result.comparison !== undefined && !this.jsonEnabled()) {
+      this.log(JSON.stringify(artifact.result.comparison));
+    }
     await persistFlowBenchmark(destinations, artifact);
     this.writeHumanOutput(artifact.result);
     return artifact.result;
   }
 
-  private warnExecution(request: Parameters<FlowBenchmarkService['benchmark']>[0]): void {
+  private warnExecution(request: FlowBenchmarkRequest): void {
     if (this.jsonEnabled() || request.dryRun) {
       return;
     }

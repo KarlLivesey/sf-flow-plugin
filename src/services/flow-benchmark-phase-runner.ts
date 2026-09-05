@@ -8,7 +8,12 @@ import { setImmediate as yieldToEventLoop } from 'node:timers/promises';
 
 import type { JsonObject } from '../types/flow-analysis.js';
 import { flowBenchmarkFailed } from '../errors/flow-errors.js';
-import type { FlowBenchmarkGateway, FlowBenchmarkPhase, FlowBenchmarkRequest } from '../types/flow-benchmark.js';
+import type {
+  FlowBenchmarkControl,
+  FlowBenchmarkGateway,
+  FlowBenchmarkPhase,
+  FlowBenchmarkRequest,
+} from '../types/flow-benchmark.js';
 import { FlowBenchmarkExecutionError } from '../utils/flow-benchmark-error.js';
 import type { FlowBenchmarkRawLogWriter } from '../utils/flow-benchmark-files.js';
 import {
@@ -30,6 +35,7 @@ export interface FlowBenchmarkPhaseResult {
 }
 
 export interface FlowBenchmarkPhaseRunnerContext {
+  control?: FlowBenchmarkControl;
   benchmark: FlowBenchmarkGateway;
   prepared: PreparedDebug;
   request: FlowBenchmarkRequest;
@@ -107,6 +113,9 @@ export class FlowBenchmarkPhaseRunner {
   }
 
   private claim(): PlannedBenchmarkSample | null {
+    if (this.context.control?.signal?.aborted === true) {
+      this.stopped = true;
+    }
     if (this.stopped || this.nextIndex >= this.context.count) {
       return null;
     }
@@ -172,7 +181,11 @@ export class FlowBenchmarkPhaseRunner {
     if (completed.stopScheduling || (!completed.sample.successful && !this.context.request.continueOnError)) {
       this.stopped = true;
     }
-    this.completed.push(await this.retainRawLog(completed));
+    await this.context.control?.onSample?.(completed.sample);
+    const retained = await this.retainRawLog(completed);
+    if (this.context.control?.retainSamples !== false) {
+      this.completed.push(retained);
+    }
   }
 
   private async runWorker(): Promise<void> {
