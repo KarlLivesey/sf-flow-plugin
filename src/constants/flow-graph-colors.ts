@@ -1,0 +1,78 @@
+/*
+ * Copyright (c) 2026, Karl Livesey.
+ * All rights reserved.
+ * Licensed under the BSD 3-Clause license.
+ * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
+export const FLOW_GRAPH_NAMED_COLORS = {
+  aliceblue: '#F0F8FF',
+  amber: '#B45309',
+  aqua: '#00FFFF',
+  aquamarine: '#7FFFD4',
+  azure: '#F0FFFF',
+  beige: '#F5F5DC',
+  bisque: '#FFE4C4',
+  black: '#000000',
+  blue: '#0000FF',
+  brown: '#A52A2A',
+  chocolate: '#D2691E',
+  coral: '#FF7F50',
+  cornflowerblue: '#6495ED',
+  crimson: '#DC143C',
+  cyan: '#00FFFF',
+  darkblue: '#00008B',
+  darkcyan: '#008B8B',
+  darkgreen: '#006400',
+  darkgrey: '#A9A9A9',
+  darkorange: '#FF8C00',
+  darkred: '#8B0000',
+  deeppink: '#FF1493',
+  deepskyblue: '#00BFFF',
+  emerald: '#047857',
+  fuchsia: '#FF00FF',
+  gold: '#FFD700',
+  goldenrod: '#DAA520',
+  gray: '#808080',
+  green: '#008000',
+  grey: '#808080',
+  hotpink: '#FF69B4',
+  indigo: '#4B0082',
+  ivory: '#FFFFF0',
+  khaki: '#F0E68C',
+  lavender: '#E6E6FA',
+  lime: '#00FF00',
+  magenta: '#FF00FF',
+  maroon: '#800000',
+  navy: '#000080',
+  olive: '#808000',
+  orange: '#FFA500',
+  orchid: '#DA70D6',
+  pink: '#FFC0CB',
+  plum: '#DDA0DD',
+  purple: '#800080',
+  red: '#FF0000',
+  rose: '#E11D48',
+  salmon: '#FA8072',
+  seagreen: '#2E8B57',
+  silver: '#C0C0C0',
+  sky: '#0284C7',
+  skyblue: '#87CEEB',
+  slate: '#475569',
+  slateblue: '#6A5ACD',
+  slategray: '#708090',
+  slategrey: '#708090',
+  tan: '#D2B48C',
+  teal: '#008080',
+  tomato: '#FF6347',
+  turquoise: '#40E0D0',
+  violet: '#EE82EE',
+  white: '#FFFFFF',
+  yellow: '#FFFF00',
+  yellowgreen: '#9ACD32',
+} as const;
+
+export const FLOW_GRAPH_NAMED_COLOR_NAMES = Object.keys(FLOW_GRAPH_NAMED_COLORS) as Array<
+  keyof typeof FLOW_GRAPH_NAMED_COLORS
+>;
+
+export type FlowGraphNamedColor = keyof typeof FLOW_GRAPH_NAMED_COLORS;

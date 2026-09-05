@@ -1,1 +1,0 @@
-<Flow xmlns="http://soap.sforce.com/2006/04/metadata"><label>Example</label><processType>AutoLaunchedFlow</processType><status>Draft</status><subflows><name>Call</name><flowName>Child</flowName></subflows></Flow>

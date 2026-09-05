@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowExplainResult",
+  "definitions": {
+    "FlowExplainResult": {
+      "type": "object",
+      "properties": {
+        "flow": {
+          "type": "string"
+        },
+        "version": {
+          "type": ["number", "null"]
+        },
+        "element": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "label": {
+          "type": ["string", "null"]
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowMetadataLocation"
+          }
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowMetadataLocation"
+          }
+        },
+        "outgoing": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "target": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "label": {
+                "type": ["string", "null"]
+              }
+            },
+            "required": ["target", "kind", "label"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["flow", "version", "element", "type", "label", "details", "references", "outgoing"],
+      "additionalProperties": false
+    },
+    "FlowMetadataLocation": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "element": {
+          "type": ["string", "null"]
+        },
+        "key": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": ["path", "element", "key", "value"],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,47 @@
+name: NUTs
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    name: dedicated Salesforce test org
+    environment: salesforce-nut
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install exact dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Install Salesforce CLI
+        run: npm install --global @salesforce/cli@2.144.6
+
+      - name: Authenticate the dedicated test org
+        env:
+          SF_NUT_AUTH_URL: ${{ secrets.SF_NUT_AUTH_URL }}
+        run: |
+          if [ -z "$SF_NUT_AUTH_URL" ]; then
+            echo "SF_NUT_AUTH_URL is not configured." >&2
+            exit 1
+          fi
+          printf '%s' "$SF_NUT_AUTH_URL" |
+            sf org login sfdx-url --sfdx-url-stdin --alias sf-flow-plugin-nut
+
+      - name: Run non-production integration tests
+        env:
+          NUT_TARGET_ORG: sf-flow-plugin-nut
+        run: yarn test:nuts

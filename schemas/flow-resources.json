@@ -1,0 +1,94 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowResourcesResult",
+  "definitions": {
+    "FlowResourcesResult": {
+      "type": "object",
+      "properties": {
+        "flow": {
+          "type": "string"
+        },
+        "version": {
+          "type": ["number", "null"]
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowResourceEntry"
+          }
+        }
+      },
+      "required": ["flow", "version", "resources"],
+      "additionalProperties": false
+    },
+    "FlowResourceEntry": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "dataType": {
+          "type": ["string", "null"]
+        },
+        "definition": {
+          "$ref": "#/definitions/JsonObject"
+        },
+        "usedBy": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowMetadataLocation"
+          }
+        }
+      },
+      "required": ["name", "kind", "dataType", "definition", "usedBy"],
+      "additionalProperties": false
+    },
+    "JsonObject": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/JsonValue"
+      }
+    },
+    "JsonValue": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/JsonPrimitive"
+        },
+        {
+          "$ref": "#/definitions/JsonObject"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/JsonValue"
+          }
+        }
+      ]
+    },
+    "JsonPrimitive": {
+      "type": ["boolean", "null", "number", "string"]
+    },
+    "FlowMetadataLocation": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "element": {
+          "type": ["string", "null"]
+        },
+        "key": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": ["path", "element", "key", "value"],
+      "additionalProperties": false
+    }
+  }
+}

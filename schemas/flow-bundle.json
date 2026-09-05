@@ -1,0 +1,244 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowBundleResult",
+  "definitions": {
+    "FlowBundleResult": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "requestedVersion": {
+          "$ref": "#/definitions/FlowComparisonVersionSelector"
+        },
+        "resolvedVersion": {
+          "type": "number"
+        },
+        "subflowVersion": {
+          "$ref": "#/definitions/FlowSubflowVersionSelector"
+        },
+        "maxDepth": {
+          "type": "number"
+        },
+        "exportedStatus": {
+          "type": "string",
+          "enum": ["Active", "Draft"]
+        },
+        "outputDir": {
+          "type": "string"
+        },
+        "overwrite": {
+          "type": "boolean"
+        },
+        "flows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowBundleVersion"
+          }
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowDependency"
+          }
+        },
+        "externalDependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowBundleExternalDependency"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowTraversalWarning"
+          }
+        },
+        "outputFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "targetOrg": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "apiName",
+        "namespace",
+        "requestedVersion",
+        "resolvedVersion",
+        "subflowVersion",
+        "maxDepth",
+        "exportedStatus",
+        "outputDir",
+        "overwrite",
+        "flows",
+        "dependencies",
+        "externalDependencies",
+        "warnings",
+        "outputFiles",
+        "targetOrg"
+      ],
+      "additionalProperties": false
+    },
+    "FlowComparisonVersionSelector": {
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "active"
+        },
+        {
+          "type": "string",
+          "const": "latest"
+        },
+        {
+          "$ref": "#/definitions/FlowVersionNumber"
+        }
+      ]
+    },
+    "FlowVersionNumber": {
+      "type": "number"
+    },
+    "FlowSubflowVersionSelector": {
+      "type": "string",
+      "enum": ["active", "latest"]
+    },
+    "FlowBundleVersion": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "qualifiedName": {
+          "type": "string"
+        },
+        "definitionId": {
+          "type": "string"
+        },
+        "versionId": {
+          "type": "string"
+        },
+        "versionNumber": {
+          "type": "number"
+        },
+        "sourceStatus": {
+          "type": "string"
+        },
+        "exportedStatus": {
+          "type": "string",
+          "enum": ["Active", "Draft"]
+        },
+        "file": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "apiName",
+        "namespace",
+        "qualifiedName",
+        "definitionId",
+        "versionId",
+        "versionNumber",
+        "sourceStatus",
+        "exportedStatus",
+        "file"
+      ],
+      "additionalProperties": false
+    },
+    "FlowDependency": {
+      "type": "object",
+      "properties": {
+        "direction": {
+          "$ref": "#/definitions/FlowDependencyQueryDirection"
+        },
+        "componentId": {
+          "type": ["string", "null"]
+        },
+        "name": {
+          "type": ["string", "null"]
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "type": {
+          "type": ["string", "null"]
+        },
+        "sourceDefinitionId": {
+          "type": "string"
+        },
+        "sourceApiName": {
+          "type": "string"
+        },
+        "sourceNamespace": {
+          "type": ["string", "null"]
+        },
+        "depth": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "componentId",
+        "depth",
+        "direction",
+        "name",
+        "namespace",
+        "sourceApiName",
+        "sourceDefinitionId",
+        "sourceNamespace",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "FlowDependencyQueryDirection": {
+      "type": "string",
+      "enum": ["uses", "used-by"]
+    },
+    "FlowBundleExternalDependency": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": ["name", "namespace", "type"],
+      "additionalProperties": false
+    },
+    "FlowTraversalWarning": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/definitions/FlowTraversalWarningKind"
+        },
+        "flowName": {
+          "type": "string"
+        },
+        "path": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["kind", "flowName", "path"],
+      "additionalProperties": false
+    },
+    "FlowTraversalWarningKind": {
+      "type": "string",
+      "enum": ["depth-limit", "missing-subflow", "subflow-version-fallback", "missing-subflow-version"]
+    }
+  }
+}
