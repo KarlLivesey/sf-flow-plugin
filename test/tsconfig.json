@@ -1,0 +1,18 @@
+{
+  "extends": "@salesforce/dev-config/tsconfig-test-strict-esm",
+  "include": ["./**/*.ts"],
+  "compilerOptions": {
+    "skipLibCheck": true,
+    "strict": true,
+    "noImplicitReturns": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "useUnknownInCatchVariables": true,
+    "forceConsistentCasingInFileNames": true,
+    "verbatimModuleSyntax": true
+  }
+}

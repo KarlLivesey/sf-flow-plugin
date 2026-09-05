@@ -1,0 +1,27 @@
+name: Verify Dependabot alert access
+
+on:
+  push:
+    branches:
+      - 'release/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read alerts without exposing their contents
+        env:
+          GH_TOKEN: ${{ secrets.DEPENDABOT_ALERTS_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo '::error::DEPENDABOT_ALERTS_TOKEN is not configured.'
+            exit 1
+          fi
+          gh api "/repos/${REPOSITORY}/dependabot/alerts?per_page=1" --silent
+          echo 'Dependabot alerts read access verified.'

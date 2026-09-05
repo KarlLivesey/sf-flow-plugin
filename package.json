@@ -1,0 +1,258 @@
+{
+  "name": "sf-flow-plugin",
+  "description": "Salesforce CLI commands for managing Flow versions",
+  "version": "1.6.0",
+  "dependencies": {
+    "@js-temporal/polyfill": "^0.5.1",
+    "@oclif/core": "^4",
+    "@salesforce/core": "^8.2.7",
+    "@salesforce/sf-plugins-core": "^12",
+    "filelist": "1.0.6",
+    "xml2js": "^0.6.2",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@oclif/plugin-command-snapshot": "^5.4.0",
+    "@salesforce/cli-plugins-testkit": "^5.3.66",
+    "@salesforce/dev-scripts": "^11.0.4",
+    "@salesforce/plugin-command-reference": "^3.1.132",
+    "@types/node": "~22.20.1",
+    "@types/xml2js": "^0.4.14",
+    "c8": "^10.1.3",
+    "eslint-plugin-sf-plugin": "^1.18.8",
+    "oclif": "^4.24.0",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.9.3"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "packageManager": "yarn@1.22.22",
+  "files": [
+    "/lib",
+    "/messages",
+    "/oclif.manifest.json",
+    "/oclif.lock",
+    "/schemas"
+  ],
+  "keywords": [
+    "force",
+    "salesforce",
+    "salesforcedx",
+    "sf",
+    "sf-plugin",
+    "sfdx",
+    "sfdx-plugin"
+  ],
+  "license": "BSD-3-Clause",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KarlLivesey/sf-flow-plugin.git"
+  },
+  "homepage": "https://github.com/KarlLivesey/sf-flow-plugin#readme",
+  "bugs": {
+    "url": "https://github.com/KarlLivesey/sf-flow-plugin/issues"
+  },
+  "oclif": {
+    "commands": "./lib/commands",
+    "bin": "sf",
+    "topicSeparator": " ",
+    "devPlugins": [
+      "@oclif/plugin-help",
+      "@oclif/plugin-command-snapshot",
+      "@salesforce/plugin-command-reference"
+    ],
+    "topics": {
+      "flow": {
+        "description": "Manage Salesforce Flow versions."
+      }
+    },
+    "flexibleTaxonomy": true
+  },
+  "scripts": {
+    "build": "wireit",
+    "check": "wireit",
+    "clean": "sf-clean",
+    "clean-all": "sf-clean all",
+    "compile": "wireit",
+    "docs": "sf-docs",
+    "format": "wireit",
+    "format:check": "wireit",
+    "link-check": "wireit",
+    "lint": "wireit",
+    "lint:fix": "eslint src test --fix --max-warnings 0",
+    "postpack": "sf-clean --ignore-signing-artifacts",
+    "prepack": "sf-clean && WIREIT_CACHE=none sf-prepack",
+    "prepare": "husky install",
+    "test": "wireit",
+    "test:command-reference": "wireit",
+    "test:coverage": "wireit",
+    "test:deprecation-policy": "wireit",
+    "test:json-schema": "wireit",
+    "test:nuts": "yarn build && nyc mocha \"test/**/*.nut.ts\" --slow 4500 --timeout 600000 --parallel",
+    "test:only": "wireit",
+    "test:unit": "wireit",
+    "typecheck": "wireit",
+    "version": "oclif readme"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "wireit": {
+    "build": {
+      "dependencies": [
+        "compile",
+        "lint"
+      ]
+    },
+    "check": {
+      "dependencies": [
+        "format:check",
+        "build",
+        "typecheck",
+        "test:coverage",
+        "test:command-reference",
+        "test:deprecation-policy",
+        "test:json-schema"
+      ]
+    },
+    "compile": {
+      "command": "tsc -p . --pretty",
+      "files": [
+        "src/**/*.ts",
+        "**/tsconfig.json",
+        "messages/**"
+      ],
+      "output": [
+        "lib/**"
+      ],
+      "clean": "if-file-deleted"
+    },
+    "format": {
+      "command": "prettier --write . --ignore-unknown --ignore-path .gitignore",
+      "files": [
+        "**/*.{cjs,js,json,md,ts,yml,yaml}",
+        ".prettier*",
+        "!coverage/**",
+        "!lib/**",
+        "!node_modules/**"
+      ],
+      "output": []
+    },
+    "format:check": {
+      "command": "prettier --check . --ignore-unknown --ignore-path .gitignore",
+      "files": [
+        "**/*.{cjs,js,json,md,ts,yml,yaml}",
+        ".prettier*",
+        "!coverage/**",
+        "!lib/**",
+        "!node_modules/**"
+      ],
+      "output": []
+    },
+    "lint": {
+      "command": "eslint src test --color --cache --cache-location .eslintcache --max-warnings 0",
+      "files": [
+        "src/**/*.ts",
+        "test/**/*.ts",
+        "messages/**",
+        "**/.eslint*",
+        "**/tsconfig.json"
+      ],
+      "output": []
+    },
+    "test:compile": {
+      "command": "tsc -p \"./test\" --pretty",
+      "files": [
+        "test/**/*.ts",
+        "**/tsconfig.json"
+      ],
+      "output": []
+    },
+    "test": {
+      "dependencies": [
+        "test:compile",
+        "test:only",
+        "test:command-reference",
+        "test:deprecation-policy",
+        "test:json-schema",
+        "lint"
+      ]
+    },
+    "test:coverage": {
+      "dependencies": [
+        "test:only"
+      ]
+    },
+    "test:only": {
+      "command": "c8 --all --include \"src/**/*.ts\" --exclude \"src/index.ts\" --check-coverage --lines 50 --statements 50 --functions 50 --branches 50 mocha \"test/**/*.test.ts\"",
+      "env": {
+        "FORCE_COLOR": "2"
+      },
+      "files": [
+        "test/**/*.ts",
+        "src/**/*.ts",
+        "**/tsconfig.json",
+        ".mocha*",
+        "!*.nut.ts",
+        ".nycrc"
+      ],
+      "output": []
+    },
+    "test:unit": {
+      "dependencies": [
+        "test:only"
+      ]
+    },
+    "typecheck": {
+      "command": "tsc -p . --noEmit --pretty && tsc -p test --noEmit --pretty",
+      "files": [
+        "src/**/*.ts",
+        "test/**/*.ts",
+        "**/tsconfig.json"
+      ],
+      "output": []
+    },
+    "test:command-reference": {
+      "command": "node --loader ts-node/esm --no-warnings=ExperimentalWarning \"./bin/dev.js\" commandreference:generate --error-on-warnings",
+      "files": [
+        "src/**/*.ts",
+        "messages/**",
+        "package.json"
+      ],
+      "output": [
+        "tmp/root"
+      ]
+    },
+    "test:deprecation-policy": {
+      "command": "node --loader ts-node/esm --no-warnings=ExperimentalWarning \"./bin/dev.js\" snapshot:compare",
+      "files": [
+        "src/**/*.ts"
+      ],
+      "output": [],
+      "dependencies": [
+        "compile"
+      ]
+    },
+    "test:json-schema": {
+      "command": "node --loader ts-node/esm --no-warnings=ExperimentalWarning \"./bin/dev.js\" schema:compare",
+      "files": [
+        "src/**/*.ts",
+        "schemas"
+      ],
+      "output": []
+    },
+    "link-check": {
+      "command": "node -e \"process.exit(process.env.CI ? 0 : 1)\" || linkinator \"**/*.md\" --skip \"CHANGELOG.md|node_modules|test/|confluence.internal.salesforce.com|my.salesforce.com|localhost|%s\" --markdown --retry --directory-listing --verbosity error",
+      "files": [
+        "./*.md",
+        "./!(CHANGELOG).md",
+        "messages/**/*.md"
+      ],
+      "output": []
+    }
+  },
+  "exports": "./lib/index.js",
+  "type": "module",
+  "author": "klivesey"
+}

@@ -1,0 +1,216 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowCompareResult",
+  "definitions": {
+    "FlowCompareResult": {
+      "type": "object",
+      "properties": {
+        "interfaceOnly": {
+          "type": "boolean"
+        },
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "definitionId": {
+          "type": ["string", "null"]
+        },
+        "fromDefinitionId": {
+          "type": ["string", "null"]
+        },
+        "toDefinitionId": {
+          "type": ["string", "null"]
+        },
+        "requestedFrom": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowComparisonVersionSelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requestedTo": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowComparisonVersionSelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowComparisonScope"
+          }
+        },
+        "ignoreOrder": {
+          "type": "boolean"
+        },
+        "ignorePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "fromVersion": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowVersionNumber"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "toVersion": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowVersionNumber"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fromSourceFile": {
+          "type": ["string", "null"]
+        },
+        "toSourceFile": {
+          "type": ["string", "null"]
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowComparisonChange"
+          }
+        },
+        "added": {
+          "type": "number"
+        },
+        "removed": {
+          "type": "number"
+        },
+        "changed": {
+          "type": "number"
+        },
+        "different": {
+          "type": "boolean"
+        },
+        "targetOrg": {
+          "type": ["string", "null"]
+        },
+        "fromOrg": {
+          "type": ["string", "null"]
+        },
+        "toOrg": {
+          "type": ["string", "null"]
+        },
+        "crossOrg": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "apiName",
+        "namespace",
+        "definitionId",
+        "fromDefinitionId",
+        "toDefinitionId",
+        "requestedFrom",
+        "requestedTo",
+        "scopes",
+        "ignoreOrder",
+        "ignorePaths",
+        "fromVersion",
+        "toVersion",
+        "fromSourceFile",
+        "toSourceFile",
+        "changes",
+        "added",
+        "removed",
+        "changed",
+        "different",
+        "targetOrg",
+        "fromOrg",
+        "toOrg",
+        "crossOrg"
+      ],
+      "additionalProperties": false
+    },
+    "FlowComparisonVersionSelector": {
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "active"
+        },
+        {
+          "type": "string",
+          "const": "latest"
+        },
+        {
+          "$ref": "#/definitions/FlowVersionNumber"
+        }
+      ]
+    },
+    "FlowVersionNumber": {
+      "type": "number"
+    },
+    "FlowComparisonScope": {
+      "type": "string",
+      "enum": ["metadata", "elements", "resources", "connectors"]
+    },
+    "FlowComparisonChange": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/definitions/FlowComparisonChangeKind"
+        },
+        "path": {
+          "type": "string"
+        },
+        "before": {
+          "$ref": "#/definitions/JsonValue"
+        },
+        "after": {
+          "$ref": "#/definitions/JsonValue"
+        }
+      },
+      "required": ["kind", "path"],
+      "additionalProperties": false
+    },
+    "FlowComparisonChangeKind": {
+      "type": "string",
+      "enum": ["added", "removed", "changed"]
+    },
+    "JsonValue": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/JsonPrimitive"
+        },
+        {
+          "$ref": "#/definitions/JsonObject"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/JsonValue"
+          }
+        }
+      ]
+    },
+    "JsonPrimitive": {
+      "type": ["boolean", "null", "number", "string"]
+    },
+    "JsonObject": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/JsonValue"
+      }
+    }
+  }
+}

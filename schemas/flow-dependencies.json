@@ -1,0 +1,155 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowDependenciesResult",
+  "definitions": {
+    "FlowDependenciesResult": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "definitionId": {
+          "type": "string"
+        },
+        "direction": {
+          "$ref": "#/definitions/FlowDependencyDirection"
+        },
+        "recursive": {
+          "type": "boolean"
+        },
+        "maxDepth": {
+          "type": "number"
+        },
+        "types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "excludeTypes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "definitionsScanned": {
+          "type": "number"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowDependency"
+          }
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "truncations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowDependencyTruncation"
+          }
+        },
+        "targetOrg": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "apiName",
+        "namespace",
+        "definitionId",
+        "direction",
+        "recursive",
+        "maxDepth",
+        "types",
+        "excludeTypes",
+        "definitionsScanned",
+        "dependencies",
+        "truncated",
+        "truncations",
+        "targetOrg"
+      ],
+      "additionalProperties": false
+    },
+    "FlowDependencyDirection": {
+      "type": "string",
+      "enum": ["uses", "used-by", "both"]
+    },
+    "FlowDependency": {
+      "type": "object",
+      "properties": {
+        "direction": {
+          "$ref": "#/definitions/FlowDependencyQueryDirection"
+        },
+        "componentId": {
+          "type": ["string", "null"]
+        },
+        "name": {
+          "type": ["string", "null"]
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "type": {
+          "type": ["string", "null"]
+        },
+        "sourceDefinitionId": {
+          "type": "string"
+        },
+        "sourceApiName": {
+          "type": "string"
+        },
+        "sourceNamespace": {
+          "type": ["string", "null"]
+        },
+        "depth": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "componentId",
+        "depth",
+        "direction",
+        "name",
+        "namespace",
+        "sourceApiName",
+        "sourceDefinitionId",
+        "sourceNamespace",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "FlowDependencyQueryDirection": {
+      "type": "string",
+      "enum": ["uses", "used-by"]
+    },
+    "FlowDependencyTruncation": {
+      "type": "object",
+      "properties": {
+        "definitionId": {
+          "type": "string"
+        },
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "direction": {
+          "$ref": "#/definitions/FlowDependencyQueryDirection"
+        },
+        "depth": {
+          "type": "number"
+        },
+        "limit": {
+          "type": "number"
+        }
+      },
+      "required": ["definitionId", "apiName", "namespace", "direction", "depth", "limit"],
+      "additionalProperties": false
+    }
+  }
+}

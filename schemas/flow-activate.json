@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowActivationResult",
+  "definitions": {
+    "FlowActivationResult": {
+      "type": "object",
+      "properties": {
+        "apiName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "definitionId": {
+          "type": "string"
+        },
+        "requestedVersion": {
+          "$ref": "#/definitions/FlowVersionSelector"
+        },
+        "resolvedVersion": {
+          "$ref": "#/definitions/FlowVersionNumber"
+        },
+        "previousActiveVersion": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowVersionNumber"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "activeVersion": {
+          "$ref": "#/definitions/FlowVersionNumber"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "targetOrg": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "apiName",
+        "namespace",
+        "definitionId",
+        "requestedVersion",
+        "resolvedVersion",
+        "previousActiveVersion",
+        "activeVersion",
+        "changed",
+        "dryRun",
+        "targetOrg"
+      ],
+      "additionalProperties": false
+    },
+    "FlowVersionSelector": {
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "latest"
+        },
+        {
+          "$ref": "#/definitions/FlowVersionNumber"
+        }
+      ]
+    },
+    "FlowVersionNumber": {
+      "type": "number"
+    }
+  }
+}

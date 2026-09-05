@@ -1,0 +1,145 @@
+/*
+ * Copyright (c) 2026, Karl Livesey.
+ * All rights reserved.
+ * Licensed under the BSD 3-Clause license.
+ * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
+import { Messages } from '@salesforce/core';
+import type { Spinner } from '@salesforce/sf-plugins-core';
+
+Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
+const messages = Messages.loadMessages('sf-flow-plugin', 'flow.progress');
+
+export type FlowProgressAction =
+  | 'search'
+  | 'resources'
+  | 'explain'
+  | 'snapshot'
+  | 'drift'
+  | 'activate'
+  | 'audit'
+  | 'benchmark'
+  | 'bundle'
+  | 'compare'
+  | 'check'
+  | 'deactivate'
+  | 'delete-version'
+  | 'dependencies'
+  | 'describe'
+  | 'export'
+  | 'graph'
+  | 'lint'
+  | 'list'
+  | 'metrics'
+  | 'prune'
+  | 'run'
+  | 'versions';
+
+export type FlowProgressStage =
+  | 'resolving-flow'
+  | 'loading-flows'
+  | 'loading-versions'
+  | 'loading-metadata'
+  | 'loading-source'
+  | 'running-code-analyzer'
+  | 'checking-permissions'
+  | 'checking-current-state'
+  | 'applying-change'
+  | 'deleting-versions'
+  | 'verifying-change'
+  | 'writing-files'
+  | 'loading-dependencies'
+  | 'loading-data-cloud-metrics'
+  | 'analysing-results'
+  | 'comparing-metadata'
+  | 'rendering-graph'
+  | 'validating-inputs'
+  | 'checking-org'
+  | 'invoking-flow'
+  | 'configuring-debug';
+
+export type FlowProgressReporter = (stage: FlowProgressStage, detail?: string) => void;
+
+export const noFlowProgress: FlowProgressReporter = () => undefined;
+
+const actionMessages: Record<FlowProgressAction, string> = {
+  search: messages.getMessage('actions.search'),
+  resources: messages.getMessage('actions.resources'),
+  explain: messages.getMessage('actions.explain'),
+  snapshot: messages.getMessage('actions.snapshot'),
+  drift: messages.getMessage('actions.drift'),
+  activate: messages.getMessage('actions.activate'),
+  audit: messages.getMessage('actions.audit'),
+  benchmark: messages.getMessage('actions.benchmark'),
+  bundle: messages.getMessage('actions.bundle'),
+  compare: messages.getMessage('actions.compare'),
+  check: messages.getMessage('actions.check'),
+  deactivate: messages.getMessage('actions.deactivate'),
+  'delete-version': messages.getMessage('actions.delete-version'),
+  dependencies: messages.getMessage('actions.dependencies'),
+  describe: messages.getMessage('actions.describe'),
+  export: messages.getMessage('actions.export'),
+  graph: messages.getMessage('actions.graph'),
+  lint: messages.getMessage('actions.lint'),
+  list: messages.getMessage('actions.list'),
+  metrics: messages.getMessage('actions.metrics'),
+  prune: messages.getMessage('actions.prune'),
+  run: messages.getMessage('actions.run'),
+  versions: messages.getMessage('actions.versions'),
+};
+
+const stageMessages: Record<FlowProgressStage, string> = {
+  'analysing-results': messages.getMessage('stages.analysing-results'),
+  'applying-change': messages.getMessage('stages.applying-change'),
+  'checking-permissions': messages.getMessage('stages.checking-permissions'),
+  'checking-current-state': messages.getMessage('stages.checking-current-state'),
+  'comparing-metadata': messages.getMessage('stages.comparing-metadata'),
+  'deleting-versions': messages.getMessage('stages.deleting-versions'),
+  'loading-dependencies': messages.getMessage('stages.loading-dependencies'),
+  'loading-data-cloud-metrics': messages.getMessage('stages.loading-data-cloud-metrics'),
+  'loading-flows': messages.getMessage('stages.loading-flows'),
+  'loading-metadata': messages.getMessage('stages.loading-metadata'),
+  'loading-source': messages.getMessage('stages.loading-source'),
+  'running-code-analyzer': messages.getMessage('stages.running-code-analyzer'),
+  'loading-versions': messages.getMessage('stages.loading-versions'),
+  'rendering-graph': messages.getMessage('stages.rendering-graph'),
+  'resolving-flow': messages.getMessage('stages.resolving-flow'),
+  'verifying-change': messages.getMessage('stages.verifying-change'),
+  'writing-files': messages.getMessage('stages.writing-files'),
+  'validating-inputs': messages.getMessage('stages.validating-inputs'),
+  'checking-org': messages.getMessage('stages.checking-org'),
+  'invoking-flow': messages.getMessage('stages.invoking-flow'),
+  'configuring-debug': messages.getMessage('stages.configuring-debug'),
+};
+
+interface FlowProgressWork<Result> {
+  stage: FlowProgressStage;
+  detail: string;
+  operation: () => Promise<Result>;
+}
+
+export async function withFlowProgressStage<Result>(
+  progress: FlowProgressReporter,
+  work: FlowProgressWork<Result>
+): Promise<Result> {
+  progress(work.stage, work.detail);
+  return work.operation();
+}
+
+export async function withFlowProgress<Result>(
+  spinner: Spinner,
+  action: FlowProgressAction,
+  operation: (progress: FlowProgressReporter) => Promise<Result>
+): Promise<Result> {
+  spinner.start(actionMessages[action]);
+  const output = spinner;
+  const progress: FlowProgressReporter = (stage, detail) => {
+    const message = stageMessages[stage];
+    output.status = detail === undefined ? message : `${message}: ${detail}`;
+  };
+  try {
+    return await operation(progress);
+  } finally {
+    spinner.stop();
+  }
+}

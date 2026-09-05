@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowDriftResult",
+  "definitions": {
+    "FlowDriftResult": {
+      "type": "object",
+      "properties": {
+        "snapshotOrg": {
+          "type": "string"
+        },
+        "targetOrg": {
+          "type": "string"
+        },
+        "different": {
+          "type": "boolean"
+        },
+        "flows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "flow": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["added", "missing", "changed", "unchanged"]
+              },
+              "changes": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/FlowComparisonChange"
+                }
+              }
+            },
+            "required": ["flow", "kind", "changes"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["snapshotOrg", "targetOrg", "different", "flows"],
+      "additionalProperties": false
+    },
+    "FlowComparisonChange": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/definitions/FlowComparisonChangeKind"
+        },
+        "path": {
+          "type": "string"
+        },
+        "before": {
+          "$ref": "#/definitions/JsonValue"
+        },
+        "after": {
+          "$ref": "#/definitions/JsonValue"
+        }
+      },
+      "required": ["kind", "path"],
+      "additionalProperties": false
+    },
+    "FlowComparisonChangeKind": {
+      "type": "string",
+      "enum": ["added", "removed", "changed"]
+    },
+    "JsonValue": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/JsonPrimitive"
+        },
+        {
+          "$ref": "#/definitions/JsonObject"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/JsonValue"
+          }
+        }
+      ]
+    },
+    "JsonPrimitive": {
+      "type": ["boolean", "null", "number", "string"]
+    },
+    "JsonObject": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/JsonValue"
+      }
+    }
+  }
+}
