@@ -14,6 +14,8 @@ jobs:
   quality:
     name: quality
     runs-on: ubuntu-latest
+    outputs:
+      markdown_only: ${{ steps.changes.outputs.markdown_only }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
@@ -76,6 +78,49 @@ jobs:
         if: steps.changes.outputs.markdown_only != 'true'
         run: yarn run check
 
-      - name: Verify package preparation
+      - name: Test release automation logic
         if: steps.changes.outputs.markdown_only != 'true'
-        run: npm pack --dry-run
+        run: node --test .github/scripts/*.test.mjs
+
+      - name: Pack installable plugin
+        if: steps.changes.outputs.markdown_only != 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/plugin-package"
+          npm pack --pack-destination "$RUNNER_TEMP/plugin-package"
+
+      - name: Upload packed plugin
+        if: steps.changes.outputs.markdown_only != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-package
+          path: ${{ runner.temp }}/plugin-package/*.tgz
+
+  package-smoke:
+    name: package smoke (${{ matrix.os }}, Node ${{ matrix.node }})
+    needs: quality
+    if: needs.quality.outputs.markdown_only != 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            node: '22.19.0'
+          - os: ubuntu-latest
+            node: '24'
+          - os: macos-latest
+            node: '22'
+          - os: windows-latest
+            node: '22'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: plugin-package
+          path: ${{ runner.temp }}/plugin-package
+      - name: Test installed tarball without development dependencies
+        shell: bash
+        run: npm exec -- node .github/scripts/package-smoke.mjs "$RUNNER_TEMP/plugin-package"
