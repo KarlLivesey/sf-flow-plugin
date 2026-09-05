@@ -2,6 +2,16 @@
 
 All notable user-visible changes to this project will be documented in this file.
 
+## 1.6.0 - 2026-09-05
+
+- Use Salesforce Code Analyzer for both org-backed and local Flow linting.
+- Add changed-file CI analysis and qualified, project-wide lint baselines.
+- Add benchmark JSONL streaming, graceful interruption and performance regression comparisons.
+- Correct urgent dependency-release classification and add installed-package cross-platform smoke tests.
+- Add Flow metadata search, resource usage inspection and element explanations.
+- Add interface-only comparisons and graph change highlighting.
+- Add multi-Flow snapshots, read-only drift checks and recursive local-directory graphs.
+
 ## 1.5.11 - 2026-09-03
 
 ### Changed
