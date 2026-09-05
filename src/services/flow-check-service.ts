@@ -21,7 +21,6 @@ import type { FlowMetricsResult } from '../types/flow-metrics.js';
 import {
   dependencyCheckFindings,
   createFlowCheckEntry,
-  flowCheckLintRules,
   selectedFlowChecks,
   traversalCheckFindings,
   versionCheckFindings,
@@ -38,6 +37,8 @@ import { CachingFlowMetadataGateway } from './caching-flow-metadata-gateway.js';
 import { FlowDependenciesService } from './flow-dependencies-service.js';
 import { FlowDescribeService } from './flow-describe-service.js';
 import { FlowLintService } from './flow-lint-service.js';
+import { FlowOrgAnalyzerService } from './flow-org-analyzer-service.js';
+import { SalesforceCodeAnalyzerFlowService } from './salesforce-code-analyzer-flow-service.js';
 import { calculateResolvedFlowMetrics } from './flow-metrics-service.js';
 import { FlowVersionsService } from './flow-versions-service.js';
 
@@ -224,7 +225,6 @@ export class FlowCheckService {
     if (!hasCheck(checks, 'lint') && !hasCheck(checks, 'subflows')) {
       return [];
     }
-    const selection = flowCheckLintRules(checks);
     const requestLimiter = new AsyncTaskLimiter(FLOW_LINT_CONCURRENCY);
     const lintTargets: Array<{ apiName: string; namespace: string | null; versionNumber: number }> =
       flows.length === 0
@@ -234,18 +234,33 @@ export class FlowCheckService {
             namespace: flow.namespace,
             versionNumber: requireOrgVersion(flow.versionNumber, flow.apiName),
           }));
-    return boundedMap(lintTargets, FLOW_LINT_CONCURRENCY, async (flow) =>
-      new FlowLintService(this.gateway, metadataGateway, requestLimiter).lint(
-        {
-          apiName: flow.apiName,
-          targetOrg: request.targetOrg,
-          version: flow.versionNumber,
-          ...selection,
-          ...(flow.namespace === null ? {} : { namespace: flow.namespace }),
-        },
-        progress
-      )
-    );
+    const results = await boundedMap(lintTargets, FLOW_LINT_CONCURRENCY, async (flow) => {
+      const target = {
+        apiName: flow.apiName,
+        targetOrg: request.targetOrg,
+        version: flow.versionNumber,
+        ...(flow.namespace === null ? {} : { namespace: flow.namespace }),
+      };
+      const analyses: FlowLintResult[] = [];
+      if (hasCheck(checks, 'lint')) {
+        analyses.push(
+          await new FlowOrgAnalyzerService(this.gateway, new SalesforceCodeAnalyzerFlowService(), metadataGateway).lint(
+            { ...target, rules: [], excludedRules: [] },
+            progress
+          )
+        );
+      }
+      if (hasCheck(checks, 'subflows')) {
+        analyses.push(
+          await new FlowLintService(this.gateway, metadataGateway, requestLimiter).lint(
+            { ...target, rules: ['inactive-subflow', 'missing-subflow'], excludedRules: [] },
+            progress
+          )
+        );
+      }
+      return analyses;
+    });
+    return results.flat();
   }
 
   private async checkDependencies(context: FlowCheckContext): Promise<FlowCheckFinding[]> {

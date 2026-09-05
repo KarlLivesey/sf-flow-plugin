@@ -9,6 +9,7 @@ import { expect } from 'chai';
 
 import FlowCheck from '../../../src/commands/flow/check.js';
 import { FlowCheckService } from '../../../src/services/flow-check-service.js';
+import { SalesforceCodeAnalyzerFlowService } from '../../../src/services/salesforce-code-analyzer-flow-service.js';
 import type { FlowCheckResult } from '../../../src/types/flow-check.js';
 import { createCommandOrg } from '../../helpers/command-org.js';
 import { commandTestContext as $$, commandUx } from '../../helpers/command-test-context.js';
@@ -30,6 +31,9 @@ const result: FlowCheckResult = {
 };
 
 describe('flow check command', (): void => {
+  beforeEach((): void => {
+    $$.SANDBOX.stub(SalesforceCodeAnalyzerFlowService.prototype, 'isInstalled').resolves(true);
+  });
   it('is CI-safe by default', (): void => {
     expect(FlowCheck.flags['fail-on'].default).to.equal('error');
     expect(FlowCheck.flags['allow-truncated'].default).to.equal(false);
@@ -78,6 +82,9 @@ describe('flow check command', (): void => {
 });
 
 describe('flow check command qualified output', (): void => {
+  beforeEach((): void => {
+    $$.SANDBOX.stub(SalesforceCodeAnalyzerFlowService.prototype, 'isInstalled').resolves(true);
+  });
   it('qualifies Flow names in the interactive findings table', async (): Promise<void> => {
     const flags = {
       'api-name': ['Flow_A'],

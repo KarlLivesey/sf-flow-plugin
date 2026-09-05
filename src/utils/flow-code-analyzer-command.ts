@@ -24,8 +24,7 @@ export async function prepareSalesforceCodeAnalyzer(
     canPrompt: !command.jsonEnabled() && Boolean(process.stdin.isTTY) && Boolean(process.stdout.isTTY),
     confirm: async () =>
       command.confirm({
-        message:
-          'Salesforce Code Analyzer is required for local Flow linting. Install @salesforce/plugin-code-analyzer now',
+        message: 'Salesforce Code Analyzer is required for Flow linting. Install @salesforce/plugin-code-analyzer now',
         defaultAnswer: false,
       }),
   });

@@ -8,7 +8,8 @@ import type { Connection } from '@salesforce/core';
 import { expect } from 'chai';
 
 import FlowLint from '../../../src/commands/flow/lint.js';
-import { FlowLintService } from '../../../src/services/flow-lint-service.js';
+import { FlowOrgAnalyzerService } from '../../../src/services/flow-org-analyzer-service.js';
+import { SalesforceCodeAnalyzerFlowService } from '../../../src/services/salesforce-code-analyzer-flow-service.js';
 import type { FlowLintResult } from '../../../src/types/flow-lint.js';
 import { createCommandOrg } from '../../helpers/command-org.js';
 import { commandTestContext as $$, commandUx } from '../../helpers/command-test-context.js';
@@ -65,6 +66,9 @@ function flags(): {
 }
 
 describe('flow lint command', (): void => {
+  beforeEach((): void => {
+    $$.SANDBOX.stub(SalesforceCodeAnalyzerFlowService.prototype, 'isInstalled').resolves(true);
+  });
   it('defaults to linting the latest Flow version', (): void => {
     expect(FlowLint.flags['flow-version'].default).to.equal('latest');
     expect(FlowLint.flags['target-org'].required).not.to.equal(true);
@@ -72,7 +76,7 @@ describe('flow lint command', (): void => {
 
   it('passes the requested Flow to the lint service', async (): Promise<void> => {
     $$.SANDBOX.stub(FlowLint.prototype, 'parseFlags').resolves(flags());
-    const lint = $$.SANDBOX.stub(FlowLintService.prototype, 'lint').resolves(result);
+    const lint = $$.SANDBOX.stub(FlowOrgAnalyzerService.prototype, 'lint').resolves(result);
     const actual = await FlowLint.run(['--json']);
     expect(lint.firstCall.args[0]).to.deep.equal({
       apiName: 'Root_Flow',
@@ -86,9 +90,12 @@ describe('flow lint command', (): void => {
 });
 
 describe('flow lint command qualified output', (): void => {
+  beforeEach((): void => {
+    $$.SANDBOX.stub(SalesforceCodeAnalyzerFlowService.prototype, 'isInstalled').resolves(true);
+  });
   it('qualifies the clean message', async (): Promise<void> => {
     $$.SANDBOX.stub(FlowLint.prototype, 'parseFlags').resolves(flags());
-    $$.SANDBOX.stub(FlowLintService.prototype, 'lint').resolves({ ...result, namespace: 'managed' });
+    $$.SANDBOX.stub(FlowOrgAnalyzerService.prototype, 'lint').resolves({ ...result, namespace: 'managed' });
     await FlowLint.run([]);
     expect(commandUx.log.firstCall.args[0]).to.contain('managed__Root_Flow v2');
   });
@@ -103,7 +110,7 @@ describe('flow lint command qualified output', (): void => {
       path: null,
     };
     $$.SANDBOX.stub(FlowLint.prototype, 'parseFlags').resolves(flags());
-    $$.SANDBOX.stub(FlowLintService.prototype, 'lint').resolves({
+    $$.SANDBOX.stub(FlowOrgAnalyzerService.prototype, 'lint').resolves({
       ...result,
       namespace: 'managed',
       findings: [finding],

@@ -5,6 +5,8 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import { expect } from 'chai';
+import sinon from 'sinon';
+import { SalesforceCodeAnalyzerFlowService } from '../../src/services/salesforce-code-analyzer-flow-service.js';
 
 import { FlowCheckService } from '../../src/services/flow-check-service.js';
 import type { FlowCheckRequest } from '../../src/types/flow-check.js';
@@ -27,6 +29,12 @@ function request(overrides: Partial<FlowCheckRequest> = {}): FlowCheckRequest {
 }
 
 describe('FlowCheckService', (): void => {
+  beforeEach((): void => {
+    sinon.stub(SalesforceCodeAnalyzerFlowService.prototype, 'analyse').resolves([]);
+  });
+  afterEach((): void => {
+    sinon.restore();
+  });
   it('runs the default read-only checks and reports contracts', async (): Promise<void> => {
     const result = await new FlowCheckService(nestedFlowGateway()).check(request());
     expect(result.checks).to.deep.equal(['lint', 'dependencies', 'subflows', 'versions']);
@@ -55,7 +63,9 @@ describe('FlowCheckService', (): void => {
     expect(blocked.findings[0]?.severity).to.equal('error');
     expect(allowed.findings[0]?.severity).to.equal('warning');
   });
+});
 
+describe('FlowCheckService metadata-free checks', (): void => {
   it('runs version checks without loading Flow metadata', async (): Promise<void> => {
     const gateway = nestedFlowGateway();
     gateway.metadata.clear();
@@ -74,6 +84,12 @@ describe('FlowCheckService', (): void => {
 });
 
 describe('FlowCheckService lint concurrency', (): void => {
+  beforeEach((): void => {
+    sinon.stub(SalesforceCodeAnalyzerFlowService.prototype, 'analyse').resolves([]);
+  });
+  afterEach((): void => {
+    sinon.restore();
+  });
   it('bounds referenced-subflow definition lookups across Flow linting', async (): Promise<void> => {
     const gateway = nestedFlowGateway();
     gateway.metadata.set('301000000000000001', {
@@ -103,6 +119,12 @@ describe('FlowCheckService lint concurrency', (): void => {
 });
 
 describe('FlowCheckService query selection', (): void => {
+  beforeEach((): void => {
+    sinon.stub(SalesforceCodeAnalyzerFlowService.prototype, 'analyse').resolves([]);
+  });
+  afterEach((): void => {
+    sinon.restore();
+  });
   it('does not query referenced subflows when only lint is selected', async (): Promise<void> => {
     const gateway = nestedFlowGateway();
     const result = await new FlowCheckService(gateway).check(request({ checks: ['lint'], recursive: true }));

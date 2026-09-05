@@ -10,7 +10,7 @@ import type { FlowExportStatus } from '../types/flow-inspection.js';
 const XML_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_.-]*$/u;
 const INDENT = '    ';
 
-function escapeXml(value: string): string {
+export function escapeXml(value: string): string {
   return value
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')

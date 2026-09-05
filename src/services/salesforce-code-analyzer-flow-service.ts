@@ -104,6 +104,7 @@ class SfCodeAnalyzerProcessRunner implements CodeAnalyzerProcessRunner {
 
 export interface FlowCodeAnalyzerRequest {
   sourceFile: string;
+  targets?: string[];
   rules: string[];
   excludedRules: string[];
 }
@@ -121,8 +122,7 @@ function analyzerArguments(request: FlowCodeAnalyzerRequest, outputFile: string)
     ...analyzerRuleSelectors(request.rules).flatMap((rule) => ['--rule-selector', rule]),
     '--workspace',
     request.sourceFile,
-    '--target',
-    request.sourceFile,
+    ...(request.targets ?? [request.sourceFile]).flatMap((target) => ['--target', target]),
     '--output-file',
     outputFile,
   ];

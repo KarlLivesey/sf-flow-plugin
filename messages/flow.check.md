@@ -8,7 +8,9 @@ Run static lint, subflow, dependency and version checks for one or more Flows. M
 one structured result suitable for local review or CI and fails on errors by default. Local `--source-file` mode
 supports Salesforce Code Analyzer Flow Scanner lint and structural metrics. `--source-dir` recursively discovers
 local Flow files and also supports subflow resolution; `--recursive` follows those references breadth-first up to
-`--max-depth`. Checks that require org state are rejected.
+`--max-depth`. Checks that require org state are rejected. Static lint uses Salesforce Code Analyzer for both org
+and local modes. Subflow existence/activation checks do not require the analyser. Directory mode supports
+`--changed-since REF` and `--include-callers`; unchanged files remain available to resolve subflows.
 
 # flags.api-name.summary
 

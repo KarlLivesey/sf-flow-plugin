@@ -10,27 +10,44 @@ import type { FlowProgressReporter } from '../utils/flow-progress.js';
 import { checkFlowSourceDirectory, lintFlowSourceDirectory } from './flow-source-analysis-service.js';
 import { loadFlowSourceDirectory, verifyFlowSourceDirectory } from './flow-source-directory-service.js';
 import type { SalesforceCodeAnalyzerFlowService } from './salesforce-code-analyzer-flow-service.js';
+import { changedFlowSources } from './flow-changed-sources.js';
 
 interface DirectoryAnalyzerRequest {
+  prepareAnalyzer?: () => Promise<void>;
+  changedSince?: string;
+  includeCallers?: boolean;
   sourceDirectory: string;
   rules: string[];
   excludedRules: string[];
-  analyzer: SalesforceCodeAnalyzerFlowService;
+  analyzer: Pick<SalesforceCodeAnalyzerFlowService, 'analyse'>;
   progress: FlowProgressReporter;
+}
+
+async function prepareAnalysis(request: DirectoryAnalyzerRequest, count: number): Promise<void> {
+  if (count === 0) {
+    return;
+  }
+  await request.prepareAnalyzer?.();
+  request.progress('running-code-analyzer', `${request.sourceDirectory} (${count} selected Flows)`);
 }
 
 export async function lintSourceDirectory(request: DirectoryAnalyzerRequest): Promise<FlowLintDirectoryResult> {
   const { sourceDirectory, rules, excludedRules, analyzer, progress } = request;
   progress('loading-source', sourceDirectory);
   const directory = await loadFlowSourceDirectory(sourceDirectory);
-  progress('running-code-analyzer', directory.directory);
-  const findings = await analyzer.analyse({
-    sourceFile: directory.directory,
-    rules,
-    excludedRules,
-  });
+  const sources = await changedFlowSources(directory, request);
+  await prepareAnalysis(request, sources.length);
+  const findings =
+    sources.length === 0
+      ? []
+      : await analyzer.analyse({
+          sourceFile: directory.directory,
+          targets: sources.map((source) => source.sourceFile),
+          rules,
+          excludedRules,
+        });
   await verifyFlowSourceDirectory(directory);
-  return lintFlowSourceDirectory(directory, findings, progress);
+  return lintFlowSourceDirectory({ ...directory, sources }, findings, progress);
 }
 
 interface DirectoryCheckRequest extends DirectoryAnalyzerRequest {
@@ -44,14 +61,21 @@ export async function checkSourceDirectory(request: DirectoryCheckRequest): Prom
   const { sourceDirectory, checks, excludedChecks, recursive, maxDepth, analyzer, progress } = request;
   progress('loading-source', sourceDirectory);
   const directory = await loadFlowSourceDirectory(sourceDirectory);
-  const lintFindings = checks.includes('lint')
-    ? (progress('running-code-analyzer', directory.directory),
-      await analyzer.analyse({ sourceFile: directory.directory, rules: [], excludedRules: [] }))
-    : [];
+  const roots = await changedFlowSources(directory, request);
+  await prepareAnalysis(request, checks.includes('lint') ? roots.length : 0);
+  const lintFindings =
+    checks.includes('lint') && roots.length > 0
+      ? await analyzer.analyse({
+          sourceFile: directory.directory,
+          targets: roots.map((source) => source.sourceFile),
+          rules: [],
+          excludedRules: [],
+        })
+      : [];
   await verifyFlowSourceDirectory(directory);
   return checkFlowSourceDirectory(
     directory,
-    { checks, excluded: excludedChecks, lintFindings, recursive, maxDepth },
+    { checks, excluded: excludedChecks, lintFindings, recursive, maxDepth, roots },
     progress
   );
 }
