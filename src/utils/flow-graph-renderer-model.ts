@@ -21,6 +21,7 @@ import type {
   FlowSubflowSummary,
   FlowVariableSummary,
 } from '../types/flow-inspection.js';
+import { qualifiedFlowName } from './flow-state.js';
 
 export interface FlowGraphRenderOptions {
   highlights?: FlowGraphHighlight[];
@@ -253,10 +254,13 @@ export function formulaLabel(formula: FlowFormulaSummary): string {
   return `Formula: ${formula.name} = ${formula.expression}`;
 }
 
-export function calledFlow(flows: ReadonlyArray<RenderFlow>, subflow: FlowSubflowSummary): RenderFlow | undefined {
-  return flows.find(
-    (flow) =>
-      flow.description.qualifiedName === subflow.flowName ||
-      (!subflow.flowName.includes('__') && flow.description.apiName === subflow.flowName)
-  );
+export function calledFlow(
+  flows: ReadonlyArray<RenderFlow>,
+  subflow: FlowSubflowSummary,
+  callerNamespace: string | null
+): RenderFlow | undefined {
+  const identity = subflow.flowName.includes('__')
+    ? subflow.flowName
+    : qualifiedFlowName(subflow.flowName, callerNamespace);
+  return flows.find((flow) => flow.description.qualifiedName === identity);
 }
