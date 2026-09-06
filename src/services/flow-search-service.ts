@@ -9,6 +9,24 @@ import { flowInspectionFailed } from '../errors/flow-errors.js';
 import { metadataLocations } from '../utils/flow-metadata-locations.js';
 
 export type FlowSearchKind = 'text' | 'object' | 'field' | 'apex' | 'subflow';
+const FIELD_PROPERTIES = new Set([
+  'field',
+  'queriedFields',
+  'sortField',
+  'recordField',
+  'displayField',
+  'picklistField',
+  'valueField',
+  'fieldReference',
+  'elementReference',
+  'leftValueReference',
+  'assignToReference',
+  'assignNextValueToReference',
+  'assignRecordIdToReference',
+  'collectionReference',
+  'inputReference',
+  'outputReference',
+]);
 
 function matchesKind(location: FlowMetadataLocation, kind: FlowSearchKind, document: FlowDocument): boolean {
   switch (kind) {
@@ -17,7 +35,7 @@ function matchesKind(location: FlowMetadataLocation, kind: FlowSearchKind, docum
     case 'object':
       return ['object', 'objectType'].includes(location.key);
     case 'field':
-      return location.key === 'field' || location.key.endsWith('Reference');
+      return FIELD_PROPERTIES.has(location.key);
     case 'apex':
       return (
         location.key === 'apexClass' ||

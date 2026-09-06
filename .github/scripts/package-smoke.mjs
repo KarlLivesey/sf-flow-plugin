@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const directory = await mkdtemp(join(tmpdir(), 'flow package smoke '));
 const archiveDirectory = resolve(process.argv[2]);
@@ -29,6 +30,35 @@ function run(args, success = true) {
   return JSON.parse(result.stdout);
 }
 
+async function checkAnalyzerDispatch() {
+  const cliDirectory = join(directory, 'CLI shim & spaces');
+  const cliRoot = join(cliDirectory, 'node_modules', '@salesforce', 'cli');
+  const pluginRoot = join(directory, 'node_modules', 'sf-flow-plugin', 'lib', 'services');
+  await mkdir(join(cliRoot, 'bin'), { recursive: true });
+  await writeFile(
+    join(cliRoot, 'package.json'),
+    JSON.stringify({
+      name: '@salesforce/cli',
+      type: 'module',
+      bin: { sf: './bin/run.js' },
+    })
+  );
+  await writeFile(join(cliRoot, 'bin', 'run.js'), 'console.log(JSON.stringify(process.argv.slice(2)))');
+  await writeFile(join(cliDirectory, 'sf.cmd'), '@echo This shim must never run');
+  const { resolveSfCliEntry } = await import(pathToFileURL(join(pluginRoot, 'sf-cli-entry.js')).href);
+  const { SfCodeAnalyzerProcessRunner } = await import(
+    pathToFileURL(join(pluginRoot, 'salesforce-code-analyzer-flow-service.js')).href
+  );
+  const runner = new SfCodeAnalyzerProcessRunner(() =>
+    resolveSfCliEntry({
+      hostScript: join(cliDirectory, 'sf.cmd'),
+      searchPath: cliDirectory,
+    })
+  );
+  const args = ['code-analyzer', 'run', '--workspace', 'Flow & spaces.xml', '--rule-selector', 'flow:(a & b);echo'];
+  assert.deepEqual(JSON.parse((await runner.run(args, directory)).stdout), args);
+}
+
 try {
   await writeFile(join(directory, 'package.json'), JSON.stringify({ private: true }));
   // npm.cmd requires shell dispatch on Windows; use npm's JS entry point instead.
@@ -43,6 +73,7 @@ try {
     join(archiveDirectory, archives[0]),
   ]);
   assert.equal(install.status, 0, install.stderr || install.stdout);
+  await checkAnalyzerDispatch();
   const source = join(directory, 'managed__Smoke_Flow.flow-meta.xml');
   await writeFile(
     source,
@@ -57,7 +88,7 @@ try {
   assert.match(await readFile(output, 'utf8'), /flowchart/);
   const failure = run(['flow:describe', '--source-file', join(directory, 'missing.flow-meta.xml'), '--json'], false);
   assert.notEqual(failure.status, 0);
-  console.log('Installed-package command discovery, local paths and JSON smoke tests passed.');
+  console.log('Installed-package command discovery, CLI shim dispatch, local paths and JSON smoke tests passed.');
 } finally {
   await rm(directory, { recursive: true, force: true });
 }

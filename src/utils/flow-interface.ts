@@ -19,12 +19,17 @@ function publicVariable(value: JsonValue): value is JsonObject {
     typeof value === 'object' &&
     value !== null &&
     !Array.isArray(value) &&
-    (value.isInput === true || value.isOutput === true)
+    (contractBoolean(value.isInput) || contractBoolean(value.isOutput))
   );
 }
 
 function contract(variable: JsonObject): JsonObject {
   return Object.fromEntries(
-    CONTRACT_FIELDS.map((key) => [key, variable[key] ?? (key.startsWith('is') ? false : null)])
+    CONTRACT_FIELDS.map((key) => [key, key.startsWith('is') ? contractBoolean(variable[key]) : variable[key] ?? null])
   );
+}
+
+// XML canonicalisation preserves booleans as strings. Only the explicit XML true values are true.
+function contractBoolean(value: JsonValue | undefined): boolean {
+  return value === true || value === 'true' || value === 1 || value === '1';
 }

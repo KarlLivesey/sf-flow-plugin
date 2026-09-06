@@ -11,6 +11,21 @@ import { explainFlowElement } from '../../src/services/flow-explain-service.js';
 import { documentFixture } from '../helpers/flow-document-fixtures.js';
 
 describe('Flow resource references', (): void => {
+  it('finds each screen choice and choice-set reference without matching declarations or prefixes', (): void => {
+    const document = documentFixture({
+      choices: [{ name: 'Selected' }, { name: 'Select' }],
+      dynamicChoiceSets: [{ name: 'Available' }],
+      screens: [{ name: 'Screen', fields: [{ name: 'Input', choiceReferences: ['Selected', 'Available'] }] }],
+    });
+    const resources = inspectFlowResources(document).resources;
+    expect(resources.find((item) => item.name === 'Select')?.usedBy).to.deep.equal([]);
+    expect(resources.find((item) => item.name === 'Selected')?.usedBy[0]?.path).to.contain('choiceReferences[0]');
+    expect(resources.find((item) => item.name === 'Available')?.usedBy[0]?.path).to.contain('choiceReferences[1]');
+    expect(explainFlowElement(document, 'Screen').references.map((reference) => reference.value)).to.have.members([
+      'Selected',
+      'Available',
+    ]);
+  });
   it('counts references from other resources but not self declarations or quoted formula text', (): void => {
     const document = documentFixture({
       formulas: [
@@ -35,6 +50,40 @@ describe('Flow resource references', (): void => {
       assignments: [{ name: 'Set', assignmentItems: [{ assignToReference: 'ValueOther' }] }],
     });
     expect(inspectFlowResources(document).resources[0]?.usedBy).to.deep.equal([]);
+  });
+});
+
+describe('Explicit field searches', (): void => {
+  it('finds explicit field properties and array entries, but not connector targets or text', (): void => {
+    const document = documentFixture({
+      description: 'AccountId',
+      recordLookups: [
+        {
+          name: 'Find',
+          queriedFields: ['Id', 'AccountId'],
+          sortField: 'AccountId',
+          connector: { targetReference: 'AccountId' },
+          filters: [{ field: 'AccountId' }],
+        },
+      ],
+      start: { scheduledPaths: [{ name: 'Later', recordField: 'AccountId' }] },
+      dynamicChoiceSets: [
+        { name: 'Choice', displayField: 'AccountId', picklistField: 'AccountId', valueField: 'AccountId' },
+      ],
+      assignments: [{ name: 'Set', assignmentItems: [{ assignToReference: 'record.AccountId' }] }],
+    });
+    const result = searchFlowDocuments([document], 'AccountId', { kind: 'field', caseSensitive: true });
+    expect(result.matches.map((match) => match.key)).to.have.members([
+      'queriedFields',
+      'sortField',
+      'field',
+      'recordField',
+      'displayField',
+      'picklistField',
+      'valueField',
+      'assignToReference',
+    ]);
+    expect(result.matches.find((match) => match.key === 'queriedFields')?.path).to.contain('queriedFields[1]');
   });
 });
 

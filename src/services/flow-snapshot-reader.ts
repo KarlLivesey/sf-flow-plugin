@@ -4,14 +4,15 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { lstat, readFile, realpath } from 'node:fs/promises';
-import { dirname, join, relative, resolve } from 'node:path';
+import { readFile, realpath } from 'node:fs/promises';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { z } from 'zod';
 import { flowInspectionFailed } from '../errors/flow-errors.js';
 import type { FlowSource } from '../types/flow-source.js';
 import type { FlowSnapshotResult } from '../types/flow-snapshot.js';
 import { qualifiedFlowName } from '../utils/flow-state.js';
 import { boundedMap } from '../utils/bounded-map.js';
+import { assertBundleTargetsSafe } from '../utils/flow-bundle-path-safety.js';
 import { readFlowSourceFile, parseFlowSourceFile } from './flow-source-service.js';
 import { snapshotDigest } from './flow-snapshot-service.js';
 
@@ -48,11 +49,18 @@ function validateEntries(manifest: FlowSnapshotResult): void {
 
 async function safeSourceFile(directory: string, source: string): Promise<string> {
   const file = join(directory, source);
+  await assertBundleTargetsSafe(directory, [file], true);
   const canonical = await realpath(file);
-  if ((await lstat(file)).isSymbolicLink() || relative(directory, canonical).startsWith('..')) {
+  if (!snapshotContainsSource(await realpath(directory), canonical)) {
     throw flowInspectionFailed('Snapshot source escapes its directory or is a symbolic link.');
   }
   return file;
+}
+
+/** Check canonical containment, including Windows relative paths that cross volumes. */
+export function snapshotContainsSource(directory: string, source: string, paths = { relative, isAbsolute }): boolean {
+  const location = paths.relative(directory, source);
+  return location !== '' && !location.startsWith('..') && !paths.isAbsolute(location);
 }
 
 async function readEntry(directory: string, entry: FlowSnapshotResult['flows'][number]): Promise<FlowSource> {
@@ -74,7 +82,7 @@ export async function readFlowSnapshot(file: string): Promise<{ manifest: FlowSn
     const parsed: unknown = JSON.parse(await readFile(resolve(file), 'utf8'));
     const manifest = manifestSchema.parse(parsed);
     validateEntries(manifest);
-    const directory = await realpath(dirname(resolve(file)));
+    const directory = dirname(resolve(file));
     const sources = await boundedMap(manifest.flows, 4, async (entry) => readEntry(directory, entry));
     return { manifest, sources };
   } catch (error: unknown) {

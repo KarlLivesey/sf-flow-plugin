@@ -14,9 +14,22 @@ import type {
 import { jsonObject, metadataLocations } from '../utils/flow-metadata-locations.js';
 
 const RESOURCE_KEYS = ['variables', 'formulas', 'constants', 'textTemplates', 'choices', 'dynamicChoiceSets', 'stages'];
+const RESOURCE_REFERENCES = new Set([
+  'fieldReference',
+  'elementReference',
+  'leftValueReference',
+  'assignToReference',
+  'assignNextValueToReference',
+  'assignRecordIdToReference',
+  'collectionReference',
+  'inputReference',
+  'outputReference',
+  'defaultSelectedChoiceReference',
+  'choiceReferences',
+]);
 
 function refersTo(location: FlowMetadataLocation, name: string): boolean {
-  if (location.key.endsWith('Reference') || location.key === 'assignToReference') {
+  if (RESOURCE_REFERENCES.has(location.key)) {
     return location.value.split('.')[0] === name;
   }
   if (location.key === 'expression') {

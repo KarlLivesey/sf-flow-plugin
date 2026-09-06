@@ -66,6 +66,9 @@ describe('Local Flow discovery commands', (): void => {
     expect(result.resources[0]?.name).to.equal('Greeting');
   });
 
+  it('preserves literal query whitespace and still rejects blank queries', async (): Promise<void> =>
+    verifyLiteralWhitespace(file));
+
   it('explains local record configuration', async (): Promise<void> => {
     const result = await FlowExplain.run(['--source-file', file, '--element', 'Find_Account', '--json']);
     expect(result.type).to.equal('Record Lookup');
@@ -79,6 +82,18 @@ describe('Local Flow discovery commands', (): void => {
     );
   });
 });
+
+async function verifyLiteralWhitespace(file: string): Promise<void> {
+  const result = await FlowSearch.run(['--source-file', file, '--query', ' Account ', '--json']);
+  expect(result.query).to.equal(' Account ');
+  expect(result.matches).to.deep.equal([]);
+  try {
+    await FlowSearch.run(['--source-file', file, '--query', '   ', '--json']);
+    expect.fail('Expected blank query rejection.');
+  } catch (error: unknown) {
+    expect(error).to.have.property('message').that.contains('non-empty');
+  }
+}
 
 describe('Local Flow graph and interface command paths', (): void => {
   let directory: string;

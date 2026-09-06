@@ -4,12 +4,12 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { mkdtemp, readFile, rm, writeFile, symlink } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile, symlink, rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, win32 } from 'node:path';
 import { expect } from 'chai';
 import { saveFlowSnapshot } from '../../src/services/flow-snapshot-service.js';
-import { readFlowSnapshot } from '../../src/services/flow-snapshot-reader.js';
+import { readFlowSnapshot, snapshotContainsSource } from '../../src/services/flow-snapshot-reader.js';
 import { inspectFlowDrift } from '../../src/services/flow-drift-service.js';
 import { expectErrorName } from '../helpers/fake-flow-gateway.js';
 import { documentFixture } from '../helpers/flow-document-fixtures.js';
@@ -57,6 +57,43 @@ describe('Flow snapshot and drift', (): void => {
   it('rejects path traversal in untrusted manifests', async (): Promise<void> => rejectSnapshotTraversal(directory));
 
   it('rejects symbolic-link source files', async (): Promise<void> => rejectSnapshotSymlink(directory));
+});
+
+describe('Snapshot ancestor links', (): void => {
+  it('rejects a linked snapshot root consistently with bundle path checks', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'flow linked snapshot '));
+    try {
+      await saveFlowSnapshot(
+        [documentFixture()],
+        { apiNames: [], version: 'latest', targetOrg: 'org' },
+        join(directory, 'root')
+      );
+      await symlink(join(directory, 'root'), join(directory, 'linked'), 'junction');
+      await expectErrorName(readFlowSnapshot(join(directory, 'linked', 'snapshot.json')), 'FlowInspectionFailed');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects ancestor junctions even when identity and checksum match', async (): Promise<void> => {
+    const directory = await mkdtemp(join(tmpdir(), 'flow snapshot junction '));
+    try {
+      await saveFlowSnapshot([documentFixture()], { apiNames: [], version: 'latest', targetOrg: 'org' }, directory);
+      await rename(join(directory, 'flows'), join(directory, 'relocated'));
+      await symlink(join(directory, 'relocated'), join(directory, 'flows'), 'junction');
+      await expectErrorName(readFlowSnapshot(join(directory, 'snapshot.json')), 'FlowInspectionFailed');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('Windows snapshot confinement', (): void => {
+  it('rejects cross-drive Windows canonical paths', (): void => {
+    expect(snapshotContainsSource('C:\\snapshot', 'D:\\external\\Flow.xml', win32)).to.equal(false);
+    expect(snapshotContainsSource('C:\\snapshot', 'C:\\external\\Flow.xml', win32)).to.equal(false);
+    expect(snapshotContainsSource('C:\\snapshot', 'C:\\snapshot\\flows\\Flow.xml', win32)).to.equal(true);
+  });
 });
 
 async function rejectModifiedSnapshot(directory: string): Promise<void> {
