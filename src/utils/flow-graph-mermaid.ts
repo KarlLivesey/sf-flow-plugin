@@ -124,7 +124,7 @@ function mermaidConnectors(flow: RenderFlow, labelWidth: number): MermaidConnect
 function mermaidCalls(flow: RenderFlow, flows: ReadonlyArray<RenderFlow>): string[] {
   return flow.description.subflows.flatMap((subflow) => {
     const source = flow.elementIds.get(subflow.name);
-    const target = calledFlow(flows, subflow);
+    const target = calledFlow(flows, subflow, flow.description.namespace);
     return source === undefined || target === undefined ? [] : [`  ${source} -. "calls" .-> f${target.index}`];
   });
 }

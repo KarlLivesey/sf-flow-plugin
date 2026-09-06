@@ -10,6 +10,7 @@ import { metadataLocations } from '../utils/flow-metadata-locations.js';
 
 export type FlowSearchKind = 'text' | 'object' | 'field' | 'apex' | 'subflow';
 const FIELD_PROPERTIES = new Set([
+  'outputFieldApiName',
   'field',
   'queriedFields',
   'sortField',
@@ -33,7 +34,7 @@ function matchesKind(location: FlowMetadataLocation, kind: FlowSearchKind, docum
     case 'text':
       return true;
     case 'object':
-      return ['object', 'objectType'].includes(location.key);
+      return ['object', 'objectType', 'picklistObject'].includes(location.key);
     case 'field':
       return FIELD_PROPERTIES.has(location.key);
     case 'apex':
