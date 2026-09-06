@@ -20,6 +20,13 @@ describe('Flow document selection', (): void => {
     expect(selectDocuments(definitions, { apiNames: ['managed__Root'] })).to.deep.equal([definitions[1]]);
   });
 
+  it('binds captured names to exact unmanaged identities without disabling all-Flow discovery', (): void => {
+    const selection = { apiNames: ['Root'], exactNames: true, allowMissing: true };
+    expect(selectDocuments(definitions, selection)).to.deep.equal([definitions[0]]);
+    expect(selectDocuments(definitions.slice(1), selection)).to.deep.equal([]);
+    expect(selectDocuments(definitions, { ...selection, apiNames: [] })).to.have.length(2);
+  });
+
   it('does not silently ignore missing selected names except when checking drift', (): void => {
     expect(() => selectDocuments(definitions, { apiNames: ['Missing'] })).to.throw('missing');
     expect(selectDocuments(definitions, { apiNames: ['Missing'], allowMissing: true })).to.deep.equal([]);

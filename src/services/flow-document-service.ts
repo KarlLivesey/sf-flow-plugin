@@ -16,6 +16,7 @@ import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progres
 
 export interface DocumentSelection {
   allowMissing?: boolean;
+  exactNames?: boolean;
   apiNames: string[];
   namespace?: string | undefined;
   version: FlowComparisonVersionSelector;
@@ -34,7 +35,7 @@ function validateSelectionName(name: string): void {
 
 export function selectDocuments<T extends { apiName: string; namespace: string | null }>(
   definitions: ReadonlyArray<T>,
-  selection: Pick<DocumentSelection, 'apiNames' | 'namespace' | 'allowMissing'>
+  selection: Pick<DocumentSelection, 'apiNames' | 'namespace' | 'allowMissing' | 'exactNames'>
 ): T[] {
   selection.apiNames.forEach((name) => {
     validateSelectionName(name);
@@ -46,9 +47,7 @@ export function selectDocuments<T extends { apiName: string; namespace: string |
     (item) => selection.namespace === undefined || item.namespace === selection.namespace
   );
   selection.apiNames.forEach((name) => {
-    const matches = scoped.filter(
-      (item) => item.apiName === name || qualifiedFlowName(item.apiName, item.namespace) === name
-    );
+    const matches = scoped.filter((item) => matchesName(item, name, selection.exactNames));
     if (matches.length > 1 || (matches.length === 0 && selection.allowMissing !== true)) {
       throw flowInspectionFailed(
         'Flow "' + name + '" is missing or ambiguous; specify its qualified name or namespace.'
@@ -59,13 +58,15 @@ export function selectDocuments<T extends { apiName: string; namespace: string |
     .filter(
       (item) =>
         selection.apiNames.length === 0 ||
-        selection.apiNames.some(
-          (name) => name === item.apiName || name === qualifiedFlowName(item.apiName, item.namespace)
-        )
+        selection.apiNames.some((name) => matchesName(item, name, selection.exactNames))
     )
     .sort((left, right) =>
       qualifiedFlowName(left.apiName, left.namespace).localeCompare(qualifiedFlowName(right.apiName, right.namespace))
     );
+}
+
+function matchesName(item: { apiName: string; namespace: string | null }, name: string, exact = false): boolean {
+  return qualifiedFlowName(item.apiName, item.namespace) === name || (!exact && item.apiName === name);
 }
 
 function selectedVersion(

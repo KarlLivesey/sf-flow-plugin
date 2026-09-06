@@ -24,7 +24,13 @@ export default class FlowSearch extends SfCommand<FlowSearchResult> {
     query: Flags.string({
       required: true,
       summary: messages.getMessage('flags.query.summary'),
-      parse: (input: string): Promise<string> => Promise.resolve(z.string().trim().min(1).parse(input)),
+      parse: (input: string): Promise<string> =>
+        Promise.resolve(
+          z
+            .string()
+            .refine((value) => value.trim().length > 0, 'A non-empty query is required.')
+            .parse(input)
+        ),
     }),
     kind: Flags.custom<FlowSearchKind>({
       default: 'text',

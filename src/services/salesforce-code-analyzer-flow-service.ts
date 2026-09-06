@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { flowCodeAnalyzerFailed, flowCodeAnalyzerUnavailable } from '../errors/flow-errors.js';
 import type { FlowLintFinding, FlowLintLocation } from '../types/flow-lint.js';
 import { createFlowLintFingerprint } from '../utils/flow-lint-fingerprint.js';
+import { resolveSfCliEntry } from './sf-cli-entry.js';
 import {
   cleanupAnalyzerTemporaryDirectory,
   defaultAnalyzerTemporaryDirectory,
@@ -73,12 +74,13 @@ export interface CodeAnalyzerProcessRunner {
   run(args: ReadonlyArray<string>, cwd: string): Promise<{ stdout: string }>;
 }
 
-class SfCodeAnalyzerProcessRunner implements CodeAnalyzerProcessRunner {
-  public constructor(private readonly executable = 'sf') {}
+export class SfCodeAnalyzerProcessRunner implements CodeAnalyzerProcessRunner {
+  public constructor(private readonly locateEntry: () => Promise<string> = resolveSfCliEntry) {}
 
   public async run(args: ReadonlyArray<string>, cwd: string): Promise<{ stdout: string }> {
+    const entry = await this.locateEntry();
     return new Promise((resolvePromise, rejectPromise) => {
-      const child = spawn(this.executable, [...args], {
+      const child = spawn(process.execPath, [entry, ...args], {
         cwd,
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,

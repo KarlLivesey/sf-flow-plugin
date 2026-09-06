@@ -38,6 +38,7 @@ async function drift(
       apiNames: selection.apiNames,
       namespace: selection.namespace ?? undefined,
       allowMissing: true,
+      exactNames: true,
       version: snapshot.manifest.versionSelector,
       targetOrg: context.targetOrg,
     },
