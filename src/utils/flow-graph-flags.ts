@@ -24,6 +24,28 @@ Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('sf-flow-plugin', 'flow.graph');
 
 export const flowGraphFlags = {
+  'highlight-changes': Flags.boolean({
+    default: false,
+    summary: 'Mark added, removed and changed root elements against a previous version or file.',
+  }),
+  from: Flags.custom<FlowComparisonVersionSelector>({
+    dependsOn: ['highlight-changes'],
+    exclusive: ['source-file', 'source-dir', 'from-file'],
+    summary: 'Previous org version for highlighting; defaults to active.',
+    parse: (input: string): Promise<FlowComparisonVersionSelector> =>
+      Promise.resolve(parseInspectionVersionSelector(input)),
+  })(),
+  'from-file': Flags.file({
+    exists: true,
+    dependsOn: ['highlight-changes'],
+    summary: 'Previous XML source for local graph highlighting.',
+  }),
+  'source-dir': Flags.directory({
+    exists: true,
+    dependsOn: ['api-name'],
+    exclusive: ['source-file'],
+    summary: 'Resolve the selected root and recursive subflows from local Flow XML files.',
+  }),
   'api-name': Flags.string({
     char: 'n',
     exactlyOne: ['api-name', 'source-file'],

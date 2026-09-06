@@ -157,7 +157,7 @@ function dotConnectors(flow: RenderFlow, options: FlowGraphRenderOptions, theme:
 function dotCalls(flow: RenderFlow, flows: ReadonlyArray<RenderFlow>, theme: ResolvedFlowGraphTheme): string[] {
   return flow.description.subflows.flatMap((subflow) => {
     const source = flow.elementIds.get(subflow.name);
-    const targetFlow = calledFlow(flows, subflow);
+    const targetFlow = calledFlow(flows, subflow, flow.description.namespace);
     const target = targetFlow?.elementIds.get('start');
     return source === undefined || target === undefined || targetFlow === undefined
       ? []

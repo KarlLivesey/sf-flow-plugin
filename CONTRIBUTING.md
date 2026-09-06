@@ -94,6 +94,15 @@ other successful updates are queued nightly. Version updates and security update
 manifest. Any failed check, unexpected file, non-Dependabot commit, concurrent `main` change or publication mismatch
 stops the automation.
 
+Urgent security classification requires the repository secret `DEPENDABOT_ALERTS_TOKEN`: a fine-grained token scoped
+to this repository with **Dependabot alerts: read** permission. The normal Actions token cannot read those alerts.
+Missing or invalid credentials fail the classification job visibly; the independent nightly path remains enabled.
+Dependency names are read from Dependabot commit metadata, including grouped and transitive updates.
+
+The quality workflow tests automation scripts and builds an installable tarball. Targeted installed-package smoke
+tests run on Linux (minimum supported Node 22.19 and Node 24), macOS and Windows without development dependencies.
+Markdown-only changes skip packaging and the smoke-test matrix as well as the full unit suite.
+
 ## Adding a command
 
 Generate the Salesforce command structure before implementing it:

@@ -29,6 +29,7 @@ Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('sf-flow-plugin', 'flow.compare');
 
 export interface CompareFlagValues {
+  'interface-only'?: boolean;
   'api-name': string | undefined;
   'from-file': string | undefined;
   'to-file': string | undefined;
@@ -108,6 +109,7 @@ function createRequest(
     fromOrg,
     toOrg,
     scopes: flags.only ?? [],
+    ...(flags['interface-only'] === true ? { interfaceOnly: true } : {}),
     ignoreOrder: flags['ignore-order'],
     ignorePaths: flags['ignore-path'] ?? [],
   };
@@ -179,8 +181,11 @@ export default class FlowCompare extends SfCommand<FlowCompareResult> {
   public static override readonly summary = messages.getMessage('summary');
   public static override readonly description = messages.getMessage('description');
   public static override readonly examples = messages.getMessages('examples');
-
   public static override readonly flags = {
+    'interface-only': Flags.boolean({
+      exclusive: ['only'],
+      summary: messages.getMessage('flags.interface-only.summary'),
+    }),
     'api-name': Flags.string({
       char: 'n',
       summary: messages.getMessage('flags.api-name.summary'),

@@ -5,6 +5,9 @@
     "FlowGraphResult": {
       "type": "object",
       "properties": {
+        "sourceDirectory": {
+          "type": "string"
+        },
         "apiName": {
           "type": "string"
         },
@@ -57,6 +60,12 @@
         },
         "sourceFile": {
           "type": "string"
+        },
+        "highlights": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowGraphHighlight"
+          }
         },
         "format": {
           "$ref": "#/definitions/FlowGraphFormat"
@@ -445,6 +454,23 @@
     "FlowTraversalWarningKind": {
       "type": "string",
       "enum": ["depth-limit", "missing-subflow", "subflow-version-fallback", "missing-subflow-version"]
+    },
+    "FlowGraphHighlight": {
+      "type": "object",
+      "properties": {
+        "flow": {
+          "type": "string"
+        },
+        "element": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["added", "removed", "changed"]
+        }
+      },
+      "required": ["flow", "element", "kind"],
+      "additionalProperties": false
     },
     "FlowGraphFormat": {
       "type": "string",

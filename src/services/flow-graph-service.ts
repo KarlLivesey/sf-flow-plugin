@@ -101,6 +101,7 @@ export function renderDescribedFlowGraph(
   const resolvedCurve = resolveGraphCurve(validated.curve, resolvedLayout);
   const resolvedElk = resolveGraphElkOptions(described.flows, validated.elk);
   const options = {
+    ...(request.highlights === undefined ? {} : { highlights: request.highlights }),
     includeVariables: request.includeVariables,
     includeFormulas: request.includeFormulas,
     direction: resolvedDirection,
@@ -116,6 +117,7 @@ export function renderDescribedFlowGraph(
   progress('rendering-graph', `${described.apiName} (${request.format})`);
   return {
     ...described,
+    ...(request.highlights === undefined ? {} : { highlights: request.highlights }),
     format: request.format,
     includeVariables: request.includeVariables,
     includeFormulas: request.includeFormulas,

@@ -112,6 +112,7 @@ export interface FlowDependenciesResult {
 }
 
 export interface FlowCompareRequest extends Omit<NamedFlowRequest, 'namespace'> {
+  interfaceOnly?: boolean;
   namespace?: string | null;
   from: FlowComparisonVersionSelector;
   to: FlowComparisonVersionSelector;
@@ -132,6 +133,7 @@ export interface FlowComparisonChange {
 }
 
 export interface FlowCompareResult {
+  interfaceOnly?: boolean;
   apiName: string;
   namespace: string | null;
   definitionId: string | null;

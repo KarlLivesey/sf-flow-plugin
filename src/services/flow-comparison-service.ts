@@ -117,6 +117,7 @@ function createResult(request: FlowCompareRequest, comparison: ResolvedCompariso
     requestedFrom: request.from,
     requestedTo: request.to,
     scopes: request.scopes,
+    ...(request.interfaceOnly === true ? { interfaceOnly: true } : {}),
     ignoreOrder: request.ignoreOrder,
     ignorePaths: request.ignorePaths,
     fromVersion: fromVersion.versionNumber,
@@ -170,6 +171,7 @@ async function resolveComparison(
   progress('comparing-metadata', sides.detail);
   const changes = compareFlowMetadata(fromMetadata, toMetadata, {
     scopes: request.scopes,
+    ...(request.interfaceOnly === true ? { interfaceOnly: true } : {}),
     ignoreOrder: request.ignoreOrder,
   }).filter((change) => !ignoredPath(change.path, request.ignorePaths));
   return {

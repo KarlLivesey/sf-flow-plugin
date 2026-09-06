@@ -58,6 +58,68 @@ If `--target-org` is omitted, the command uses the Salesforce CLI `target-org` c
 
 ## Commands
 
+New inspection commands also support local XML where applicable:
+
+| Command             | Purpose                                                            |
+| ------------------- | ------------------------------------------------------------------ |
+| `sf flow search`    | Find literal values and component references across Flow metadata. |
+| `sf flow resources` | Inspect resource declarations and their static usage locations.    |
+| `sf flow explain`   | Inspect an element's conditions, assignments and outgoing paths.   |
+| `sf flow snapshot`  | Save selected org versions as XML with a checksummed manifest.     |
+| `sf flow drift`     | Compare a saved snapshot with an org without deploying anything.   |
+
+```bash
+sf flow search --source-dir force-app/main/default/flows --query Account --kind object
+sf flow search --target-org staging --query My_Apex_Action --kind apex
+sf flow resources --api-name My_Flow --flow-version active
+sf flow explain --source-file force-app/main/default/flows/My_Flow.flow-meta.xml --element Check_Account
+sf flow snapshot --api-name My_Flow --api-name Another_Flow --output-dir snapshots/review
+sf flow drift --snapshot snapshots/review/snapshot.json --target-org staging --fail-on-drift
+```
+
+Search is a literal substring match, case-insensitive unless `--case-sensitive` is set. `--kind` accepts `text`,
+`object`, `field`, `apex` and `subflow`; reference filters search explicit metadata fields, not inferred runtime
+dependencies. Field references can be resource-qualified rather than object-qualified. An unfiltered org search
+reads each selected version's metadata; narrow it with repeatable `--api-name` and `--namespace` in large orgs.
+
+Resources and explanations select exactly one Flow. Resource usage includes references from other resources but
+excludes self-declarations. Dynamic references and external callers cannot be inferred. Explanations show stored
+configuration and outgoing paths; they do not execute conditions or use AI. All three commands support
+`--source-file` and `--source-dir`, with no authenticated org required for local input.
+
+Snapshots default to latest versions, retain the original status and do not bundle dependencies. Their XML is for
+faithful review and comparison, not an automatically Draft deployment bundle. `snapshot.json` records the source
+org, resolved qualified identities, versions, selection and checksums. Existing files are never overwritten.
+Capturing several Flows is not an atomic org-wide transaction. A missing selected version fails the capture.
+
+Drift validates manifest paths, identities and checksums before reading org metadata. It compares metadata and
+status using the recorded selector and selection; selected named Flows remain bound to their captured namespaces.
+Additional Flows are reported only within that selection. Edited snapshot XML is rejected. No deployment or org
+mutation occurs. `--fail-on-drift` returns exit status 1 for differences, with the full report still available in JSON.
+
+### Interface comparisons and local graphs
+
+```bash
+sf flow compare --api-name My_Flow --from active --to latest --interface-only --fail-on-difference
+sf flow graph --source-dir force-app/main/default/flows --api-name My_Flow --recursive
+sf flow graph --api-name My_Flow --flow-version latest --highlight-changes --from active
+sf flow graph --source-file current/My_Flow.flow-meta.xml --highlight-changes --from-file previous/My_Flow.flow-meta.xml
+```
+
+`--interface-only` compares public input/output names, types, object/Apex types, collection settings and direction.
+It excludes private variables and implementation changes and cannot be combined with `--only`. Differences signal
+a changed contract, not a definitive proof that every caller will break.
+
+Directory graphs require `--api-name` to select the root. Recursive subflows resolve from the discovered local files
+within the caller's namespace; missing files and depth limits produce warnings. Org/version flags are not applicable
+to local directory input. Both Mermaid and DOT formats are supported.
+
+`--highlight-changes` compares root elements with an earlier org version (active by default) or `--from-file` for
+local input. Added, removed and changed elements have explicit text labels and green, red and amber borders.
+Removed elements and their old connections remain labelled in the overlay. Expanded child Flows retain their
+selected versions and are not independently compared. Inspect the full comparison report for resource or global
+metadata changes that do not belong to an executable element.
+
 | Command                  | Purpose                                                                 |
 | ------------------------ | ----------------------------------------------------------------------- |
 | `sf flow list`           | Inventory Flow definitions and their current version state.             |
@@ -105,7 +167,21 @@ sf flow check --source-dir force-app/main/default/flows --recursive --only lint 
 Directory discovery is recursive, ignores symlinks, rejects files that change during loading and rejects duplicate qualified
 Flow names. `flow check --recursive` resolves subflow references from the discovered local files up to `--max-depth`;
 missing references and depth limits are findings. Directory mode supports lint, subflow and structural-metrics checks.
-Org-state checks remain unavailable, and lint baselines remain scoped to single-Flow lint results.
+Org-state checks remain unavailable. Directory lint baselines match each qualified Flow independently.
+
+For pull-request CI, analyse tracked changes against a Git commit or ref:
+
+```bash
+sf flow lint --source-dir force-app/main/default/flows --changed-since origin/main --include-callers --fail-on warning
+sf flow check --source-dir force-app/main/default/flows --changed-since origin/main --only subflows --recursive
+sf flow lint --source-dir force-app/main/default/flows --json > flow-lint-baseline.json
+sf flow lint --source-dir force-app/main/default/flows --baseline flow-lint-baseline.json --fail-on warning
+```
+
+`--changed-since` compares the tracked working tree (including staged and unstaged changes) against the exact ref,
+not its merge base. Untracked files are excluded until added to Git. Renames are treated as deletion plus addition;
+`--include-callers` also selects transitive callers of deleted Flows. Unchanged sources remain available for subflow
+resolution. No matching changes returns an empty report. Invalid refs and Git failures are errors, not clean results.
 
 Subflow traversal is breadth-first, so a Flow reachable through multiple branches is analysed at its shortest depth.
 A qualified subflow reference resolves that exact namespace. An unqualified reference resolves only in the caller's
@@ -120,7 +196,9 @@ API namespace.
 One source file cannot provide org state or referenced subflow metadata. Source mode therefore rejects target-org,
 version, namespace, recursive and depth flags. Local lint delegates to Salesforce Code Analyzer's official Flow
 Scanner and runs all rules in its `flow` engine by default. It honours `code-analyzer.yml`, preserves Analyzer rule
-names, severities, tags and source locations, and does not run this plugin's separate org-backed lint rules.
+names, severities, tags and source locations. Org-backed lint uses the same analyser after exporting the selected
+version to private temporary XML with its original status. Temporary files are removed after analysis, and org
+reports retain logical locations rather than links to deleted temporary files. Org-state checks remain in `flow check`.
 
 If `@salesforce/plugin-code-analyzer` is missing, an interactive command offers to install the official plugin. JSON,
 non-interactive and `--no-prompt` runs instead fail with the exact
@@ -224,9 +302,9 @@ sf flow lint \
   [--json]
 ```
 
-The command checks the selected Flow version for unconnected elements, missing fault paths, DML inside loops,
-hard-coded Salesforce IDs, inactive or missing subflows, and unused private variables or formulas. Input and output
-variables are not reported as unused because callers can reference them externally.
+The command runs the official Flow Scanner rules against the selected Flow version or local source. Rule availability
+and policy come from the installed Salesforce Code Analyzer and its configuration. Use `flow check --only subflows`
+for Salesforce subflow existence and activation checks.
 
 ```bash
 sf flow lint --api-name Order_Processing --flow-version active
@@ -240,10 +318,10 @@ sf flow lint \
   --fail-on warning
 ```
 
-For local source, repeatable `--rule` values are Salesforce Code Analyzer rule selectors automatically constrained to
+For both org and local source, repeatable `--rule` values are Salesforce Code Analyzer rule selectors automatically constrained to
 the `flow` engine; for example, `--rule MissingDescription`. Repeatable `--exclude-rule` values remove matching
 Analyzer rule names from the result. Analyzer severities 1–2 map to `error` and 3–5 map to `warning` for
-`--fail-on`. Org-backed lint continues to accept this plugin's documented rule names.
+`--fail-on`. Previously used custom org-lint rule names must be replaced with the corresponding Flow Scanner selectors.
 
 The result reports stable rule names, severities, tags and complete source locations for scripting. Use
 `--result-format sarif` for code-scanning integrations and `--fail-on` to make new findings affect the process exit
@@ -256,7 +334,7 @@ from the command's standard Salesforce CLI JSON output:
 sf flow lint --api-name Order_Processing --json > flow-lint-baseline.json
 ```
 
-The baseline may be that complete Salesforce CLI success envelope or its raw `result` object. In either form, the
+The baseline may be that complete Salesforce CLI envelope (status 0 or 1) or its raw `result` object. In either form, the
 plugin validates both `apiName` and `namespace` before matching fingerprints. Bare findings arrays and partial
 `{ "findings": [...] }` objects are rejected because they cannot establish which Flow they belong to. Baseline
 findings remain visible separately from new findings.
@@ -796,6 +874,27 @@ The command fails on errors by default. Use `--fail-on warning` for a stricter C
 `--exclude` flags to select checks, and SARIF output for code-scanning integrations.
 
 ## `sf flow benchmark`
+
+Stream sample records and compare performance with a previous run:
+
+```bash
+sf flow benchmark --api-name My_Flow --iterations 1000 --samples-file samples.jsonl --output-file baseline.json
+sf flow benchmark --api-name My_Flow --iterations 1000 --baseline baseline.json --max-regression 10 --regression-metric cpu --regression-percentile 95
+```
+
+The stream contains per-sample CPU and wall-clock measurements in completion order, then a summary line. The
+summary's `samples` array is empty in streaming mode. Exact percentile calculations still retain numeric timings;
+there are no plugin-imposed workload or concurrency caps. Existing stream files are rejected; partial records remain
+recoverable after failures. A stream without a summary is incomplete. Ctrl+C stops new samples, waits for in-flight
+samples and saves `interrupted: true` with a failing exit code. Dry runs validate paths without creating a stream.
+
+Baselines accept raw result JSON or the standard successful Salesforce CLI envelope. They must contain a complete,
+successful run and the new input fingerprint/settings fields. Inputs, target org, warm-up count, iteration count,
+concurrency, timeout, log level and failed-sample inclusion must match. Flow versions may differ, but qualified Flow
+identity must match. A missing selected percentile is an error. A zero baseline followed by a positive duration
+exceeds any finite regression threshold; its percentage is `null`, avoiding a non-JSON infinity. Dry-run/incomplete
+comparisons have `currentValue: null` and `exceeded: null`. Fingerprints avoid storing inputs, but are not anonymisation
+of guessable input values.
 
 ```bash
 sf flow benchmark \

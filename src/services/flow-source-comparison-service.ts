@@ -162,6 +162,7 @@ function createResult(
     requestedFrom: from.sourceFile === null ? request.from : null,
     requestedTo: to.sourceFile === null ? request.to : null,
     scopes: request.scopes,
+    ...(request.interfaceOnly === true ? { interfaceOnly: true } : {}),
     ignoreOrder: request.ignoreOrder,
     ignorePaths: request.ignorePaths,
     fromVersion: from.version,
@@ -207,6 +208,7 @@ export async function compareFlowSources(context: SourceComparisonContext): Prom
   const metadata = await canonicalFlowComparisonPair(from.metadata, to.metadata);
   const changes = compareFlowMetadata(metadata.from, metadata.to, {
     scopes: request.scopes,
+    ...(request.interfaceOnly === true ? { interfaceOnly: true } : {}),
     ignoreOrder: request.ignoreOrder,
     includeStatus: true,
   }).filter((change) => !ignoredPath(change.path, request.ignorePaths));

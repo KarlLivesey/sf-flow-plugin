@@ -5,6 +5,9 @@
     "FlowCompareResult": {
       "type": "object",
       "properties": {
+        "interfaceOnly": {
+          "type": "boolean"
+        },
         "apiName": {
           "type": "string"
         },

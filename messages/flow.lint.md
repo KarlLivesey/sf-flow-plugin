@@ -4,9 +4,11 @@ Lint a Salesforce Flow.
 
 # description
 
-Inspect an org-backed Flow version using this plugin's lint rules. Use `--source-file` to analyse one local Flow or
-`--source-dir` to recursively discover every `.flow-meta.xml` file under a directory without an org. Local lint runs
-Salesforce Code Analyzer's official Flow Scanner once for the selected file or directory.
+Analyse an org-backed Flow version or local source using Salesforce Code Analyzer's official Flow Scanner.
+Org mode exports the selected version to private temporary XML, preserves its status, and removes it after analysis.
+Use `--source-file` for one local Flow or `--source-dir` for a source tree without an org. With `--changed-since REF`,
+only tracked files changed against that Git commit are linted. `--include-callers` includes transitive callers,
+including callers of deleted Flows. The full directory remains the analyser workspace.
 
 # flags.api-name.summary
 
@@ -34,8 +36,7 @@ Set a failing exit code when a new finding has this severity or worse.
 
 # flags.rule.summary
 
-Run only this lint rule. Local values are Salesforce Code Analyzer rule selectors constrained to the `flow` engine;
-org-backed values use this plugin's Flow lint rule names. Repeat the flag to select multiple rules.
+Run only this Salesforce Code Analyzer rule selector constrained to the `flow` engine. Repeat to select multiple rules.
 
 # flags.exclude-rule.summary
 
@@ -52,7 +53,7 @@ Write the human-readable or SARIF lint report to this file.
 
 # flags.baseline.summary
 
-Complete JSON lint result for the same qualified Flow, either raw or in the Salesforce CLI success envelope, whose matching findings are excluded from the CI exit decision.
+Complete JSON lint result for the same qualified Flow, or a directory lint result in directory mode. Raw results and Salesforce CLI envelopes with status 0 or 1 are accepted. Matching findings are excluded from the CI exit decision, independently for each qualified Flow.
 
 # flags.namespace.summary
 
@@ -64,7 +65,7 @@ Salesforce API version to use for the Tooling API requests.
 
 # flags.no-prompt.summary
 
-Do not offer to install Salesforce Code Analyzer when local Flow linting requires it.
+Do not offer to install Salesforce Code Analyzer when Flow linting requires it.
 
 # examples
 

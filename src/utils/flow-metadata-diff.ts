@@ -5,6 +5,7 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 import type { FlowComparisonChange, FlowComparisonScope, JsonObject, JsonValue } from '../types/flow-analysis.js';
+import { flowInterface } from './flow-interface.js';
 
 interface DiffContext {
   path: string;
@@ -13,6 +14,7 @@ interface DiffContext {
 }
 
 export interface FlowMetadataDiffOptions {
+  interfaceOnly?: boolean;
   scopes?: ReadonlyArray<FlowComparisonScope>;
   ignoreOrder?: boolean;
   includeStatus?: boolean;
@@ -200,11 +202,15 @@ export function compareFlowMetadata(
 ): FlowComparisonChange[] {
   const changes: FlowComparisonChange[] = [];
   const includeStatus = options.includeStatus ?? false;
-  diffObjects(normaliseMetadata(before, includeStatus), normaliseMetadata(after, includeStatus), {
-    path: '$',
-    changes,
-    ignoreOrder: options.ignoreOrder ?? false,
-  });
+  diffObjects(
+    options.interfaceOnly === true ? flowInterface(before) : normaliseMetadata(before, includeStatus),
+    options.interfaceOnly === true ? flowInterface(after) : normaliseMetadata(after, includeStatus),
+    {
+      path: '$',
+      changes,
+      ignoreOrder: options.ignoreOrder ?? false,
+    }
+  );
   const scopes = new Set(options.scopes ?? []);
   return scopes.size === 0 ? changes : changes.filter((change) => scopes.has(changeScope(change)));
 }

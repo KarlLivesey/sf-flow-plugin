@@ -36,10 +36,16 @@ jobs:
     outputs:
       urgent: ${{ steps.severity.outputs.urgent }}
     steps:
+      - name: Check out trusted classifier
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
       - name: Match the pull request to an open high or critical alert
         id: severity
         env:
           GH_TOKEN: ${{ github.token }}
+          ALERTS_TOKEN: ${{ secrets.DEPENDABOT_ALERTS_TOKEN }}
           PULL_REQUEST_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
           REPOSITORY: ${{ github.repository }}
         shell: bash
@@ -53,8 +59,18 @@ jobs:
           alerts_file="${RUNNER_TEMP}/urgent-dependabot-alerts.json"
           gh api "/repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}" > "$pull_request_file"
 
+          if [[ "$(jq -r '.user.login' "$pull_request_file")" != 'dependabot[bot]' ]]; then
+            exit 0
+          fi
+          if [[ -z "$ALERTS_TOKEN" ]]; then
+            echo '::error::Set DEPENDABOT_ALERTS_TOKEN with Dependabot alerts: read permission. Urgent classification is unavailable; nightly processing remains enabled.'
+            exit 1
+          fi
+          commits_file="${RUNNER_TEMP}/dependabot-commits.json"
+          gh api --paginate --slurp "/repos/${REPOSITORY}/pulls/${PULL_REQUEST_NUMBER}/commits" > "$commits_file"
+
           set +e
-          gh api \
+          GH_TOKEN="$ALERTS_TOKEN" gh api \
             --paginate \
             --slurp \
             "/repos/${REPOSITORY}/dependabot/alerts?state=open&severity=high%2Ccritical&ecosystem=npm&per_page=100" \
@@ -62,32 +78,12 @@ jobs:
           alerts_exit=$?
           set -e
           if (( alerts_exit != 0 )); then
-            echo 'Security-alert metadata was unavailable; the pull request will use the nightly path.'
-            exit 0
+            echo '::error::Security-alert metadata is unavailable. Check DEPENDABOT_ALERTS_TOKEN permissions; nightly processing remains enabled.'
+            exit 1
           fi
 
-          PULL_REQUEST_FILE="$pull_request_file" ALERTS_FILE="$alerts_file" node <<'NODE'
-          const { appendFileSync, readFileSync } = require('node:fs');
-
-          const pullRequest = JSON.parse(readFileSync(process.env.PULL_REQUEST_FILE, 'utf8'));
-          if (pullRequest.user?.login !== 'dependabot[bot]') {
-            process.exit(0);
-          }
-
-          const dependencyNames = new Set(
-            [...(pullRequest.body ?? '').matchAll(/dependency-name:\s*(?:"([^"]+)"|'([^']+)'|([^\s]+))/gu)].map(
-              (match) => match[1] ?? match[2] ?? match[3]
-            )
-          );
-          const alerts = JSON.parse(readFileSync(process.env.ALERTS_FILE, 'utf8')).flat();
-          const matchesUrgentAlert = alerts.some((alert) =>
-            dependencyNames.has(alert.dependency?.package?.name)
-          );
-
-          if (matchesUrgentAlert) {
-            appendFileSync(process.env.GITHUB_OUTPUT, 'urgent=true\n');
-          }
-          NODE
+          PULL_REQUEST_FILE="$pull_request_file" ALERTS_FILE="$alerts_file" COMMITS_FILE="$commits_file" \
+            node .github/scripts/dependabot-security.mjs
 
   queue-nightly:
     name: queue tested updates

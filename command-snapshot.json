@@ -45,6 +45,7 @@
     "flags": [
       "api-name",
       "api-version",
+      "baseline",
       "concurrency",
       "confirm",
       "continue-on-error",
@@ -58,10 +59,14 @@
       "iterations",
       "json",
       "log-level",
+      "max-regression",
       "namespace",
       "output-file",
       "percentile",
       "raw-log-dir",
+      "regression-metric",
+      "regression-percentile",
+      "samples-file",
       "target-org",
       "wait",
       "warmup"
@@ -98,10 +103,12 @@
       "allow-truncated",
       "api-name",
       "api-version",
+      "changed-since",
       "exclude",
       "fail-on",
       "flags-dir",
       "flow-version",
+      "include-callers",
       "json",
       "max-depth",
       "namespace",
@@ -133,6 +140,7 @@
       "from-org",
       "ignore-order",
       "ignore-path",
+      "interface-only",
       "json",
       "namespace",
       "only",
@@ -254,6 +262,33 @@
   },
   {
     "alias": [],
+    "command": "flow:drift",
+    "flagAliases": [],
+    "flagChars": ["o"],
+    "flags": ["api-version", "fail-on-drift", "flags-dir", "json", "snapshot", "target-org"],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
+    "command": "flow:explain",
+    "flagAliases": [],
+    "flagChars": ["n", "o"],
+    "flags": [
+      "api-name",
+      "api-version",
+      "element",
+      "flags-dir",
+      "flow-version",
+      "json",
+      "namespace",
+      "source-dir",
+      "source-file",
+      "target-org"
+    ],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
     "command": "flow:export",
     "flagAliases": [],
     "flagChars": ["n", "o"],
@@ -289,6 +324,9 @@
       "font-size",
       "force-node-order",
       "format",
+      "from",
+      "from-file",
+      "highlight-changes",
       "include-formulas",
       "include-variables",
       "json",
@@ -304,6 +342,7 @@
       "output-file",
       "rank-spacing",
       "recursive",
+      "source-dir",
       "source-file",
       "subflow-version",
       "target-org"
@@ -319,10 +358,12 @@
       "api-name",
       "api-version",
       "baseline",
+      "changed-since",
       "exclude-rule",
       "fail-on",
       "flags-dir",
       "flow-version",
+      "include-callers",
       "json",
       "namespace",
       "no-prompt",
@@ -403,6 +444,24 @@
   },
   {
     "alias": [],
+    "command": "flow:resources",
+    "flagAliases": [],
+    "flagChars": ["n", "o"],
+    "flags": [
+      "api-name",
+      "api-version",
+      "flags-dir",
+      "flow-version",
+      "json",
+      "namespace",
+      "source-dir",
+      "source-file",
+      "target-org"
+    ],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
     "command": "flow:run",
     "flagAliases": [],
     "flagChars": ["n", "o"],
@@ -426,6 +485,35 @@
       "target-org",
       "wait"
     ],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
+    "command": "flow:search",
+    "flagAliases": [],
+    "flagChars": ["n", "o"],
+    "flags": [
+      "api-name",
+      "api-version",
+      "case-sensitive",
+      "flags-dir",
+      "flow-version",
+      "json",
+      "kind",
+      "namespace",
+      "query",
+      "source-dir",
+      "source-file",
+      "target-org"
+    ],
+    "plugin": "sf-flow-plugin"
+  },
+  {
+    "alias": [],
+    "command": "flow:snapshot",
+    "flagAliases": [],
+    "flagChars": ["n", "o"],
+    "flags": ["api-name", "api-version", "flags-dir", "flow-version", "json", "namespace", "output-dir", "target-org"],
     "plugin": "sf-flow-plugin"
   },
   {

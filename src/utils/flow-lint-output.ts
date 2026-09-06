@@ -81,7 +81,7 @@ const findingSchema = z
   });
 
 // A complete result identity is required so a findings-only file cannot suppress another Flow's findings.
-const scopedBaselineSchema: z.ZodType<FlowLintBaseline> = z.object({
+export const scopedBaselineSchema: z.ZodType<FlowLintBaseline> = z.object({
   apiName: flowApiNameSchema,
   namespace: namespaceSchema.nullable(),
   findings: z.array(findingSchema),
@@ -102,7 +102,7 @@ function findingKey(finding: FlowLintFinding): string {
   return finding.fingerprint;
 }
 
-function classifyFindings(result: FlowLintResult, baseline: ReadonlyArray<BaselineFinding>): FlowLintResult {
+export function classifyFindings(result: FlowLintResult, baseline: ReadonlyArray<BaselineFinding>): FlowLintResult {
   const known = new Set(baseline.map((entry) => findingKey(entry.finding)));
   const legacy = new Set(
     baseline.flatMap((entry) => (entry.legacyMessageKey === null ? [] : [entry.legacyMessageKey]))

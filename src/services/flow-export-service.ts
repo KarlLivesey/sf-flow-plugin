@@ -12,6 +12,8 @@ import { renderFlowMetadataXml } from '../utils/flow-metadata-xml.js';
 import { noFlowProgress, type FlowProgressReporter } from '../utils/flow-progress.js';
 import { selectFlowDefinition } from '../utils/flow-state.js';
 
+type ExportGateway = Pick<FlowDefinitionGateway, 'findDefinitions' | 'findVersions'> & FlowMetadataGateway;
+
 function selectVersion(
   definition: FlowDefinition,
   versions: ReadonlyArray<FlowVersion>,
@@ -31,7 +33,7 @@ function selectVersion(
 }
 
 async function exportFlow(
-  gateway: FlowDefinitionGateway & FlowMetadataGateway,
+  gateway: ExportGateway,
   request: FlowExportRequest,
   progress: FlowProgressReporter
 ): Promise<FlowExportArtifact> {
@@ -65,7 +67,7 @@ async function exportFlow(
 }
 
 export class FlowExportService {
-  public constructor(private readonly gateway: FlowDefinitionGateway & FlowMetadataGateway) {}
+  public constructor(private readonly gateway: ExportGateway) {}
 
   public async export(
     request: FlowExportRequest,

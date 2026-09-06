@@ -198,6 +198,7 @@ function directorySubflowFindings(
 }
 
 interface DirectoryCheckSelection {
+  roots?: FlowSource[];
   checks: FlowCheckKind[];
   excluded: FlowCheckKind[];
   lintFindings: FlowLintFinding[];
@@ -257,7 +258,7 @@ export function checkFlowSourceDirectory(
   progress: FlowProgressReporter = noFlowProgress
 ): FlowCheckResult {
   const lintFindings = assignAnalyzerFindings(directory.sources, selection.lintFindings);
-  const results = directory.sources.map((source) =>
+  const results = (selection.roots ?? directory.sources).map((source) =>
     directoryCheckEntry(source, { directory, lintFindings, selection, progress })
   );
   const findings = results.flatMap((flow) => flow.findings);

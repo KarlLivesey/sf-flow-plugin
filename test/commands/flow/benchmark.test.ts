@@ -130,3 +130,24 @@ describe('flow benchmark command warnings', (): void => {
     expect(commandUx.warn.lastCall.args[0]).to.include('unredacted');
   });
 });
+
+describe('flow benchmark Salesforce interrupt lifecycle', (): void => {
+  it('replaces only its inherited immediate-exit listener during sampling', async (): Promise<void> => {
+    const existing = new Set(process.listeners('SIGINT'));
+    $$.SANDBOX.stub(FlowBenchmark.prototype, 'parseFlags').resolves(flags());
+    $$.SANDBOX.stub(FlowBenchmarkService.prototype, 'benchmark').callsFake(async (_request, _progress, control) => {
+      const listeners = process.listeners('SIGINT').filter((listener) => !existing.has(listener));
+      expect(listeners).to.have.length(1);
+      listeners.forEach((listener) => {
+        listener('SIGINT');
+      });
+      expect(control?.signal?.aborted).to.equal(true);
+      await Promise.resolve();
+      return { result: { ...result, interrupted: true, successful: false }, rawLogStage: null };
+    });
+    const actual = await FlowBenchmark.run(['--json']);
+    expect(actual.interrupted).to.equal(true);
+    expect(new Set(process.listeners('SIGINT'))).to.deep.equal(existing);
+    process.exitCode = 0;
+  });
+});

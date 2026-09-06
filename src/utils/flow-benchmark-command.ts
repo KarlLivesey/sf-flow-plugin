@@ -14,6 +14,11 @@ import { assertBenchmarkWorkload } from './flow-benchmark-flags.js';
 import { readFlowBenchmarkInputs } from './flow-benchmark-input.js';
 
 export interface BenchmarkFlagValues {
+  'samples-file'?: string | undefined;
+  baseline?: string | undefined;
+  'max-regression'?: number | undefined;
+  'regression-metric'?: 'cpu' | 'wall-clock' | undefined;
+  'regression-percentile'?: number | undefined;
   'api-name': string;
   'target-org': Org | undefined;
   input: string[];

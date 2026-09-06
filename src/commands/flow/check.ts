@@ -32,13 +32,16 @@ import type { FlowProgressReporter } from '../../utils/flow-progress.js';
 import { writeFlowReportFile } from '../../utils/flow-report-file.js';
 import { qualifiedFlowName } from '../../utils/flow-state.js';
 import { validateFlowSourceFlags } from '../../utils/flow-source-command.js';
-import { prepareSourceCheck } from '../../utils/flow-source-check-command.js';
+import { prepareSourceCheck, shouldFailFlowCheck } from '../../utils/flow-source-check-command.js';
+import { changedSourceFlags } from '../../utils/flow-changed-source-flags.js';
 import { parseInspectionVersionSelector } from './describe.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('sf-flow-plugin', 'flow.check');
 
 export interface CheckFlagValues {
+  'changed-since'?: string | undefined;
+  'include-callers'?: boolean;
   'api-name': string[] | undefined;
   'source-file': string | undefined;
   'source-dir': string | undefined;
@@ -79,10 +82,6 @@ function createRequest(flags: CheckFlagValues, context: ReturnType<typeof create
     ...(flags.namespace === undefined ? {} : { namespace: flags.namespace }),
     ...(flags['api-version'] === undefined ? {} : { apiVersion: flags['api-version'] }),
   };
-}
-
-function shouldFail(result: FlowCheckResult, severity: FlowCheckSeverity): boolean {
-  return severity === 'warning' ? result.errors + result.warnings > 0 : result.errors > 0;
 }
 
 async function checkOrg(
@@ -126,6 +125,7 @@ export default class FlowCheck extends SfCommand<FlowCheckResult> {
   public static override readonly examples = messages.getMessages('examples');
 
   public static override readonly flags = {
+    ...changedSourceFlags,
     'api-name': Flags.string({
       char: 'n',
       exactlyOne: ['api-name', 'source-file', 'source-dir'],
@@ -219,6 +219,9 @@ export default class FlowCheck extends SfCommand<FlowCheckResult> {
       flags['source-dir'] !== undefined
         ? checkSourceDirectory({
             sourceDirectory: flags['source-dir'],
+            prepareAnalyzer: source.prepareAnalyzer,
+            ...(flags['changed-since'] === undefined ? {} : { changedSince: flags['changed-since'] }),
+            includeCallers: flags['include-callers'] ?? false,
             checks: source.checks ?? [],
             excludedChecks: flags.exclude ?? [],
             recursive: flags.recursive,
@@ -233,7 +236,7 @@ export default class FlowCheck extends SfCommand<FlowCheckResult> {
         : checkSource({ flags, checks: source.checks ?? [], analyzer: source.analyzer, progress })
     );
     await this.writeOutput(result, flags);
-    if (shouldFail(result, flags['fail-on'])) {
+    if (shouldFailFlowCheck(result, flags['fail-on'])) {
       process.exitCode = 1;
     }
     return result;

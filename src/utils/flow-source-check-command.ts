@@ -8,8 +8,9 @@ import type { SfCommand } from '@salesforce/sf-plugins-core';
 
 import { selectedSourceChecks, selectedSourceDirectoryChecks } from '../services/flow-source-analysis-service.js';
 import { SalesforceCodeAnalyzerFlowService } from '../services/salesforce-code-analyzer-flow-service.js';
-import type { FlowCheckKind } from '../types/flow-check.js';
+import type { FlowCheckKind, FlowCheckResult, FlowCheckSeverity } from '../types/flow-check.js';
 import { prepareSalesforceCodeAnalyzer } from './flow-code-analyzer-command.js';
+import { selectedFlowChecks } from './flow-check-analysis.js';
 
 interface SourceCheckFlags {
   sourceFile: string | undefined;
@@ -19,7 +20,12 @@ interface SourceCheckFlags {
   noPrompt: boolean;
 }
 
+export function shouldFailFlowCheck(result: FlowCheckResult, severity: FlowCheckSeverity): boolean {
+  return severity === 'warning' ? result.errors + result.warnings > 0 : result.errors > 0;
+}
+
 export interface PreparedSourceCheck {
+  prepareAnalyzer: () => Promise<void>;
   analyzer: SalesforceCodeAnalyzerFlowService;
   checks: FlowCheckKind[] | null;
 }
@@ -35,8 +41,15 @@ export async function prepareSourceCheck(
       : flags.sourceFile === undefined
       ? null
       : selectedSourceChecks(flags.only, flags.exclude);
-  if (checks?.includes('lint') === true) {
+  if (
+    flags.sourceDirectory === undefined &&
+    (checks ?? selectedFlowChecks(flags.only, flags.exclude)).includes('lint')
+  ) {
     await prepareSalesforceCodeAnalyzer(command, analyzer, flags.noPrompt);
   }
-  return { analyzer, checks };
+  return {
+    analyzer,
+    checks,
+    prepareAnalyzer: async () => prepareSalesforceCodeAnalyzer(command, analyzer, flags.noPrompt),
+  };
 }
