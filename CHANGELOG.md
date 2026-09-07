@@ -2,6 +2,12 @@
 
 All notable user-visible changes to this project will be documented in this file.
 
+## 1.6.1 - 2026-09-07
+
+### Changed
+
+- Applied tested dependency updates from Dependabot PR #62.
+
 ## 1.6.0 - 2026-09-05
 
 - Use Salesforce Code Analyzer for both org-backed and local Flow linting.
