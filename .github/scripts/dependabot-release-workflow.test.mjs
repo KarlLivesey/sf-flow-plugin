@@ -47,6 +47,18 @@ function fixture(t, { pending = false, manual = false } = {}) {
     git('push', 'origin', 'main');
   }
   const repo = { full_name: 'owner/plugin' };
+  // Match the real repository: existing release branches cannot be pushed directly.
+  writeFileSync(
+    join(remote, 'hooks', 'pre-receive'),
+    `#!/bin/bash
+    while read -r old_sha new_sha ref; do
+      if [[ "$ref" == refs/heads/release/* && ! "$old_sha" =~ ^0+$ ]]; then
+        echo 'Changes must be made through a pull request.' >&2
+        exit 1
+      fi
+    done\n`,
+    { mode: 0o755 }
+  );
   writeFileSync(
     join(root, 'pr.json'),
     JSON.stringify({
@@ -90,6 +102,8 @@ function fixture(t, { pending = false, manual = false } = {}) {
         GITHUB_REPOSITORY: 'owner/plugin',
         DEPENDABOT_PR_NUMBER: resume ? '' : '80',
         RESUME_RELEASE: String(resume),
+        GITHUB_RUN_ID: '123',
+        GITHUB_RUN_ATTEMPT: '1',
       },
     });
   return { root, bin, cwd, git, run, output };
@@ -105,7 +119,7 @@ test('prepares and pushes a new patch release with recorded commit IDs', (t) => 
   assert.equal(f.git('rev-parse', 'HEAD'), f.git('rev-parse', 'origin/release/1.2.4'));
 });
 
-test('resumes an existing release and includes newer main changes without force-pushing', (t) => {
+test('resumes a protected release by testing current main on a temporary branch', (t) => {
   const f = fixture(t, { pending: true });
   const oldRelease = f.git('rev-parse', 'origin/release/1.2.4');
   const main = f.git('rev-parse', 'main');
@@ -116,6 +130,47 @@ test('resumes an existing release and includes newer main changes without force-
   assert.equal(f.git('merge-base', main, 'HEAD'), main);
   assert.equal(readFileSync(join(f.cwd, 'dependency-fix.txt'), 'utf8'), 'a later dependency fix\n');
   assert.equal(JSON.parse(readFileSync(join(f.cwd, 'package.json'))).version, '1.2.4');
+  assert.equal(f.git('rev-parse', 'origin/release/1.2.4'), oldRelease);
+  assert.equal(f.git('rev-parse', 'origin/automation/release-1.2.4-123-1'), f.git('rev-parse', 'HEAD'));
+  const outputs = Object.fromEntries(
+    readFileSync(f.output, 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => line.split('='))
+  );
+  assert.equal(outputs['head-sha'], oldRelease);
+  assert.equal(outputs['test-tree'], f.git('rev-parse', 'HEAD^{tree}'));
+  assert.equal(outputs['test-branch'], 'automation/release-1.2.4-123-1');
+
+  // Execute the actual test-dispatch step and prove it tests the merged candidate.
+  writeFileSync(
+    join(f.bin, 'gh'),
+    `#!/bin/bash
+    case "$*" in
+      'workflow run '*) echo "$*" >> "$FIXTURE_ROOT/dispatches" ;;
+      'run list '*) echo 456 ;;
+      'run watch '*) exit 0 ;;
+      *) exit 2 ;;
+    esac\n`,
+    { mode: 0o755 }
+  );
+  const testStep = workflow.jobs.release.steps.find(({ name }) => name === 'Test the patch release');
+  const tested = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', testStep.run], {
+    cwd: f.cwd,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PATH: `${f.bin}:${process.env.PATH}`,
+      FIXTURE_ROOT: f.root,
+      RELEASE_BRANCH: 'release/1.2.4',
+      TEST_BRANCH: outputs['test-branch'],
+    },
+  });
+  assert.equal(tested.status, 0, tested.stderr);
+  assert.match(readFileSync(join(f.root, 'dispatches'), 'utf8'), /--ref automation\/release-1\.2\.4-123-1/u);
+  f.git('switch', 'main');
+  f.git('merge', '--no-ff', '--no-edit', 'origin/release/1.2.4');
+  assert.equal(f.git('rev-parse', 'HEAD^{tree}'), outputs['test-tree']);
 });
 
 test('refuses to resume a manually changed release', (t) => {
