@@ -97,8 +97,9 @@ stops the automation.
 The nightly job recovers unfinished work before queuing more dependency updates. It retries publication when
 `main` is ahead of npm, or resumes the next patch release when its branch already exists. A resumed release must
 still be an open, same-repository, bot-authored automated PR containing only `package.json` and `CHANGELOG.md`
-changes and bot-authored commits. The workflow merges current `main` into that branch without force-pushing,
-reuses its PR, and reruns the complete quality and package tests before merging the exact tested commit. It refuses
+changes and bot-authored commits. The workflow tests its merge with current `main` on a temporary automation
+branch, preserves the protected release branch, and reuses the existing PR. It verifies the original PR head and
+current `main` before merging, and verifies the merged tree matches the tested candidate before publishing. It refuses
 to take over manually modified releases. To retry an eligible pending release immediately, dispatch
 `dependabot-release.yml` with `resume-release=true`.
 

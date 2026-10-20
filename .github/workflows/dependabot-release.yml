@@ -398,11 +398,16 @@ jobs:
               echo 'The pending release changed during validation.' >&2
               exit 1
             fi
-            git switch --create "$release_branch" FETCH_HEAD
+            release_head="$(git rev-parse FETCH_HEAD)"
+            git switch --create "$release_branch" "$release_head"
             git merge --no-ff --no-edit origin/main
             node .github/scripts/validate-release-version.mjs main "$release_branch"
-            git push origin "$release_branch"
-            echo "head-sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            test_branch="automation/release-${release_version}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            git push origin "HEAD:refs/heads/${test_branch}"
+            echo "head-sha=$release_head" >> "$GITHUB_OUTPUT"
+            echo "test-branch=$test_branch" >> "$GITHUB_OUTPUT"
+            echo "temporary-branch=$test_branch" >> "$GITHUB_OUTPUT"
+            echo "test-tree=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if [[ "$RESUME_RELEASE" == 'true' ]]; then
@@ -420,6 +425,8 @@ jobs:
           git commit --message "chore: release ${release_version}"
           git push --set-upstream origin "$release_branch"
           echo "head-sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "test-branch=$release_branch" >> "$GITHUB_OUTPUT"
+          echo "test-tree=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
 
       - name: Open the patch release pull request
         if: steps.release.outputs.branch != ''
@@ -449,18 +456,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_BRANCH: ${{ steps.release.outputs.branch }}
+          TEST_BRANCH: ${{ steps.release.outputs.test-branch }}
         shell: bash
         run: |
           node .github/scripts/validate-release-version.mjs main "$RELEASE_BRANCH"
           dispatched_after="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          gh workflow run test.yml --ref "$RELEASE_BRANCH"
+          gh workflow run test.yml --ref "$TEST_BRANCH"
 
           run_id=''
           for _ in {1..30}; do
             run_id="$(
               gh run list \
                 --workflow test.yml \
-                --branch "$RELEASE_BRANCH" \
+                --branch "$TEST_BRANCH" \
                 --event workflow_dispatch \
                 --limit 10 \
                 --json databaseId,createdAt \
@@ -479,13 +487,21 @@ jobs:
           fi
           gh run watch "$run_id" --exit-status --interval 15
 
+      - name: Remove the temporary release candidate
+        if: always() && steps.release.outputs.temporary-branch != ''
+        env:
+          TEST_BRANCH: ${{ steps.release.outputs.temporary-branch }}
+        run: git push origin --delete "$TEST_BRANCH" || true
+
       - name: Merge the tested patch release
+        id: merged-release
         if: steps.release.outputs.branch != ''
         env:
           GH_TOKEN: ${{ github.token }}
           PULL_REQUEST_NUMBER: ${{ steps.release-pull-request.outputs.number }}
           EXPECTED_HEAD: ${{ steps.release.outputs.head-sha }}
           EXPECTED_MAIN: ${{ steps.release.outputs.base-commit }}
+          EXPECTED_TREE: ${{ steps.release.outputs.test-tree }}
         shell: bash
         run: |
           current_main="$(git ls-remote origin refs/heads/main | cut -f1)"
@@ -494,16 +510,28 @@ jobs:
             exit 1
           fi
           gh pr merge "$PULL_REQUEST_NUMBER" --merge --match-head-commit "$EXPECTED_HEAD"
+          merged_commit="$(gh pr view "$PULL_REQUEST_NUMBER" --json mergeCommit --jq '.mergeCommit.oid')"
+          merged_tree="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${merged_commit}" --jq '.tree.sha')"
+          if [[ "$merged_tree" != "$EXPECTED_TREE" ]]; then
+            echo 'The merged release tree differs from the tested candidate; refusing publication.' >&2
+            exit 1
+          fi
+          echo "commit=$merged_commit" >> "$GITHUB_OUTPUT"
 
       - name: Publish the patch release
         if: steps.release.outputs.branch != ''
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          EXPECTED_COMMIT: ${{ steps.merged-release.outputs.commit }}
         shell: bash
         run: |
           git fetch origin main
           merged_commit="$(git rev-parse origin/main)"
+          if [[ "$merged_commit" != "$EXPECTED_COMMIT" ]]; then
+            echo 'main changed after the tested release merged; refusing publication.' >&2
+            exit 1
+          fi
           gh workflow run release.yml --ref main
 
           run_id=''
