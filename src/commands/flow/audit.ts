@@ -10,6 +10,7 @@ import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
 import { FlowAuditService } from '../../services/flow-audit-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
+import type { DurationFlag } from '../../types/flags.js';
 import type { FlowAuditRequest, FlowAuditResult } from '../../types/flow.js';
 import { createFlowCommandContext } from '../../utils/flow-command.js';
 import { validateFlowApiName, validateNamespace } from '../../utils/flow-name-validation.js';
@@ -78,7 +79,7 @@ export default class FlowAudit extends SfCommand<FlowAuditResult> {
     'older-than': Flags.duration({
       unit: 'days',
       summary: messages.getMessage('flags.older-than.summary'),
-    }),
+    }) as DurationFlag,
     'api-version': Flags.orgApiVersion({
       summary: messages.getMessage('flags.api-version.summary'),
     }),

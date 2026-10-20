@@ -94,6 +94,14 @@ other successful updates are queued nightly. Version updates and security update
 manifest. Any failed check, unexpected file, non-Dependabot commit, concurrent `main` change or publication mismatch
 stops the automation.
 
+The nightly job recovers unfinished work before queuing more dependency updates. It retries publication when
+`main` is ahead of npm, or resumes the next patch release when its branch already exists. A resumed release must
+still be an open, same-repository, bot-authored automated PR containing only `package.json` and `CHANGELOG.md`
+changes and bot-authored commits. The workflow merges current `main` into that branch without force-pushing,
+reuses its PR, and reruns the complete quality and package tests before merging the exact tested commit. It refuses
+to take over manually modified releases. To retry an eligible pending release immediately, dispatch
+`dependabot-release.yml` with `resume-release=true`.
+
 Urgent security classification requires the repository secret `DEPENDABOT_ALERTS_TOKEN`: a fine-grained token scoped
 to this repository with **Dependabot alerts: read** permission. The normal Actions token cannot read those alerts.
 Missing or invalid credentials fail the classification job visibly; the independent nightly path remains enabled.
