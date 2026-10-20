@@ -10,6 +10,7 @@ import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 
 import { FlowPruneService } from '../../services/flow-prune-service.js';
 import { ToolingFlowDefinitionGateway } from '../../services/tooling-flow-definition-gateway.js';
+import type { DurationFlag } from '../../types/flags.js';
 import type { FlowPruneOrder, FlowPruneRequest, FlowPruneResult, FlowVersionStatusFilter } from '../../types/flow.js';
 import { createFlowCommandContext, createNamedFlowRequest, validateNamedFlowFlags } from '../../utils/flow-command.js';
 import { withFlowProgress } from '../../utils/flow-progress.js';
@@ -96,7 +97,7 @@ export default class FlowPrune extends SfCommand<FlowPruneResult> {
     'older-than': Flags.duration({
       unit: 'days',
       summary: messages.getMessage('flags.older-than.summary'),
-    }),
+    }) as DurationFlag,
     'if-active-version': Flags.integer({
       summary: messages.getMessage('flags.if-active-version.summary'),
     }),

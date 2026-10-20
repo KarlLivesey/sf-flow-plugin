@@ -12,8 +12,12 @@ on:
     inputs:
       pull-request:
         description: Open Dependabot pull-request number to process
-        required: true
+        required: false
         type: string
+      resume-release:
+        description: Resume an unfinished automated patch release
+        type: boolean
+        default: false
 
 concurrency:
   group: dependabot-patch-release
@@ -90,12 +94,33 @@ jobs:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
+      - name: Check out trusted release helpers
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
       - name: Dispatch each tested Dependabot pull request
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
         shell: bash
         run: |
+          package_name="$(node -p "require('./package.json').name")"
+          package_version="$(node -p "require('./package.json').version")"
+          published_version="$(npm view "$package_name" version --json --registry=https://registry.npmjs.org | node -e 'let source = ""; process.stdin.on("data", chunk => source += chunk); process.stdin.on("end", () => process.stdout.write(JSON.parse(source)));')"
+          if [[ "$package_version" != "$published_version" ]]; then
+            echo "Retrying publication of main version ${package_version} (npm latest: ${published_version})."
+            gh workflow run release.yml --repo "$REPOSITORY" --ref main
+            exit 0
+          fi
+
+          release_branch="$(node --input-type=module -e "import { nextReleaseBranch } from './.github/scripts/pending-dependabot-release.mjs'; console.log(nextReleaseBranch(process.argv[1]));" "$package_version")"
+          if gh api "/repos/${REPOSITORY}/git/ref/heads/${release_branch}" --silent; then
+            echo "Resuming pending ${release_branch} before processing more dependencies."
+            gh workflow run dependabot-release.yml --repo "$REPOSITORY" --ref main --field resume-release=true
+            exit 0
+          fi
+
           pull_requests_file="${RUNNER_TEMP}/tested-dependabot-pull-requests.json"
           gh pr list \
             --repo "$REPOSITORY" \
@@ -155,6 +180,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Resolve and validate the Dependabot pull request
+        if: inputs.resume-release != true
         id: dependabot
         env:
           DISPATCH_PULL_REQUEST: ${{ inputs['pull-request'] }}
@@ -233,7 +259,7 @@ jobs:
           NODE
 
       - name: Check out the current main branch
-        if: steps.dependabot.outputs.eligible == 'true'
+        if: steps.dependabot.outputs.eligible == 'true' || inputs.resume-release == true
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
@@ -248,7 +274,7 @@ jobs:
         shell: bash
         run: |
           base_commit="$(git rev-parse HEAD)"
-          candidate_branch="automation/dependabot-${DEPENDABOT_PR_NUMBER}-${DEPENDABOT_HEAD_SHA:0:12}"
+          candidate_branch="automation/dependabot-${DEPENDABOT_PR_NUMBER}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git fetch origin "pull/${DEPENDABOT_PR_NUMBER}/head:refs/remotes/origin/dependabot-${DEPENDABOT_PR_NUMBER}"
@@ -316,7 +342,7 @@ jobs:
             echo "Dependabot PR #${PULL_REQUEST_NUMBER} changed after candidate testing." >&2
             exit 1
           fi
-          gh pr merge "$PULL_REQUEST_NUMBER" --squash --delete-branch
+          gh pr merge "$PULL_REQUEST_NUMBER" --squash --delete-branch --match-head-commit "$EXPECTED_HEAD"
 
       - name: Remove the temporary test candidate
         if: always() && steps.dependabot.outputs.eligible == 'true' && steps.candidate.outputs.branch != ''
@@ -325,13 +351,16 @@ jobs:
         run: git push origin --delete "$CANDIDATE_BRANCH" || true
 
       - name: Prepare the patch release
-        if: steps.dependabot.outputs.eligible == 'true'
+        if: steps.dependabot.outputs.eligible == 'true' || inputs.resume-release == true
         id: release
         env:
           DEPENDABOT_PR_NUMBER: ${{ steps.dependabot.outputs.number }}
           GH_TOKEN: ${{ github.token }}
+          RESUME_RELEASE: ${{ inputs.resume-release }}
         shell: bash
         run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git fetch origin main
           git switch --detach origin/main
 
@@ -343,14 +372,49 @@ jobs:
             exit 1
           fi
 
-          RELEASE_DATE="$(date -u +%Y-%m-%d)" node .github/scripts/prepare-dependabot-release.mjs
-          release_branch="$(grep '^branch=' "$GITHUB_OUTPUT" | tail -n 1 | cut -d= -f2-)"
-          release_version="$(grep '^version=' "$GITHUB_OUTPUT" | tail -n 1 | cut -d= -f2-)"
+          release_branch="$(node --input-type=module -e "import { nextReleaseBranch } from './.github/scripts/pending-dependabot-release.mjs'; console.log(nextReleaseBranch(process.argv[1]));" "$package_version")"
+          release_version="${release_branch#release/}"
+          echo "version=$release_version" >> "$GITHUB_OUTPUT"
+          echo "branch=$release_branch" >> "$GITHUB_OUTPUT"
+          echo "base-commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
           if git ls-remote --exit-code --heads origin "$release_branch" >/dev/null 2>&1; then
-            echo "Release branch ${release_branch} already exists." >&2
+            release_pr="$(gh pr list --base main --head "$release_branch" --state open --json number --jq '.[0].number // empty')"
+            if [[ -z "$release_pr" ]]; then
+              echo "Cannot resume ${release_branch}: no open release PR." >&2
+              exit 1
+            fi
+            release_pr_file="${RUNNER_TEMP}/pending-release-pr.json"
+            release_files_file="${RUNNER_TEMP}/pending-release-files.json"
+            release_commits_file="${RUNNER_TEMP}/pending-release-commits.json"
+            gh api "repos/${GITHUB_REPOSITORY}/pulls/${release_pr}" > "$release_pr_file"
+            gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${release_pr}/files" > "$release_files_file"
+            gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${release_pr}/commits" > "$release_commits_file"
+            RELEASE_PR_FILE="$release_pr_file" RELEASE_FILES_FILE="$release_files_file" \
+              RELEASE_COMMITS_FILE="$release_commits_file" RELEASE_BRANCH="$release_branch" \
+              node .github/scripts/pending-dependabot-release.mjs
+            git fetch origin "$release_branch"
+            if [[ "$(git rev-parse FETCH_HEAD)" != "$(jq -r '.head.sha' "$release_pr_file")" ]]; then
+              echo 'The pending release changed during validation.' >&2
+              exit 1
+            fi
+            release_head="$(git rev-parse FETCH_HEAD)"
+            git switch --create "$release_branch" "$release_head"
+            git merge --no-ff --no-edit origin/main
+            node .github/scripts/validate-release-version.mjs main "$release_branch"
+            test_branch="automation/release-${release_version}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            git push origin "HEAD:refs/heads/${test_branch}"
+            echo "head-sha=$release_head" >> "$GITHUB_OUTPUT"
+            echo "test-branch=$test_branch" >> "$GITHUB_OUTPUT"
+            echo "temporary-branch=$test_branch" >> "$GITHUB_OUTPUT"
+            echo "test-tree=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$RESUME_RELEASE" == 'true' ]]; then
+            echo "No pending release exists at ${release_branch}." >&2
             exit 1
           fi
+          RELEASE_DATE="$(date -u +%Y-%m-%d)" node .github/scripts/prepare-dependabot-release.mjs
           if npm view "${package_name}@${release_version}" version --json --registry=https://registry.npmjs.org >/dev/null 2>&1; then
             echo "${package_name}@${release_version} is already published." >&2
             exit 1
@@ -360,9 +424,12 @@ jobs:
           git add package.json CHANGELOG.md
           git commit --message "chore: release ${release_version}"
           git push --set-upstream origin "$release_branch"
+          echo "head-sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "test-branch=$release_branch" >> "$GITHUB_OUTPUT"
+          echo "test-tree=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
 
       - name: Open the patch release pull request
-        if: steps.dependabot.outputs.eligible == 'true'
+        if: steps.release.outputs.branch != ''
         id: release-pull-request
         env:
           GH_TOKEN: ${{ github.token }}
@@ -370,34 +437,38 @@ jobs:
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
         shell: bash
         run: |
-          pull_request_url="$(
-            gh pr create \
-              --base main \
-              --head "$RELEASE_BRANCH" \
-              --title "release: ${RELEASE_VERSION}" \
-              --body "Automated patch release for a tested Dependabot dependency update."
-          )"
+          pull_request_url="$(gh pr list --base main --head "$RELEASE_BRANCH" --state open --json url --jq '.[0].url // empty')"
+          if [[ -z "$pull_request_url" ]]; then
+            pull_request_url="$(
+              gh pr create \
+                --base main \
+                --head "$RELEASE_BRANCH" \
+                --title "release: ${RELEASE_VERSION}" \
+                --body "Automated patch release for a tested Dependabot dependency update."
+            )"
+          fi
           pull_request_number="$(gh pr view "$pull_request_url" --json number --jq .number)"
           echo "number=$pull_request_number" >> "$GITHUB_OUTPUT"
           echo "url=$pull_request_url" >> "$GITHUB_OUTPUT"
 
       - name: Test the patch release
-        if: steps.dependabot.outputs.eligible == 'true'
+        if: steps.release.outputs.branch != ''
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_BRANCH: ${{ steps.release.outputs.branch }}
+          TEST_BRANCH: ${{ steps.release.outputs.test-branch }}
         shell: bash
         run: |
           node .github/scripts/validate-release-version.mjs main "$RELEASE_BRANCH"
           dispatched_after="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          gh workflow run test.yml --ref "$RELEASE_BRANCH"
+          gh workflow run test.yml --ref "$TEST_BRANCH"
 
           run_id=''
           for _ in {1..30}; do
             run_id="$(
               gh run list \
                 --workflow test.yml \
-                --branch "$RELEASE_BRANCH" \
+                --branch "$TEST_BRANCH" \
                 --event workflow_dispatch \
                 --limit 10 \
                 --json databaseId,createdAt \
@@ -416,22 +487,51 @@ jobs:
           fi
           gh run watch "$run_id" --exit-status --interval 15
 
+      - name: Remove the temporary release candidate
+        if: always() && steps.release.outputs.temporary-branch != ''
+        env:
+          TEST_BRANCH: ${{ steps.release.outputs.temporary-branch }}
+        run: git push origin --delete "$TEST_BRANCH" || true
+
       - name: Merge the tested patch release
-        if: steps.dependabot.outputs.eligible == 'true'
+        id: merged-release
+        if: steps.release.outputs.branch != ''
         env:
           GH_TOKEN: ${{ github.token }}
           PULL_REQUEST_NUMBER: ${{ steps.release-pull-request.outputs.number }}
-        run: gh pr merge "$PULL_REQUEST_NUMBER" --merge
+          EXPECTED_HEAD: ${{ steps.release.outputs.head-sha }}
+          EXPECTED_MAIN: ${{ steps.release.outputs.base-commit }}
+          EXPECTED_TREE: ${{ steps.release.outputs.test-tree }}
+        shell: bash
+        run: |
+          current_main="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [[ "$current_main" != "$EXPECTED_MAIN" ]]; then
+            echo "main changed while the release was tested; retry against current main." >&2
+            exit 1
+          fi
+          gh pr merge "$PULL_REQUEST_NUMBER" --merge --match-head-commit "$EXPECTED_HEAD"
+          merged_commit="$(gh pr view "$PULL_REQUEST_NUMBER" --json mergeCommit --jq '.mergeCommit.oid')"
+          merged_tree="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${merged_commit}" --jq '.tree.sha')"
+          if [[ "$merged_tree" != "$EXPECTED_TREE" ]]; then
+            echo 'The merged release tree differs from the tested candidate; refusing publication.' >&2
+            exit 1
+          fi
+          echo "commit=$merged_commit" >> "$GITHUB_OUTPUT"
 
       - name: Publish the patch release
-        if: steps.dependabot.outputs.eligible == 'true'
+        if: steps.release.outputs.branch != ''
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          EXPECTED_COMMIT: ${{ steps.merged-release.outputs.commit }}
         shell: bash
         run: |
           git fetch origin main
           merged_commit="$(git rev-parse origin/main)"
+          if [[ "$merged_commit" != "$EXPECTED_COMMIT" ]]; then
+            echo 'main changed after the tested release merged; refusing publication.' >&2
+            exit 1
+          fi
           gh workflow run release.yml --ref main
 
           run_id=''

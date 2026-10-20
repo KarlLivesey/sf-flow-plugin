@@ -2,6 +2,14 @@
 
 All notable user-visible changes to this project will be documented in this file.
 
+## 1.6.7 - 2026-10-20
+
+### Changed
+
+- Applied dependency updates from Dependabot PRs #74, #76, #77, #80, #81, and #82.
+- Fixed declaration builds when dependency updates install multiple Salesforce Kit versions.
+- Resume unfinished automated releases and retry interrupted publication before queuing further dependency updates.
+
 ## 1.6.6 - 2026-09-23
 
 ### Changed
